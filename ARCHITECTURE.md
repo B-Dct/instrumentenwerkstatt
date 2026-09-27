@@ -21,6 +21,15 @@ Kernprinzipien:
 - **Kein hartes Löschen:** Mitarbeiter und Aufträge werden archiviert/deaktiviert, nie gelöscht — erhält die Historie
 - **Strukturierte Kategorien statt Freitext:** Instrumentenklassen und Reparaturarten sind eigene Tabellen, nicht Freitextfelder — Voraussetzung für spätere Auswertbarkeit
 
+Umsetzung in der Datenbank (Stand 27.09.2026):
+- **Tabellen-Definitionen** in `backend/app/models.py` (SQLAlchemy), Änderungen am Schema ausschließlich über **Alembic-Migrationen** (`backend/migrations/`), nie direkt in Supabase
+- **Primärschlüssel sind UUIDs** (von PostgreSQL per `gen_random_uuid()` erzeugt) — nicht erratbar, einheitlich in allen Tabellen
+- **Keine Umlaute in Tabellen-/Spaltennamen:** Umschreibung (z. B. `prioritaet`, `schaetzungs_log`, `geschaetztes_fertigstellungsdatum`)
+- **Auftragsstatus als eigene, pflegbare Tabelle** `auftragsstatus` (statt fester Liste): mit stabilem `schluessel` für den Code, Anzeigename, Reihenfolge, Farbe sowie den Schaltern `erfordert_zeiterfassung` (z. B. „Fertig“) und `ist_abgeschlossen`. `auftrag.status_aktuell_id` und `auftrag_statusverlauf.status_id` verweisen darauf. Die UI darf Status/Farben daher nicht hart kodieren
+- **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
+- **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
+- **Row Level Security auf allen Tabellen aktiv, ohne Freigabe-Regeln:** sperrt die automatische öffentliche REST-API von Supabase. Zugriff auf Daten nur über unser Backend
+
 ## 3. Terminschätzung (Stufenmodell)
 
 - **Stufe 1 (Start):** Regelbasierte Schätzung aus historischem Durchschnitt, Auftragsvolumen, Abwesenheiten und Komplexitätsfaktor
@@ -62,5 +71,6 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Grundschema angelegt (Alembic-Migration), Datenbank-Konventionen festgelegt (siehe Abschnitt 2) |
 | 27.09.2026 | Tech-Stack festgelegt (FastAPI, React/Vite, PostgreSQL bei Supabase); Datenbankzugriff über Supabase Session Pooler (IPv4) |
 

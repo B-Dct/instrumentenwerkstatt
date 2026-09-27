@@ -1,0 +1,340 @@
+"""Tabellen-Definitionen gemäß docs/datenmodell.md.
+
+Konventionen:
+- Primärschlüssel sind UUIDs (von PostgreSQL erzeugt).
+- Umlaute in Namen werden umgeschrieben (prioritaet, schaetzungs_log, ...).
+- Nichts wird hart gelöscht: Mitarbeiter/Stammdaten haben ein `aktiv`-Flag.
+"""
+
+import enum
+import uuid
+from datetime import date, datetime
+from decimal import Decimal
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+
+# --- Hilfsbausteine ---------------------------------------------------------
+
+def uuid_pk() -> Mapped[uuid.UUID]:
+    return mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+
+
+def fk(target: str, *, nullable: bool = False, index: bool = True) -> Mapped:
+    return mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{target}.id"), nullable=nullable, index=index
+    )
+
+
+def zeitstempel_jetzt() -> Mapped[datetime]:
+    return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+def pg_enum(py_enum: type[enum.Enum], name: str) -> Enum:
+    # Speichert die (kleingeschriebenen) Werte, nicht die Python-Namen
+    return Enum(py_enum, name=name, values_callable=lambda e: [m.value for m in e])
+
+
+# --- Feste Auswahllisten ----------------------------------------------------
+
+class Systemrolle(str, enum.Enum):
+    mitarbeiter = "mitarbeiter"
+    werkstattleiter = "werkstattleiter"
+    admin = "admin"
+
+
+class Prioritaet(str, enum.Enum):
+    normal = "normal"
+    hoch = "hoch"
+
+
+class Abwesenheitstyp(str, enum.Enum):
+    urlaub = "urlaub"
+    krankheit = "krankheit"
+    feiertag = "feiertag"
+    betriebsschliessung = "betriebsschliessung"
+    schulung = "schulung"
+    reduzierte_stunden = "reduzierte_stunden"
+
+
+# --- 2.1 Kunde --------------------------------------------------------------
+
+class Kunde(Base):
+    __tablename__ = "kunde"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    kundennummer: Mapped[str] = mapped_column(String(30), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(254))
+    telefon: Mapped[str | None] = mapped_column(String(50))
+    erstellt_am: Mapped[datetime] = zeitstempel_jetzt()
+
+
+# --- 2.2 Mitarbeiter --------------------------------------------------------
+
+class Mitarbeiter(Base):
+    __tablename__ = "mitarbeiter"
+    __table_args__ = (
+        CheckConstraint(
+            "(aktiv AND deaktiviert_am IS NULL) OR (NOT aktiv AND deaktiviert_am IS NOT NULL)",
+            name="deaktiviert_am_passt_zu_aktiv",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(200))
+    rolle: Mapped[str | None] = mapped_column(String(100))  # fachlich, z. B. Geigenbauer
+    systemrolle: Mapped[Systemrolle] = mapped_column(
+        pg_enum(Systemrolle, "systemrolle"), server_default=Systemrolle.mitarbeiter.value
+    )
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    passwort_hash: Mapped[str] = mapped_column(String(255))
+    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    erstellt_am: Mapped[datetime] = zeitstempel_jetzt()
+    deaktiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# --- 2.3 Abwesenheit --------------------------------------------------------
+
+class Abwesenheit(Base):
+    __tablename__ = "abwesenheit"
+    __table_args__ = (
+        CheckConstraint("bis_datum >= von_datum", name="zeitraum_gueltig"),
+        CheckConstraint("reduzierte_stunden IS NULL OR reduzierte_stunden >= 0",
+                        name="reduzierte_stunden_positiv"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True)  # NULL = ganze Werkstatt
+    von_datum: Mapped[date] = mapped_column(Date)
+    bis_datum: Mapped[date] = mapped_column(Date)
+    typ: Mapped[Abwesenheitstyp] = mapped_column(pg_enum(Abwesenheitstyp, "abwesenheitstyp"))
+    reduzierte_stunden: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))  # NULL = ganztägig
+
+
+# --- 2.4 Instrumentenklasse / 2.6 Reparaturart / Auftragsstatus (Stammdaten) -
+
+class Instrumentenklasse(Base):
+    __tablename__ = "instrumentenklasse"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    bezeichnung: Mapped[str] = mapped_column(String(100), unique=True)
+    oberkategorie: Mapped[str] = mapped_column(String(100))
+    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+
+class Reparaturart(Base):
+    __tablename__ = "reparaturart"
+    __table_args__ = (
+        CheckConstraint("standard_komplexitaet BETWEEN 1 AND 5", name="komplexitaet_1_bis_5"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    bezeichnung: Mapped[str] = mapped_column(String(150), unique=True)
+    standard_komplexitaet: Mapped[int] = mapped_column(SmallInteger)
+    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+
+class Auftragsstatus(Base):
+    """Pflegbare Liste der Auftragsstatus (statt fester Werte im Code)."""
+
+    __tablename__ = "auftragsstatus"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    schluessel: Mapped[str] = mapped_column(String(50), unique=True)  # stabil, für Code: "fertig"
+    bezeichnung: Mapped[str] = mapped_column(String(100), unique=True)  # Anzeige: "Fertig"
+    reihenfolge: Mapped[int] = mapped_column(SmallInteger)
+    farbe: Mapped[str] = mapped_column(String(7))  # Hex, z. B. #2E7D32
+    # Beim Wechsel in diesen Status muss Arbeitszeit erfasst werden (Datenmodell 9.8)
+    erfordert_zeiterfassung: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Auftrag gilt in diesem Status als abgeschlossen (zählt nicht mehr zur Auslastung)
+    ist_abgeschlossen: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+
+# --- 2.5 Instrument ---------------------------------------------------------
+
+class Instrument(Base):
+    __tablename__ = "instrument"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    kunde_id: Mapped[uuid.UUID] = fk("kunde")
+    instrumentenklasse_id: Mapped[uuid.UUID] = fk("instrumentenklasse")
+    hersteller: Mapped[str | None] = mapped_column(String(150))
+    typenbezeichnung: Mapped[str | None] = mapped_column(String(150))
+    baujahr: Mapped[int | None] = mapped_column(Integer)
+    seriennummer: Mapped[str | None] = mapped_column(String(100))
+    notizen: Mapped[str | None] = mapped_column(Text)
+
+
+# --- 2.7 Auftrag ------------------------------------------------------------
+
+class Auftrag(Base):
+    __tablename__ = "auftrag"
+    __table_args__ = (
+        CheckConstraint("komplexitaet BETWEEN 1 AND 5", name="komplexitaet_1_bis_5"),
+        CheckConstraint(
+            "geschaetzte_bandbreite_bis IS NULL OR geschaetzte_bandbreite_von IS NULL "
+            "OR geschaetzte_bandbreite_bis >= geschaetzte_bandbreite_von",
+            name="bandbreite_gueltig",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    auftragsnummer: Mapped[str] = mapped_column(String(30), unique=True)
+    zugriffstoken: Mapped[str] = mapped_column(String(64), unique=True)
+    kunde_id: Mapped[uuid.UUID] = fk("kunde")
+    instrument_id: Mapped[uuid.UUID] = fk("instrument")
+    reparaturart_id: Mapped[uuid.UUID] = fk("reparaturart")
+    zugewiesener_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True)
+    prioritaet: Mapped[Prioritaet] = mapped_column(
+        pg_enum(Prioritaet, "prioritaet"), server_default=Prioritaet.normal.value
+    )
+    komplexitaet: Mapped[int] = mapped_column(SmallInteger)
+    # Redundant zur schnellen Anzeige – Quelle der Wahrheit ist auftrag_statusverlauf
+    status_aktuell_id: Mapped[uuid.UUID] = fk("auftragsstatus")
+    erstellt_am: Mapped[datetime] = zeitstempel_jetzt()
+    geschaetztes_fertigstellungsdatum: Mapped[date | None] = mapped_column(Date)
+    geschaetzte_bandbreite_von: Mapped[date | None] = mapped_column(Date)
+    geschaetzte_bandbreite_bis: Mapped[date | None] = mapped_column(Date)
+    geschaetzte_arbeitsstunden: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    tatsaechliches_fertigstellungsdatum: Mapped[date | None] = mapped_column(Date)
+    notizen: Mapped[str | None] = mapped_column(Text)
+
+
+# --- 2.8 Auftrag-Statusverlauf ----------------------------------------------
+
+class AuftragStatusverlauf(Base):
+    __tablename__ = "auftrag_statusverlauf"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    auftrag_id: Mapped[uuid.UUID] = fk("auftrag")
+    status_id: Mapped[uuid.UUID] = fk("auftragsstatus")
+    geaendert_am: Mapped[datetime] = zeitstempel_jetzt()
+    geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True)
+    kommentar: Mapped[str | None] = mapped_column(Text)
+
+
+# --- 2.9 Unterbrechung ------------------------------------------------------
+
+class Unterbrechung(Base):
+    __tablename__ = "unterbrechung"
+    __table_args__ = (
+        CheckConstraint("bis_datum IS NULL OR bis_datum >= von_datum", name="zeitraum_gueltig"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    auftrag_id: Mapped[uuid.UUID] = fk("auftrag")
+    grund: Mapped[str] = mapped_column(String(200))
+    von_datum: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    bis_datum: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = ungelöst
+
+
+# --- 2.10 Schätzungs-Log ----------------------------------------------------
+
+class SchaetzungsLog(Base):
+    __tablename__ = "schaetzungs_log"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    auftrag_id: Mapped[uuid.UUID] = fk("auftrag")
+    berechnet_am: Mapped[datetime] = zeitstempel_jetzt()
+    methode: Mapped[str] = mapped_column(String(50))  # "regelbasiert", "ml_modell_v1", ...
+    geschaetztes_datum: Mapped[date] = mapped_column(Date)
+    eingabefaktoren: Mapped[dict | None] = mapped_column(JSONB)
+
+
+# --- 2.11 Arbeitszeiterfassung ----------------------------------------------
+
+class Arbeitszeiterfassung(Base):
+    __tablename__ = "arbeitszeiterfassung"
+    __table_args__ = (CheckConstraint("dauer_minuten > 0", name="dauer_positiv"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    auftrag_id: Mapped[uuid.UUID] = fk("auftrag")
+    mitarbeiter_id: Mapped[uuid.UUID] = fk("mitarbeiter")
+    dauer_minuten: Mapped[int] = mapped_column(Integer)
+    erfasst_am: Mapped[datetime] = zeitstempel_jetzt()
+    kommentar: Mapped[str | None] = mapped_column(Text)
+
+
+# --- 2.12 Mitarbeiter-Arbeitszeit (Wochenstunden mit Gültigkeit) ------------
+
+class MitarbeiterArbeitszeit(Base):
+    __tablename__ = "mitarbeiter_arbeitszeit"
+    __table_args__ = (
+        CheckConstraint("wochenstunden >= 0", name="wochenstunden_positiv"),
+        CheckConstraint("gueltig_bis IS NULL OR gueltig_bis >= gueltig_ab", name="zeitraum_gueltig"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    mitarbeiter_id: Mapped[uuid.UUID] = fk("mitarbeiter")
+    wochenstunden: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    gueltig_ab: Mapped[date] = mapped_column(Date)
+    gueltig_bis: Mapped[date | None] = mapped_column(Date)  # NULL = aktuell gültig
+    geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
+    geaendert_am: Mapped[datetime] = zeitstempel_jetzt()
+
+
+# --- 2.13 Mitarbeiter-Qualifikation -----------------------------------------
+
+class MitarbeiterQualifikation(Base):
+    __tablename__ = "mitarbeiter_qualifikation"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    mitarbeiter_id: Mapped[uuid.UUID] = fk("mitarbeiter")
+    reparaturart_id: Mapped[uuid.UUID | None] = fk("reparaturart", nullable=True, index=False)
+    instrumentenklasse_id: Mapped[uuid.UUID | None] = fk("instrumentenklasse", nullable=True, index=False)
+    bezeichnung: Mapped[str] = mapped_column(String(200))
+    erworben_am: Mapped[date | None] = mapped_column(Date)
+    gueltig_bis: Mapped[date | None] = mapped_column(Date)  # NULL = unbefristet
+
+
+# --- 2.14 Arbeitszeit-Anpassung (Gleitzeit) ---------------------------------
+
+class ArbeitszeitAnpassung(Base):
+    __tablename__ = "arbeitszeit_anpassung"
+    __table_args__ = (
+        CheckConstraint("EXTRACT(ISODOW FROM woche_start_datum) = 1", name="woche_beginnt_montags"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    mitarbeiter_id: Mapped[uuid.UUID] = fk("mitarbeiter")
+    woche_start_datum: Mapped[date] = mapped_column(Date)
+    anpassung_stunden: Mapped[Decimal] = mapped_column(Numeric(5, 2))  # + mehr, − weniger
+    grund: Mapped[str | None] = mapped_column(String(200))
+    erfasst_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
+    erfasst_am: Mapped[datetime] = zeitstempel_jetzt()
+
+
+# --- 7.3 System-Ereignis-Log ------------------------------------------------
+
+class SystemEreignisLog(Base):
+    __tablename__ = "system_ereignis_log"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    ausgefuehrt_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True)
+    aktion: Mapped[str] = mapped_column(String(100))
+    betroffene_entitaet: Mapped[str] = mapped_column(String(100))
+    betroffene_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    details: Mapped[dict | None] = mapped_column(JSONB)
+    zeitpunkt: Mapped[datetime] = zeitstempel_jetzt()
