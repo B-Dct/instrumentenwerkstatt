@@ -7,7 +7,27 @@ uv run uvicorn app.main:app --reload
 
 - http://localhost:8000/health – App läuft
 - http://localhost:8000/health/db – Datenbankverbindung funktioniert
-- http://localhost:8000/docs – automatische API-Doku
+- http://localhost:8000/docs – automatische API-Doku (zum Ausprobieren der Endpunkte)
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+Die Tests laufen gegen die Datenbank aus der `.env`, aber jeder Test in einer
+Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
+
+## Endpunkte
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET | `/admin/vorgabewerte` | Vorgabewerte auflisten (Filter: `reparaturart_id`, `instrumentenklasse_id`) |
+| GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
+| POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
+| PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
+
+⚠️ `/admin`-Endpunkte sind **noch ungeschützt**, bis Login/Rollen umgesetzt sind (siehe `app/auth.py`).
 
 ## Datenbank-Schema (Alembic)
 

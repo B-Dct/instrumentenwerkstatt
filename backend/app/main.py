@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.routers import admin
 
 app = FastAPI(title="Werkstatt-Auftragsmanagement")
 
@@ -14,6 +15,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin.router)
 
 
 @app.get("/health")

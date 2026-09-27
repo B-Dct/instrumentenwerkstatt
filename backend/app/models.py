@@ -23,6 +23,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -155,6 +156,36 @@ class Reparaturart(Base):
     aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
 
 
+class ReparaturVorgabewert(Base):
+    """2.6a: Vorgabewerte für Dauer/Kosten je Reparaturart (optional je Instrumentenklasse).
+
+    instrumentenklasse_id = NULL bedeutet: allgemeiner Wert für die Reparaturart.
+    Pro Kombination (auch "allgemein") gibt es höchstens einen Eintrag.
+    """
+
+    __tablename__ = "reparatur_vorgabewert"
+    __table_args__ = (
+        UniqueConstraint(
+            "reparaturart_id", "instrumentenklasse_id",
+            name="uq_reparatur_vorgabewert_kombination",
+            postgresql_nulls_not_distinct=True,
+        ),
+        CheckConstraint("vorgabe_stunden >= 0", name="stunden_nicht_negativ"),
+        CheckConstraint("vorgabe_kosten >= 0", name="kosten_nicht_negativ"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    reparaturart_id: Mapped[uuid.UUID] = fk("reparaturart")
+    instrumentenklasse_id: Mapped[uuid.UUID | None] = fk("instrumentenklasse", nullable=True, index=False)
+    vorgabe_stunden: Mapped[Decimal] = mapped_column(Numeric(6, 2))
+    vorgabe_kosten: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # in Euro
+    notiz: Mapped[str | None] = mapped_column(Text)
+    geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
+    geaendert_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Auftragsstatus(Base):
     """Pflegbare Liste der Auftragsstatus (statt fester Werte im Code)."""
 
@@ -193,6 +224,10 @@ class Auftrag(Base):
     __tablename__ = "auftrag"
     __table_args__ = (
         CheckConstraint("komplexitaet BETWEEN 1 AND 5", name="komplexitaet_1_bis_5"),
+        CheckConstraint("geschaetzte_kosten IS NULL OR geschaetzte_kosten >= 0",
+                        name="geschaetzte_kosten_nicht_negativ"),
+        CheckConstraint("tatsaechliche_kosten IS NULL OR tatsaechliche_kosten >= 0",
+                        name="tatsaechliche_kosten_nicht_negativ"),
         CheckConstraint(
             "geschaetzte_bandbreite_bis IS NULL OR geschaetzte_bandbreite_von IS NULL "
             "OR geschaetzte_bandbreite_bis >= geschaetzte_bandbreite_von",
@@ -218,6 +253,8 @@ class Auftrag(Base):
     geschaetzte_bandbreite_von: Mapped[date | None] = mapped_column(Date)
     geschaetzte_bandbreite_bis: Mapped[date | None] = mapped_column(Date)
     geschaetzte_arbeitsstunden: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    geschaetzte_kosten: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))  # in Euro
+    tatsaechliche_kosten: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))  # NULL bis Abschluss
     tatsaechliches_fertigstellungsdatum: Mapped[date | None] = mapped_column(Date)
     notizen: Mapped[str | None] = mapped_column(Text)
 

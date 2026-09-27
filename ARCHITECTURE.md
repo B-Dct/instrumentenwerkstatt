@@ -47,6 +47,11 @@ Drei Systemrollen, kumulativ (Admin ⊇ Werkstattleiter ⊇ Mitarbeiter):
 
 Details: siehe Datenmodell-Dokument, Abschnitt 7.
 
+**Technische Umsetzung (Stand 27.09.2026 — noch unvollständig):**
+- Berechtigungsprüfung ist als FastAPI-Dependency gekapselt in `backend/app/auth.py` (`aktueller_mitarbeiter_id`, `require_admin`). Endpunkte enthalten selbst keine Prüflogik
+- `require_admin` hängt am gesamten Router unter `/admin` (`backend/app/routers/admin/__init__.py`) — neue Admin-Endpunkte dort einhängen, dann sind sie automatisch mitgeschützt
+- ⚠️ **Login/Rollen sind noch nicht implementiert: Die Dependencies prüfen derzeit nichts, alle `/admin`-Endpunkte sind ungeschützt.** Vor jedem Betrieb außerhalb des lokalen Rechners zwingend nachrüsten (Stellen sind mit `TODO` markiert)
+
 ## 5. Kundenauthentifizierung
 
 Kein Login für Kunden. Zugriff auf das Status-Dashboard über **Auftragsnummer + zufälliges Zugriffstoken** (auf dem Abgabebeleg/als QR-Code ausgegeben). Details und Begründung (u. a. warum keine Postleitzahl): siehe Datenmodell-Dokument, Abschnitt 6.
@@ -71,6 +76,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Tabelle `reparatur_vorgabewert` + Kostenfelder in `auftrag`; Admin-Endpunkte für Vorgabewerte (noch ohne Berechtigungsprüfung, siehe Abschnitt 4) |
 | 27.09.2026 | Grundschema angelegt (Alembic-Migration), Datenbank-Konventionen festgelegt (siehe Abschnitt 2) |
 | 27.09.2026 | Tech-Stack festgelegt (FastAPI, React/Vite, PostgreSQL bei Supabase); Datenbankzugriff über Supabase Session Pooler (IPv4) |
 
