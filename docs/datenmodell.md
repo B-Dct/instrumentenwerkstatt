@@ -611,7 +611,7 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - **Druckansicht für den Abgabebeleg:** eigene, aufs Drucken optimierte Seite mit Auftragsnummer, Zugriffstoken/QR-Code (siehe Abschnitt 6) und den wichtigsten Auftragsdaten
 - **Leere Zustände klar kommunizieren:** z. B. "Keine offenen Aufträge" statt einer leeren, irritierenden Liste
 - **Ladezustände sichtbar machen:** kurze Ladeanzeige statt eingefroren wirkender Seite bei längeren Abfragen
-- **Suchen/Filtern** in allen Listenansichten (Aufträge nach Kunde, Status, Mitarbeiter, Instrumentenklasse filterbar)
+- **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (siehe auch Abschnitt 10, Punkt 6a)
 - **Barrierefreiheit (Kontrast, Tastaturbedienbarkeit):** insbesondere für den internen Bereich sinnvoll, falls künftig auch weniger technikaffine oder ältere Mitarbeiter damit arbeiten
 
 ### 9.8 Auftragsabschluss (Pflicht-Zeiterfassung)
@@ -641,6 +641,7 @@ Umsetzung der Kapazitätsplanung aus Abschnitt 8 als einfache, wöchentliche Bal
 4. Login/Authentifizierung + Berechtigungsprüfung nach `systemrolle` implementieren
 5. Stufe-1-Berechnungslogik implementieren
 6. Internes Dashboard (Mitarbeitersicht) gemäß Abschnitt 9.4
+6a. Filter (Status, Mitarbeiter, Instrumentenklasse, Priorität) und Freitext-Suche (Kundenname, Auftragsnummer) für die Auftragsliste — noch nicht dringend bei wenigen Test-Aufträgen, aber sobald der echte Auftragsbestand wächst, wird die Liste sonst unübersichtlich (siehe Abschnitt 9.7)
 7. Administrationsbereich (Werkstattleiter- und Admin-Ansicht gemäß Berechtigungsmatrix in Abschnitt 7, Werkstattleiter-Dashboard gemäß 9.5, Kapazitäts-Dashboard gemäß 8 und 9.9)
 8. Kunden-Dashboard (Auftragsnummer + Zugriffstoken gemäß Abschnitt 6)
 9. Abfrage-Assistent für historische Erfahrungswerte (Abschnitt 8a) — nach Login/Rollen
