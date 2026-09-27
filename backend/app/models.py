@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -204,6 +205,10 @@ class Auftragsstatus(Base):
     erfordert_zeiterfassung: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Auftrag gilt in diesem Status als abgeschlossen (zählt nicht mehr zur Auslastung)
     ist_abgeschlossen: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Gesetzt = dieser Status pausiert den Auftrag (z. B. "Wartet auf Ersatzteil"): Beim Wechsel
+    # hinein entsteht automatisch ein offener unterbrechung-Eintrag mit diesem Standardgrund,
+    # beim Wechsel heraus wird er abgeschlossen (Datenmodell 2.9)
+    unterbrechungsgrund: Mapped[str | None] = mapped_column(String(200))
     aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
 
 
@@ -282,6 +287,9 @@ class Unterbrechung(Base):
     __tablename__ = "unterbrechung"
     __table_args__ = (
         CheckConstraint("bis_datum IS NULL OR bis_datum >= von_datum", name="zeitraum_gueltig"),
+        # Höchstens eine offene Unterbrechung je Auftrag
+        Index("uq_unterbrechung_offen_je_auftrag", "auftrag_id", unique=True,
+              postgresql_where=text("bis_datum IS NULL")),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()

@@ -19,7 +19,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Select, select, text
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten
@@ -36,6 +36,7 @@ from app.models import (
     Prioritaet,
     Reparaturart,
     SchaetzungsLog,
+    Unterbrechung,
 )
 from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, schaetze_arbeitsstunden, schaetze_kosten
 from app.schemas import (
@@ -47,6 +48,7 @@ from app.schemas import (
     StatusKurz,
     StatusverlaufEintrag,
     Statuswechsel,
+    UnterbrechungEintrag,
 )
 
 router = APIRouter(prefix="/auftraege", tags=["Aufträge"], dependencies=[Depends(aktueller_mitarbeiter)])
@@ -145,6 +147,11 @@ def _detail(db: Session, auftrag_id: uuid.UUID) -> AuftragDetail:
         .where(SchaetzungsLog.auftrag_id == auftrag_id)
         .order_by(SchaetzungsLog.berechnet_am, SchaetzungsLog.id)
     ).all()
+    unterbrechungen = db.scalars(
+        select(Unterbrechung)
+        .where(Unterbrechung.auftrag_id == auftrag_id)
+        .order_by(Unterbrechung.von_datum, Unterbrechung.id)
+    ).all()
     return AuftragDetail(
         **_kurz_felder(zeile),
         zugriffstoken=a.zugriffstoken,
@@ -163,6 +170,7 @@ def _detail(db: Session, auftrag_id: uuid.UUID) -> AuftragDetail:
             for v, s in verlauf
         ],
         schaetzungen=[SchaetzungsLogEintrag.model_validate(s) for s in schaetzungen],
+        unterbrechungen=[UnterbrechungEintrag.model_validate(u) for u in unterbrechungen],
     )
 
 
@@ -289,6 +297,10 @@ def status_wechseln(
     if neu.id == auftrag.status_aktuell_id:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Auftrag ist bereits im Status \"{neu.bezeichnung}\"")
 
+    if daten.unterbrechungsgrund and neu.unterbrechungsgrund is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            f"Der Status \"{neu.bezeichnung}\" ist keine Unterbrechung – Grund nicht möglich")
+
     # Pflicht-Zeiterfassung beim Abschluss (Datenmodell 9.8)
     if neu.erfordert_zeiterfassung and daten.arbeitszeit_minuten is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -300,6 +312,8 @@ def status_wechseln(
             dauer_minuten=daten.arbeitszeit_minuten,
             kommentar=daten.kommentar,
         ))
+
+    _unterbrechung_fortschreiben(db, auftrag, neu, daten.unterbrechungsgrund)
 
     # Fertigstellungsdatum = Trainingslabel für Stufe 2: beim ersten Abschluss setzen,
     # bei Wiederaufnahme (zurück in einen offenen Status) wieder leeren
@@ -318,6 +332,32 @@ def status_wechseln(
     auftrag.status_aktuell_id = neu.id
     db.commit()
     return _detail(db, auftrag.id)
+
+
+def _unterbrechung_fortschreiben(
+    db: Session, auftrag: Auftrag, neu: Auftragsstatus, grund: str | None
+) -> None:
+    """Unterbrechungen (Datenmodell 2.9) aus dem Statuswechsel ableiten.
+
+    - Eine offene Unterbrechung wird beim Verlassen des pausierenden Status abgeschlossen
+      (bis_datum = jetzt) – auch beim Wechsel in einen anderen pausierenden Status.
+    - Ist der neue Status pausierend (auftragsstatus.unterbrechungsgrund gesetzt), beginnt eine
+      neue Unterbrechung mit dem angegebenen oder dem Standardgrund.
+    Die Einträge sind die Grundlage, um Wartezeiten später aus der Bearbeitungsdauer
+    herauszurechnen (Terminschätzung, Abschnitt 4).
+    """
+    offen = db.scalar(
+        select(Unterbrechung).where(Unterbrechung.auftrag_id == auftrag.id, Unterbrechung.bis_datum.is_(None))
+    )
+    if offen is not None:
+        offen.bis_datum = func.clock_timestamp()
+        db.flush()  # zuerst schließen – es darf nur eine offene Unterbrechung geben
+    if neu.unterbrechungsgrund is not None:
+        db.add(Unterbrechung(
+            auftrag_id=auftrag.id,
+            grund=grund or neu.unterbrechungsgrund,
+            von_datum=func.clock_timestamp(),
+        ))
 
 
 # --- Manuelle Korrektur der Schätzung (Datenmodell 4.2) ---------------------

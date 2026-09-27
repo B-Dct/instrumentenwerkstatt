@@ -183,6 +183,9 @@ def _offene_auftraege_anlegen(db: Session, klassen: dict, arten: dict) -> None:
                                         geaendert_am=angelegt + timedelta(days=i * 2),
                                         geaendert_von_mitarbeiter_id=bearbeiter.id,
                                         kommentar="Auftrag angelegt" if i == 0 else None))
+        if status[schluessel].unterbrechungsgrund is not None:  # pausierender Status (2.9)
+            db.add(Unterbrechung(auftrag_id=auftrag.id, grund=status[schluessel].unterbrechungsgrund,
+                                 von_datum=angelegt + timedelta(days=2)))
 
 
 def _historie_anlegen(db: Session, violine: Instrumentenklasse, saitenwechsel: Reparaturart) -> None:

@@ -32,6 +32,7 @@ function Statuswechsel({ auftrag, alleStatus, onFertig }) {
   const [statusId, setStatusId] = useState('')
   const [kommentar, setKommentar] = useState('')
   const [minuten, setMinuten] = useState('')
+  const [grund, setGrund] = useState('')
   const [meldung, setMeldung] = useState(null)
   const ziel = alleStatus.find((s) => s.id === statusId)
 
@@ -43,8 +44,9 @@ function Statuswechsel({ auftrag, alleStatus, onFertig }) {
         status_id: statusId,
         kommentar: kommentar || null,
         arbeitszeit_minuten: minuten ? Number(minuten) : null,
+        unterbrechungsgrund: ziel?.unterbrechungsgrund ? grund || null : null,
       })
-      setStatusId(''); setKommentar(''); setMinuten('')
+      setStatusId(''); setKommentar(''); setMinuten(''); setGrund('')
       setMeldung({ ok: true, text: `Status geändert: ${neu.status.bezeichnung}` })
       onFertig(neu)
     } catch (err) {
@@ -69,6 +71,13 @@ function Statuswechsel({ auftrag, alleStatus, onFertig }) {
           <span>Aufgewendete Arbeitszeit in Minuten</span>
           <input type="number" min="1" value={minuten} onChange={(e) => setMinuten(e.target.value)} required />
           <small>Pflichtangabe beim Abschluss.</small>
+        </label>
+      )}
+      {ziel?.unterbrechungsgrund && (
+        <label className="feld">
+          <span>Grund der Unterbrechung</span>
+          <input value={grund} onChange={(e) => setGrund(e.target.value)} placeholder={ziel.unterbrechungsgrund} maxLength={200} />
+          <small>Leer lassen für „{ziel.unterbrechungsgrund}“. Die Wartezeit wird bis zum nächsten Statuswechsel erfasst.</small>
         </label>
       )}
       <label className="feld">
@@ -200,6 +209,26 @@ export default function AuftragDetail() {
         </table>
         </div>
       </section>
+
+      {auftrag.unterbrechungen.length > 0 && (
+        <section className="abschnitt">
+          <h2>Unterbrechungen</h2>
+          <div className="tabelle-rahmen">
+            <table className="tabelle">
+              <thead><tr><th>Grund</th><th>Von</th><th>Bis</th></tr></thead>
+              <tbody>
+                {auftrag.unterbrechungen.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.grund}</td>
+                    <td>{zeit(u.von_datum)}</td>
+                    <td>{u.bis_datum ? zeit(u.bis_datum) : <span className="leise">läuft noch</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="abschnitt">
         <h2>Schätzungen</h2>

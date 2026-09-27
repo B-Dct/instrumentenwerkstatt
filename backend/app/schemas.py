@@ -118,6 +118,15 @@ class SchaetzungsLogEintrag(BaseModel):
     grund: str | None
 
 
+class UnterbrechungEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    grund: str
+    von_datum: datetime
+    bis_datum: datetime | None  # None = noch offen
+
+
 class AuftragDetail(AuftragKurz):
     zugriffstoken: str  # für den Abgabebeleg (Kunden-Dashboard, Abschnitt 6)
     geschaetzte_bandbreite_von: date | None
@@ -127,6 +136,7 @@ class AuftragDetail(AuftragKurz):
     notizen: str | None
     statusverlauf: list[StatusverlaufEintrag]  # älteste zuerst
     schaetzungen: list[SchaetzungsLogEintrag]  # älteste zuerst
+    unterbrechungen: list[UnterbrechungEintrag]  # älteste zuerst
 
 
 class Statuswechsel(BaseModel):
@@ -134,6 +144,8 @@ class Statuswechsel(BaseModel):
     kommentar: str | None = None
     # Pflicht, wenn der Zielstatus Zeiterfassung erfordert (z. B. "Fertig", Datenmodell 9.8)
     arbeitszeit_minuten: int | None = Field(None, gt=0)
+    # Nur bei pausierenden Status (z. B. "Wartet auf Ersatzteil"); leer = Standardgrund des Status
+    unterbrechungsgrund: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
 
 
 class SchaetzungKorrektur(BaseModel):
@@ -182,6 +194,7 @@ class StatusEintrag(BaseModel):
     farbe: str
     symbol: str
     erfordert_zeiterfassung: bool
+    unterbrechungsgrund: str | None
     ist_abgeschlossen: bool
 
 

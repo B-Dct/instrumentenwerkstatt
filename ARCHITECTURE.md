@@ -27,6 +27,7 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Keine Umlaute in Tabellen-/Spaltennamen:** Umschreibung (z. B. `prioritaet`, `schaetzungs_log`, `geschaetztes_fertigstellungsdatum`)
 - **Auftragsstatus als eigene, pflegbare Tabelle** `auftragsstatus` (statt fester Liste): mit stabilem `schluessel` für den Code, Anzeigename, Reihenfolge, Farbe sowie den Schaltern `erfordert_zeiterfassung` (z. B. „Fertig“) und `ist_abgeschlossen`. `auftrag.status_aktuell_id` und `auftrag_statusverlauf.status_id` verweisen darauf. Die UI darf Status/Farben daher nicht hart kodieren
 - **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
+- **Unterbrechungen automatisch aus dem Status:** Status mit gesetztem `auftragsstatus.unterbrechungsgrund` (derzeit „Wartet auf Ersatzteil“) öffnen beim Wechsel hinein einen `unterbrechung`-Eintrag und schließen ihn beim Wechsel heraus. Höchstens eine offene Unterbrechung je Auftrag (Datenbank-Index). Grundlage, um Wartezeiten später aus der Bearbeitungsdauer herauszurechnen
 - **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
 - **Row Level Security auf allen Tabellen aktiv, ohne Freigabe-Regeln:** sperrt die automatische öffentliche REST-API von Supabase. Zugriff auf Daten nur über unser Backend
 - **Zeitstempel = echte Uhrzeit des Eintrags** (`clock_timestamp()`), nicht Transaktionsbeginn (`now()`) — sonst hätten mehrere Einträge einer Transaktion denselben Zeitstempel und die Reihenfolge von Verläufen/Logs wäre zufällig
@@ -95,6 +96,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Unterbrechungen automatisch bei pausierenden Status (z. B. „Wartet auf Ersatzteil“); Datenmodell-Doku an Tabelle `auftragsstatus` angeglichen |
 | 27.09.2026 | Design-System umgesetzt (Tokens, Seitenleiste, Statusfarben/-symbole aus der DB, lokale Schriften) |
 | 27.09.2026 | React-Klick-Prototyp (nur funktional, wird mit dem Design-System ersetzt); Lese-Endpunkte für Auswahllisten |
 | 27.09.2026 | Beispieldaten-Skript `app/demo_daten.py` (anlegen/anzeigen/entfernen) |
