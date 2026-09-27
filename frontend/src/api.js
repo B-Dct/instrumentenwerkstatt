@@ -43,7 +43,12 @@ async function anfrage(pfad, { methode = 'GET', daten, formular } = {}) {
     body = JSON.stringify(daten)
   }
 
-  const antwort = await fetch(API_URL + pfad, { method: methode, headers, body })
+  let antwort
+  try {
+    antwort = await fetch(API_URL + pfad, { method: methode, headers, body })
+  } catch {
+    throw new ApiFehler(0, `Backend nicht erreichbar (${API_URL}) – läuft es?`)
+  }
   const inhalt = antwort.headers.get('content-type')?.includes('json') ? await antwort.json() : null
   if (!antwort.ok) {
     if (antwort.status === 401 && pfad !== '/auth/login') {

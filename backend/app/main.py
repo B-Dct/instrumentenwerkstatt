@@ -8,10 +8,12 @@ from app.routers import admin, auftraege, auswahllisten, auth
 
 app = FastAPI(title="Werkstatt-Auftragsmanagement")
 
-# Erlaubt dem Vite-Dev-Server (Frontend) Anfragen ans Backend
+# Erlaubt dem Frontend in der lokalen Entwicklung Anfragen ans Backend – von jedem
+# localhost-Port (Vite weicht z. B. auf 5174 aus, wenn 5173 belegt ist).
+# TODO: Vor einem Betrieb außerhalb des lokalen Rechners auf die echte Frontend-Adresse beschränken.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"],
     allow_headers=["*"],
 )
