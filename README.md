@@ -58,3 +58,4 @@ cd frontend
 
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — Architekturentscheidungen im Überblick
 - Datenmodell-Dokument (Tabellen, Sicherheitskonzept, UI-Richtlinien, Kapazitätsplanung) — Link/Ablageort hier ergänzen
+
