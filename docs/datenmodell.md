@@ -444,6 +444,8 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Funktion | Mitarbeiter | Werkstattleiter | Admin |
 |---|---|---|---|
 | Eigene zugewiesene Aufträge einsehen/bearbeiten | ✅ | ✅ | ✅ |
+| Kunden und Instrumente anlegen/bearbeiten | ✅ | ✅ | ✅ |
+| Kunden/Instrumente archivieren (z. B. bei Dubletten) | ❌ | ✅ | ✅ |
 | Alle Aufträge werkstattweit einsehen | ❌ | ✅ | ✅ |
 | Aufträge einem Mitarbeiter zuweisen/umverteilen | ❌ | ✅ | ✅ |
 | Geschätztes Fertigstellungsdatum manuell korrigieren | ❌ | ✅ | ✅ |
