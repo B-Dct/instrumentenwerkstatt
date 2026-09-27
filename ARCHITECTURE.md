@@ -29,6 +29,7 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
 - **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
 - **Row Level Security auf allen Tabellen aktiv, ohne Freigabe-Regeln:** sperrt die automatische öffentliche REST-API von Supabase. Zugriff auf Daten nur über unser Backend
+- **Zeitstempel = echte Uhrzeit des Eintrags** (`clock_timestamp()`), nicht Transaktionsbeginn (`now()`) — sonst hätten mehrere Einträge einer Transaktion denselben Zeitstempel und die Reihenfolge von Verläufen/Logs wäre zufällig
 
 ## 3. Terminschätzung (Stufenmodell)
 
@@ -42,7 +43,9 @@ Details und Berechnungsformeln: siehe Datenmodell-Dokument, Abschnitte 4–5.
 - Arbeitszeit: erst je Auftrag alle Zeiteinträge summieren, dann über die Aufträge mitteln
 - Ab `MINDESTANZAHL_VERGLEICHSFAELLE = 5` Vergleichsfällen → historischer Durchschnitt; sonst Vorgabewert (spezifisch vor allgemein); sonst keine Schätzung
 - Ergebnis enthält neben dem Wert auch die Quelle und die Anzahl Vergleichsfälle (für das spätere `schaetzungs_log`)
-- Noch **nicht** umgesetzt: Komplexitätsfaktor, Terminschätzung (Fertigstellungsdatum), Anbindung an Auftragserstellung/Statuswechsel
+- Anbindung: Beim Anlegen eines Auftrags werden Stunden und Kosten geschätzt, im Auftrag gespeichert und als ein Eintrag im `schaetzungs_log` (`methode = "regelbasiert"`, Eingabefaktoren inkl. Quelle und Anzahl Vergleichsfälle) protokolliert
+- Manuelle Korrektur (Datenmodell 4.2): neuer Log-Eintrag `methode = "manuelle_korrektur"` mit Mitarbeiter, Pflicht-Begründung und vorherigen Werten; bisherige Log-Einträge bleiben unverändert. Die Datenbank erzwingt Mitarbeiter + Grund bei Korrektur-Einträgen
+- Noch **nicht** umgesetzt: Komplexitätsfaktor, Terminschätzung (Fertigstellungsdatum), Neuberechnung bei späteren Änderungen am Auftrag
 
 ## 4. Berechtigungskonzept
 
@@ -58,6 +61,8 @@ Details: siehe Datenmodell-Dokument, Abschnitt 7.
 - Berechtigungsprüfung ist als FastAPI-Dependency gekapselt in `backend/app/auth.py` (`aktueller_mitarbeiter_id`, `require_admin`). Endpunkte enthalten selbst keine Prüflogik
 - `require_admin` hängt am gesamten Router unter `/admin` (`backend/app/routers/admin/__init__.py`) — neue Admin-Endpunkte dort einhängen, dann sind sie automatisch mitgeschützt
 - ⚠️ **Login/Rollen sind noch nicht implementiert: Die Dependencies prüfen derzeit nichts, alle `/admin`-Endpunkte sind ungeschützt.** Vor jedem Betrieb außerhalb des lokalen Rechners zwingend nachrüsten (Stellen sind mit `TODO` markiert)
+- **Vorläufige Identifikation:** Bis zum Login wird der handelnde Mitarbeiter über den Header `X-Mitarbeiter-Id` angegeben (nur Zuordnung, *keine* Sicherheit — der Wert wird ungeprüft geglaubt). Nötig für Aktionen, die einer Person zugeordnet sein müssen (manuelle Korrektur, Arbeitszeit). Wird beim Login in `aktueller_mitarbeiter_id` durch das Login-Token ersetzt
+- Auch `/auftraege` ist derzeit ungeschützt; vorgesehene Prüfung je Auftrag: `darf_auftrag_bearbeiten` (zugewiesener Mitarbeiter oder Werkstattleiter/Admin)
 
 ## 5. Kundenauthentifizierung
 
@@ -83,6 +88,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Auftrags-Endpunkte (Anlegen mit Schätzung, Liste, Detail, Statuswechsel, manuelle Korrektur); vorläufige Identifikation per `X-Mitarbeiter-Id`; alle Zeitstempel auf `clock_timestamp()` |
 | 27.09.2026 | Stufe-1-Schätzung für Arbeitsstunden und Kosten (isoliert, noch nicht angebunden) |
 | 27.09.2026 | Tabelle `reparatur_vorgabewert` + Kostenfelder in `auftrag`; Admin-Endpunkte für Vorgabewerte (noch ohne Berechtigungsprüfung, siehe Abschnitt 4) |
 | 27.09.2026 | Grundschema angelegt (Alembic-Migration), Datenbank-Konventionen festgelegt (siehe Abschnitt 2) |

@@ -48,7 +48,10 @@ def fk(target: str, *, nullable: bool = False, index: bool = True) -> Mapped:
 
 
 def zeitstempel_jetzt() -> Mapped[datetime]:
-    return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    """Echte Uhrzeit des Eintrags (clock_timestamp), nicht der Transaktionsbeginn (now()) –
+    sonst hätten mehrere Einträge einer Transaktion denselben Zeitstempel und ihre
+    Reihenfolge (Statusverlauf, Logs, "älteste zuerst") wäre nicht mehr erkennbar."""
+    return mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False)
 
 
 def pg_enum(py_enum: type[enum.Enum], name: str) -> Enum:
@@ -182,7 +185,7 @@ class ReparaturVorgabewert(Base):
     notiz: Mapped[str | None] = mapped_column(Text)
     geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
     geaendert_am: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.clock_timestamp(), onupdate=func.clock_timestamp()
     )
 
 
@@ -290,14 +293,32 @@ class Unterbrechung(Base):
 # --- 2.10 Schätzungs-Log ----------------------------------------------------
 
 class SchaetzungsLog(Base):
+    """Jede automatische Schätzung und jede manuelle Korrektur (nie überschrieben)."""
+
     __tablename__ = "schaetzungs_log"
+    __table_args__ = (
+        CheckConstraint(
+            "methode <> 'manuelle_korrektur' OR "
+            "(korrigiert_von_mitarbeiter_id IS NOT NULL AND grund IS NOT NULL AND btrim(grund) <> '')",
+            name="korrektur_mit_mitarbeiter_und_grund",
+        ),
+        CheckConstraint("geschaetzte_stunden IS NULL OR geschaetzte_stunden >= 0",
+                        name="stunden_nicht_negativ"),
+        CheckConstraint("geschaetzte_kosten IS NULL OR geschaetzte_kosten >= 0",
+                        name="kosten_nicht_negativ"),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     auftrag_id: Mapped[uuid.UUID] = fk("auftrag")
     berechnet_am: Mapped[datetime] = zeitstempel_jetzt()
-    methode: Mapped[str] = mapped_column(String(50))  # "regelbasiert", "ml_modell_v1", ...
-    geschaetztes_datum: Mapped[date] = mapped_column(Date)
+    methode: Mapped[str] = mapped_column(String(50))  # "regelbasiert" / "ml_modell_v1" / "manuelle_korrektur"
+    # Je nach Eintrag ist nur ein Teil gefüllt (was geschätzt bzw. korrigiert wurde)
+    geschaetztes_datum: Mapped[date | None] = mapped_column(Date)
+    geschaetzte_stunden: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    geschaetzte_kosten: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     eingabefaktoren: Mapped[dict | None] = mapped_column(JSONB)
+    korrigiert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
+    grund: Mapped[str | None] = mapped_column(Text)  # nur bei manueller Korrektur
 
 
 # --- 2.11 Arbeitszeiterfassung ----------------------------------------------

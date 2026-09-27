@@ -26,8 +26,17 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
+| GET | `/auftraege` | Aufträge auflisten (Priorität hoch zuerst, dann älteste; Filter: `status_id`, `nur_offene`, `zugewiesener_mitarbeiter_id`, `kunde_id`, `prioritaet`) |
+| GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
+| POST | `/auftraege` | Auftrag anlegen – schätzt Stunden/Kosten automatisch und protokolliert die Schätzung |
+| POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) |
+| POST | `/auftraege/{id}/schaetzung-korrektur` | Geschätzte Stunden/Kosten manuell korrigieren (Pflicht: `grund`) |
 
-⚠️ `/admin`-Endpunkte sind **noch ungeschützt**, bis Login/Rollen umgesetzt sind (siehe `app/auth.py`).
+⚠️ Alle Endpunkte sind **noch ungeschützt**, bis Login/Rollen umgesetzt sind (siehe `app/auth.py`).
+
+**Vorläufig bis zum Login:** Aktionen, die einem Mitarbeiter zugeordnet werden müssen
+(manuelle Korrektur, Arbeitszeit beim Status „Fertig“), brauchen den Header
+`X-Mitarbeiter-Id: <UUID des Mitarbeiters>`. Das ist nur eine Zuordnung und keine Sicherheit.
 
 ## Datenbank-Schema (Alembic)
 
