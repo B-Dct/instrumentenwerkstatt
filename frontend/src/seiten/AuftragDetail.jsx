@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, datum, euro, stunden, zeit } from '../api.js'
+import { angemeldeterNutzer, api, datum, euro, stunden, zahl, zeit } from '../api.js'
 import { HohePrioritaet, Status, Ueberfaellig } from '../komponenten/Status.jsx'
-import { istUeberfaellig } from '../komponenten/ueberfaellig.js'
 
 const QUELLEN = {
   historisch: 'historischer Durchschnitt',
@@ -11,12 +10,75 @@ const QUELLEN = {
   keine: 'keine Grundlage',
 }
 const METHODEN = { regelbasiert: 'Automatisch', manuelle_korrektur: 'Korrektur' }
+const ANLAESSE = {
+  auftrag_angelegt: 'beim Anlegen',
+  zuweisung_geaendert: 'nach Umzuweisung',
+  prioritaet_geaendert: 'nach Prioritätsänderung',
+  'zuweisung_geaendert+prioritaet_geaendert': 'nach Umzuweisung und Prioritätsänderung',
+}
 
 function quelleText(eintrag) {
   const f = eintrag.eingabefaktoren
   if (eintrag.methode !== 'regelbasiert' || !f) return null
+  const teile = []
+  if (f.anlass) teile.push(`Berechnet ${ANLAESSE[f.anlass] ?? f.anlass}.`)
   const teil = (x) => `${QUELLEN[x.quelle] ?? x.quelle} (${x.anzahl_vergleichsfaelle} Vergleichsfälle)`
-  return `Stunden: ${teil(f.stunden)}. Kosten: ${teil(f.kosten)}.`
+  if (f.stunden) teile.push(`Stunden: ${teil(f.stunden)}. Kosten: ${teil(f.kosten)}.`)
+  const t = f.termin
+  if (t?.arbeitstage != null) {
+    const vorlauf = t.ohne_zuweisung ? 'durchschnittliche Warteschlange' : `${t.auftraege_davor} Aufträge davor`
+    const z = (wert) => zahl(Number(wert))
+    teile.push(`Termin: ${z(t.warteschlange_stunden)} Std. Vorlauf (${vorlauf}) + ${z(t.eigene_stunden)} Std., ${z(t.stunden_pro_tag)} Std./Tag, ${t.arbeitstage} Arbeitstage.`)
+  }
+  return teile.join(' ')
+}
+
+function ZuweisungUndPrioritaet({ auftrag, onFertig }) {
+  const [mitarbeiter, setMitarbeiter] = useState([])
+  const [zugewiesen, setZugewiesen] = useState(auftrag.zugewiesener_mitarbeiter_id ?? '')
+  const [prioritaet, setPrioritaet] = useState(auftrag.prioritaet)
+  const [meldung, setMeldung] = useState(null)
+
+  useEffect(() => {
+    api.mitarbeiter().then(setMitarbeiter).catch(() => {})
+  }, [])
+
+  async function absenden(e) {
+    e.preventDefault()
+    setMeldung(null)
+    try {
+      const neu = await api.auftragAendern(auftrag.id, { zugewiesener_mitarbeiter_id: zugewiesen || null, prioritaet })
+      setMeldung({ ok: true, text: `Gespeichert. Voraussichtlich fertig: ${datum(neu.geschaetztes_fertigstellungsdatum)}` })
+      onFertig(neu)
+    } catch (err) {
+      setMeldung({ ok: false, text: err.message })
+    }
+  }
+
+  return (
+    <form onSubmit={absenden}>
+      <h2>Zuweisung und Priorität</h2>
+      <div className="spalten spalten--eng">
+        <label className="feld">
+          <span>Zugewiesen an</span>
+          <select value={zugewiesen} onChange={(e) => setZugewiesen(e.target.value)}>
+            <option value="">Noch niemand</option>
+            {mitarbeiter.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label className="feld">
+          <span>Priorität</span>
+          <select value={prioritaet} onChange={(e) => setPrioritaet(e.target.value)}>
+            <option value="normal">Normal</option>
+            <option value="hoch">Hoch</option>
+          </select>
+        </label>
+      </div>
+      <small className="leise">Der voraussichtliche Termin wird beim Speichern neu berechnet.</small>
+      <div><button className="btn btn--sekundaer">Speichern</button></div>
+      <Meldung meldung={meldung} />
+    </form>
+  )
 }
 
 function Meldung({ meldung }) {
@@ -159,6 +221,8 @@ export default function AuftragDetail() {
   }, [laden])
 
   const name = (mitarbeiterId) => (mitarbeiterId ? namen[mitarbeiterId] ?? 'unbekannt' : '–')
+  // Berechtigungsmatrix 7.2: Zuweisen/Priorität nur Werkstattleitung und Admin (Backend prüft ebenso)
+  const darfZuweisen = ['werkstattleiter', 'admin'].includes(angemeldeterNutzer()?.systemrolle)
 
   if (fehler) return <p className="meldung meldung--fehler">{fehler}</p>
   if (!auftrag) return <p className="leise">Lädt …</p>
@@ -169,7 +233,7 @@ export default function AuftragDetail() {
       <div className="kopf">
         <h1>Auftrag {auftrag.auftragsnummer}</h1>
         <Status status={auftrag.status} />
-        {istUeberfaellig(auftrag) && <Ueberfaellig />}
+        {auftrag.ist_ueberfaellig && <Ueberfaellig />}
         {auftrag.prioritaet === 'hoch' && <HohePrioritaet />}
       </div>
 
@@ -179,7 +243,13 @@ export default function AuftragDetail() {
         <dt>Reparatur</dt><dd>{auftrag.reparaturart_bezeichnung} (Komplexität {auftrag.komplexitaet})</dd>
         <dt>Zugewiesen an</dt><dd>{auftrag.zugewiesener_mitarbeiter_name ?? 'nicht zugewiesen'}</dd>
         <dt>Geschätzt</dt><dd>{stunden(auftrag.geschaetzte_arbeitsstunden)} · {euro(auftrag.geschaetzte_kosten)}</dd>
-        <dt>Voraussichtlich fertig</dt><dd>{datum(auftrag.geschaetztes_fertigstellungsdatum)}</dd>
+        <dt>Voraussichtlich fertig</dt>
+        <dd>
+          {datum(auftrag.geschaetztes_fertigstellungsdatum)}
+          {auftrag.geschaetzte_bandbreite_von && (
+            <span className="leise"> (zwischen {datum(auftrag.geschaetzte_bandbreite_von)} und {datum(auftrag.geschaetzte_bandbreite_bis)})</span>
+          )}
+        </dd>
         <dt>Eingang</dt><dd>{zeit(auftrag.erstellt_am)}</dd>
         <dt>Fertiggestellt am</dt><dd>{datum(auftrag.tatsaechliches_fertigstellungsdatum)}</dd>
         <dt>Zugangscode Kunde</dt><dd><code>{auftrag.zugriffstoken}</code></dd>
@@ -189,6 +259,7 @@ export default function AuftragDetail() {
       <section className="abschnitt spalten">
         <Statuswechsel auftrag={auftrag} alleStatus={alleStatus} onFertig={setAuftrag} />
         <Korrektur auftrag={auftrag} onFertig={setAuftrag} />
+        {darfZuweisen && <ZuweisungUndPrioritaet key={auftrag.id} auftrag={auftrag} onFertig={setAuftrag} />}
       </section>
 
       <section className="abschnitt">
@@ -235,7 +306,7 @@ export default function AuftragDetail() {
         <div className="tabelle-rahmen">
         <table className="tabelle">
           <thead>
-            <tr><th>Zeitpunkt</th><th>Art</th><th className="zahl">Stunden</th><th className="zahl">Kosten</th><th>Grundlage</th></tr>
+            <tr><th>Zeitpunkt</th><th>Art</th><th className="zahl">Stunden</th><th className="zahl">Kosten</th><th>Termin</th><th>Grundlage</th></tr>
           </thead>
           <tbody>
             {auftrag.schaetzungen.map((s) => (
@@ -244,6 +315,7 @@ export default function AuftragDetail() {
                 <td>{METHODEN[s.methode] ?? s.methode}</td>
                 <td className="zahl">{stunden(s.geschaetzte_stunden)}</td>
                 <td className="zahl">{euro(s.geschaetzte_kosten)}</td>
+                <td>{datum(s.geschaetztes_datum)}</td>
                 <td>
                   {quelleText(s)}
                   {s.methode === 'manuelle_korrektur' && <>{name(s.korrigiert_von_mitarbeiter_id)}: „{s.grund}“</>}

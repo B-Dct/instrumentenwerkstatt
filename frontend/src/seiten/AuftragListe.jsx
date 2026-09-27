@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api, datum, euro, zahl } from '../api.js'
 import { HohePrioritaet, Status, Ueberfaellig } from '../komponenten/Status.jsx'
-import { istUeberfaellig } from '../komponenten/ueberfaellig.js'
 
 export default function AuftragListe() {
   const [auftraege, setAuftraege] = useState(null)
@@ -38,7 +37,7 @@ export default function AuftragListe() {
           </thead>
           <tbody>
             {auftraege.map((a) => {
-              const ueberfaellig = istUeberfaellig(a)
+              const ueberfaellig = a.ist_ueberfaellig
               return (
                 <tr key={a.id} className={ueberfaellig ? 'zeile--ueberfaellig' : undefined}>
                   <td>

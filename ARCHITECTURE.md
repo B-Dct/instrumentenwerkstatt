@@ -46,7 +46,17 @@ Details und Berechnungsformeln: siehe Datenmodell-Dokument, Abschnitte 4–5.
 - Ergebnis enthält neben dem Wert auch die Quelle und die Anzahl Vergleichsfälle (für das spätere `schaetzungs_log`)
 - Anbindung: Beim Anlegen eines Auftrags werden Stunden und Kosten geschätzt, im Auftrag gespeichert und als ein Eintrag im `schaetzungs_log` (`methode = "regelbasiert"`, Eingabefaktoren inkl. Quelle und Anzahl Vergleichsfälle) protokolliert
 - Manuelle Korrektur (Datenmodell 4.2): neuer Log-Eintrag `methode = "manuelle_korrektur"` mit Mitarbeiter, Pflicht-Begründung und vorherigen Werten; bisherige Log-Einträge bleiben unverändert. Die Datenbank erzwingt Mitarbeiter + Grund bei Korrektur-Einträgen
-- Noch **nicht** umgesetzt: Komplexitätsfaktor, Terminschätzung (Fertigstellungsdatum), Neuberechnung bei späteren Änderungen am Auftrag
+- Noch **nicht** umgesetzt: Komplexitätsfaktor
+
+**Umsetzung Terminschätzung (Stand 27.09.2026):** `backend/app/terminschaetzung.py`, Funktion `schaetze_fertigstellung`
+- Baut auf `auftrag.geschaetzte_arbeitsstunden` auf (keine separate historische Dauer)
+- Vorlauf = Stunden der offenen Aufträge desselben Mitarbeiters, die vor diesem an der Reihe sind (Priorität hoch zuerst, dann ältester Eingang, wie 9.4). Pausierte Aufträge zählen mit, bereits geleistete Teil-Arbeitszeit wird nicht abgezogen (bewusste Vereinfachung)
+- Abgearbeitet ab dem nächsten Tag mit Wochenstunden / 5 pro Tag (`mitarbeiter_arbeitszeit`, sonst Standard 40 Std.); Wochenenden, betriebsweite Abwesenheiten und ganztägige Abwesenheiten des Mitarbeiters werden übersprungen. `abwesenheit.reduzierte_stunden` wird als **verfügbare Wochenstunden im Zeitraum** gelesen (z. B. 20 → 4 Std./Tag)
+- Bandbreite ± 20 % der Arbeitstage, mindestens ± 1 Arbeitstag, nicht vor Arbeitsbeginn
+- Ohne Zuweisung: durchschnittliche offene Stunden je aktivem Mitarbeiter als Vorlauf
+- Neuberechnung beim Anlegen und bei Änderung von Zuweisung/Priorität (`PATCH /auftraege/{id}`, Werkstattleitung/Admin), jeweils mit Eintrag im `schaetzungs_log` (Anlass + Eingabefaktoren)
+- Bewusst **nicht**: Neuberechnung der *anderen* Aufträge, wenn sich die Warteschlange ändert; Neuberechnung nach manueller Korrektur der Stunden
+- „Überfällig“ berechnet das Backend (`ist_ueberfaellig`: Termin vor heute und Status nicht abgeschlossen)
 
 ## 4. Berechtigungskonzept
 
@@ -96,6 +106,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Terminschätzung (Fertigstellungsdatum + Bandbreite) mit Neuberechnung bei Anlegen, Umzuweisung, Prioritätsänderung; `PATCH /auftraege/{id}`; „überfällig“ im Backend |
 | 27.09.2026 | Unterbrechungen automatisch bei pausierenden Status (z. B. „Wartet auf Ersatzteil“); Datenmodell-Doku an Tabelle `auftragsstatus` angeglichen |
 | 27.09.2026 | Design-System umgesetzt (Tokens, Seitenleiste, Statusfarben/-symbole aus der DB, lokale Schriften) |
 | 27.09.2026 | React-Klick-Prototyp (nur funktional, wird mit dem Design-System ersetzt); Lese-Endpunkte für Auswahllisten |

@@ -95,6 +95,8 @@ class AuftragKurz(BaseModel):
     geschaetzte_arbeitsstunden: Stunden | None
     geschaetzte_kosten: Euro | None
     geschaetztes_fertigstellungsdatum: date | None
+    # Termin überschritten und noch nicht abgeschlossen (9.3) – Markierung, kein Status
+    ist_ueberfaellig: bool
 
 
 class StatusverlaufEintrag(BaseModel):
@@ -137,6 +139,13 @@ class AuftragDetail(AuftragKurz):
     statusverlauf: list[StatusverlaufEintrag]  # älteste zuerst
     schaetzungen: list[SchaetzungsLogEintrag]  # älteste zuerst
     unterbrechungen: list[UnterbrechungEintrag]  # älteste zuerst
+
+
+class AuftragAenderung(BaseModel):
+    """Zuweisung/Priorität ändern (Werkstattleitung/Admin). Nur mitgeschickte Felder zählen."""
+
+    zugewiesener_mitarbeiter_id: uuid.UUID | None = None  # explizit null = Zuweisung aufheben
+    prioritaet: Prioritaet | None = None
 
 
 class Statuswechsel(BaseModel):

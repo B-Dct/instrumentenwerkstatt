@@ -72,6 +72,7 @@ export const api = {
   auftraege: (filter = {}) => anfrage('/auftraege?' + new URLSearchParams(filter)),
   auftrag: (id) => anfrage(`/auftraege/${id}`),
   auftragAnlegen: (daten) => anfrage('/auftraege', { methode: 'POST', daten }),
+  auftragAendern: (id, daten) => anfrage(`/auftraege/${id}`, { methode: 'PATCH', daten }),
   statusWechseln: (id, daten) => anfrage(`/auftraege/${id}/status`, { methode: 'POST', daten }),
   schaetzungKorrigieren: (id, daten) => anfrage(`/auftraege/${id}/schaetzung-korrektur`, { methode: 'POST', daten }),
   kunden: () => anfrage('/kunden'),

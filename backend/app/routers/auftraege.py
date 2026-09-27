@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, func, select, text
 from sqlalchemy.orm import Session
 
-from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten
+from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten, rolle_mindestens
 from app.db import get_db
 from app.models import (
     Arbeitszeiterfassung,
@@ -36,10 +36,13 @@ from app.models import (
     Prioritaet,
     Reparaturart,
     SchaetzungsLog,
+    Systemrolle,
     Unterbrechung,
 )
 from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, schaetze_arbeitsstunden, schaetze_kosten
+from app.terminschaetzung import Terminschaetzung, schaetze_fertigstellung
 from app.schemas import (
+    AuftragAenderung,
     AuftragDetail,
     AuftragKurz,
     AuftragNeu,
@@ -128,6 +131,11 @@ def _kurz_felder(zeile) -> dict:
         "geschaetzte_arbeitsstunden": a.geschaetzte_arbeitsstunden,
         "geschaetzte_kosten": a.geschaetzte_kosten,
         "geschaetztes_fertigstellungsdatum": a.geschaetztes_fertigstellungsdatum,
+        "ist_ueberfaellig": (
+            a.geschaetztes_fertigstellungsdatum is not None
+            and a.geschaetztes_fertigstellungsdatum < date.today()
+            and not status_.ist_abgeschlossen
+        ),
     }
 
 
@@ -255,6 +263,8 @@ def auftrag_anlegen(
     )
     db.add(auftrag)
     db.flush()  # erzeugt die ID
+    db.refresh(auftrag, ["erstellt_am"])  # für die Position in der Warteschlange
+    termin = _termin_uebernehmen(db, auftrag)
 
     db.add(AuftragStatusverlauf(
         auftrag_id=auftrag.id,
@@ -267,16 +277,75 @@ def auftrag_anlegen(
         methode=METHODE_REGELBASIERT,
         geschaetzte_stunden=stunden.wert,
         geschaetzte_kosten=kosten.wert,
+        geschaetztes_datum=termin.datum,
         eingabefaktoren={
+            "anlass": "auftrag_angelegt",
             "instrumentenklasse_id": str(instrument.instrumentenklasse_id),
             "reparaturart_id": str(reparaturart.id),
             "komplexitaet": auftrag.komplexitaet,
             "mindestanzahl_vergleichsfaelle": MINDESTANZAHL_VERGLEICHSFAELLE,
             "stunden": _schaetzung_als_faktor(stunden),
             "kosten": _schaetzung_als_faktor(kosten),
+            "termin": termin.eingabefaktoren,
         },
     ))
     db.commit()
+    return _detail(db, auftrag.id)
+
+
+# --- Terminschätzung (Datenmodell 4) ----------------------------------------
+
+def _termin_uebernehmen(db: Session, auftrag: Auftrag) -> Terminschaetzung:
+    """Termin berechnen und in den Auftrag schreiben (ohne Protokoll)."""
+    termin = schaetze_fertigstellung(db, auftrag)
+    auftrag.geschaetztes_fertigstellungsdatum = termin.datum
+    auftrag.geschaetzte_bandbreite_von = termin.bandbreite_von
+    auftrag.geschaetzte_bandbreite_bis = termin.bandbreite_bis
+    return termin
+
+
+def _termin_neu_berechnen(db: Session, auftrag: Auftrag, anlass: str) -> None:
+    """Termin neu berechnen und als eigenen Eintrag im schaetzungs_log protokollieren."""
+    termin = _termin_uebernehmen(db, auftrag)
+    db.add(SchaetzungsLog(
+        auftrag_id=auftrag.id,
+        methode=METHODE_REGELBASIERT,
+        geschaetztes_datum=termin.datum,
+        eingabefaktoren={"anlass": anlass, "termin": termin.eingabefaktoren},
+    ))
+
+
+@router.patch("/{auftrag_id}", response_model=AuftragDetail,
+              dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
+def auftrag_aendern(
+    auftrag_id: uuid.UUID,
+    daten: AuftragAenderung,
+    db: Session = Depends(get_db),
+) -> AuftragDetail:
+    """Zuweisung und/oder Priorität ändern (7.2: Werkstattleitung/Admin). Löst eine
+    Neuberechnung des Termins aus, wenn sich etwas geändert hat."""
+    auftrag = _auftrag_laden(db, auftrag_id)
+    aenderungen = daten.model_dump(exclude_unset=True)
+    if "prioritaet" in aenderungen and aenderungen["prioritaet"] is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Priorität darf nicht leer sein")
+    neu_zugewiesen = aenderungen.get("zugewiesener_mitarbeiter_id")
+    if neu_zugewiesen is not None:
+        m = db.get(Mitarbeiter, neu_zugewiesen)
+        if m is None or not m.aktiv:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Mitarbeiter existiert nicht oder ist deaktiviert")
+
+    anlaesse = []
+    if "zugewiesener_mitarbeiter_id" in aenderungen and neu_zugewiesen != auftrag.zugewiesener_mitarbeiter_id:
+        auftrag.zugewiesener_mitarbeiter_id = neu_zugewiesen
+        anlaesse.append("zuweisung_geaendert")
+    if "prioritaet" in aenderungen and aenderungen["prioritaet"] != auftrag.prioritaet:
+        auftrag.prioritaet = aenderungen["prioritaet"]
+        anlaesse.append("prioritaet_geaendert")
+
+    if anlaesse:
+        db.flush()
+        _termin_neu_berechnen(db, auftrag, "+".join(anlaesse))
+        db.commit()
     return _detail(db, auftrag.id)
 
 

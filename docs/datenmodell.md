@@ -54,7 +54,7 @@ Für Urlaub, Krankheit, Feiertage — wichtig sowohl für die interne Kapazität
 | von_datum | DATE | |
 | bis_datum | DATE | |
 | typ | VARCHAR | Urlaub / Krankheit / Feiertag / Betriebsschließung / Schulung / Reduzierte Stunden |
-| reduzierte_stunden | DECIMAL | NULL = ganztägig abwesend im angegebenen Zeitraum. Ansonsten: nur teilweise reduzierte Verfügbarkeit im Zeitraum (z. B. "diese Woche nur 20 statt 35 Stunden" wegen Arztterminen o. Ä.), ohne eine eigene Tabelle dafür zu brauchen |
+| reduzierte_stunden | DECIMAL | NULL = ganztägig abwesend im angegebenen Zeitraum. Ansonsten: die in diesem Zeitraum tatsächlich **verfügbare** Wochenstundenzahl (absoluter Wert, kein Abzugsbetrag) — z. B. "diese Woche nur 20 Std. verfügbar" wegen Arztterminen o. Ä., statt der vollen `mitarbeiter_arbeitszeit.wochenstunden` |
 
 ---
 
@@ -133,7 +133,7 @@ Die zentrale Tabelle.
 | zugewiesener_mitarbeiter_id | FK → mitarbeiter | Kann initial NULL sein (noch nicht zugewiesen) |
 | priorität | ENUM (`normal` / `hoch`) | Manuell durch Werkstattleiter/Admin setzbar, z. B. bei Eilaufträgen oder Kulanzfällen. Fließt in die Sortierung der Mitarbeiter- und Werkstattleiter-Dashboards ein (siehe Abschnitt 9) |
 | komplexität | INT (1–5) | Vom Mitarbeiter bei Anlage geschätzt |
-| status_aktuell_id | FK → auftragsstatus | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
+| status_aktuell_id | FK → status | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
 | erstellt_am | TIMESTAMP | |
 | geschätztes_fertigstellungsdatum | DATE | Ergebnis der Berechnung (Stufe 1 oder 2) |
 | geschätzte_bandbreite_von | DATE | z. B. für Anzeige "zwischen dem 12. und 16.10." |
@@ -146,22 +146,17 @@ Die zentrale Tabelle.
 
 ---
 
-### 2.7a `auftragsstatus`
+### 2.7a `status`
 
 Nachschlagetabelle für Auftragsstatus — eingeführt bei der UI-Umsetzung, damit Farbe und Symbol (Abschnitt 9.3/9.6) direkt aus der Datenbank kommen, statt im Frontend-Code hinterlegt zu sein. Neue Status lassen sich damit ohne Code-Änderung ergänzen.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
-| id | UUID | Primärschlüssel |
-| schluessel | VARCHAR, UNIQUE | Stabiler technischer Name für den Code, z. B. "wartet_auf_ersatzteil" (ändert sich nicht, auch wenn die Bezeichnung umbenannt wird) |
-| bezeichnung | VARCHAR, UNIQUE | z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
-| reihenfolge | INT | Für konsistente Sortierung/Anzeige (z. B. in Auswahllisten) |
+| id | UUID / SERIAL | Primärschlüssel |
+| bezeichnung | VARCHAR | z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
 | farbe | VARCHAR | Hex-Wert, siehe Statusfarben-Tabelle in Abschnitt 9.6 |
 | symbol | VARCHAR | z. B. "○", "◐", "⏸", "◑", "✓", "●" |
-| erfordert_zeiterfassung | BOOLEAN | Beim Wechsel in diesen Status muss die Arbeitszeit angegeben werden (Abschnitt 9.8) — derzeit "Fertig" |
-| ist_abgeschlossen | BOOLEAN | Auftrag gilt als abgeschlossen (Vergleichsfall für die Schätzung, setzt das Fertigstellungsdatum) — derzeit "Fertig" und "Abgeholt" |
-| unterbrechungsgrund | VARCHAR | Gesetzt = der Status pausiert den Auftrag: Beim Wechsel hinein entsteht automatisch ein offener `unterbrechung`-Eintrag (2.9) mit diesem Standardgrund, beim Wechsel heraus wird er abgeschlossen — derzeit "Wartet auf Ersatzteil" → "Ersatzteil bestellt" |
-| aktiv | BOOLEAN | Archivieren statt Löschen |
+| reihenfolge | INT | Für konsistente Sortierung/Anzeige (z. B. in Auswahllisten) |
 
 **Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün), Abgeholt (●, dunkles Neutral `#5E554C`).
 
@@ -175,7 +170,7 @@ Kernstück für spätere Auswertung — jeder Wechsel wird protokolliert, nichts
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | auftrag_id | FK → auftrag | |
-| status_id | FK → auftragsstatus | |
+| status_id | FK → status | |
 | geändert_am | TIMESTAMP | |
 | geändert_von_mitarbeiter_id | FK → mitarbeiter | |
 | kommentar | TEXT | Optional |
@@ -193,8 +188,6 @@ Erfasst Gründe für Verzögerungen — wichtig, damit das spätere Modell "haus
 | grund | VARCHAR | z. B. "Ersatzteil bestellt", "Rückfrage beim Kunden", "Zusatzschaden entdeckt" |
 | von_datum | TIMESTAMP | |
 | bis_datum | TIMESTAMP | NULL solange ungelöst |
-
-**Automatische Erfassung:** Einträge entstehen und enden mit dem Statuswechsel — siehe `auftragsstatus.unterbrechungsgrund` (2.7a). Der Grund kann beim Statuswechsel frei eingegeben werden, sonst gilt der Standardgrund des Status. Je Auftrag ist höchstens eine Unterbrechung gleichzeitig offen.
 
 ---
 
@@ -306,8 +299,8 @@ erDiagram
     REPARATURART ||--o{ REPARATUR_VORGABEWERT : hat
     INSTRUMENTENKLASSE ||--o{ REPARATUR_VORGABEWERT : verfeinert
     AUFTRAG ||--o{ AUFTRAG_STATUSVERLAUF : durchläuft
-    AUFTRAGSSTATUS ||--o{ AUFTRAG_STATUSVERLAUF : ist
-    AUFTRAGSSTATUS ||--o{ AUFTRAG : aktueller_status
+    STATUS ||--o{ AUFTRAG_STATUSVERLAUF : ist
+    STATUS ||--o{ AUFTRAG : aktueller_status
     AUFTRAG ||--o{ UNTERBRECHUNG : hat
     AUFTRAG ||--o{ SCHÄTZUNGS_LOG : erhält
     AUFTRAG ||--o{ ARBEITSZEITERFASSUNG : hat
@@ -319,21 +312,42 @@ erDiagram
 
 ---
 
-## 4. Stufe 1: Regelbasierte Berechnungslogik (Beispiel)
+## 4. Stufe 1: Regelbasierte Berechnungslogik
+
+**Umgesetzte Logik (Warteschlangen-Prinzip):**
 
 ```
-geschätzte_dauer_tage =
-    durchschnitt(bisherige_ist_dauer WHERE instrumentenklasse = X AND reparaturart = Y)
-    * komplexitätsfaktor(auftrag.komplexität)
-    + warteschlangen_aufschlag(zugewiesener_mitarbeiter, aktuelles_auftragsvolumen)
-    + abwesenheits_aufschlag(zugewiesener_mitarbeiter, abwesenheit im Zeitraum)
+vorlauf_stunden =
+    Summe(geschätzte_arbeitsstunden aller offenen Aufträge desselben Mitarbeiters,
+          die nach Priorität + Eingang vor diesem Auftrag stehen, siehe 9.4)
+    (bei nicht zugewiesenem Auftrag: durchschnittliche offene Arbeit pro Mitarbeiter als Fallback)
 
-geschätztes_fertigstellungsdatum = erstellt_am + geschätzte_dauer_tage (Arbeitstage, keine Wochenenden/Feiertage)
+benötigte_stunden = vorlauf_stunden + auftrag.geschätzte_arbeitsstunden (siehe 4.1)
+
+verfügbare_stunden_pro_tag = mitarbeiter_arbeitszeit.wochenstunden / 5
+    (Wochenenden, Betriebsschließungen, Feiertage, Urlaub übersprungen;
+     an Tagen mit abwesenheit.reduzierte_stunden gilt reduzierte_stunden / 5 statt der vollen Wochenstunden)
+
+geschätztes_fertigstellungsdatum = der Arbeitstag, an dem benötigte_stunden 
+    durch tägliches Abarbeiten ab morgen aufgebraucht sind
+
+geschätzte_bandbreite = ± 20 % der benötigten Arbeitstage, mindestens ± 1 Tag
 ```
 
-Für Instrumentenklasse/Reparaturart-Kombinationen ohne (ausreichend) historische Daten: Fallback auf `reparatur_vorgabewert.vorgabe_stunden` (2.6a) — spezifischer Wert für die Instrumentenklasse, falls vorhanden, sonst der allgemeine Wert der Reparaturart. Mit wachsender Anzahl abgeschlossener Aufträge wird der historische Durchschnitt zunehmend gegenüber dem Vorgabewert gewichtet (einfachste Variante: sobald z. B. 5 abgeschlossene Vergleichsfälle vorliegen, komplett auf den historischen Durchschnitt umschalten).
+`auftrag.geschätzte_arbeitsstunden` (die Grundlage für `benötigte_stunden`) wird wie in Abschnitt 4.1 beschrieben ermittelt: historischer Durchschnitt vergleichbarer abgeschlossener Aufträge, mit Fallback auf `reparatur_vorgabewert` (2.6a), solange zu wenig historische Daten vorliegen (Schwellenwert: 5 Vergleichsfälle).
 
-**Hinweis:** Sobald `arbeitszeiterfassung`-Daten vorliegen, kann `bisherige_ist_dauer` wahlweise auf Basis der Kalenderdauer oder der reinen Arbeitszeit berechnet werden — Letztere liefert genauere Durchschnittswerte, da sie nicht durch Wartezeiten auf Ersatzteile verzerrt wird.
+**Neuberechnung ausgelöst bei:** Auftragserstellung, Änderung von Zuweisung oder Priorität (über `PATCH /auftraege/{id}`, nur Werkstattleiter/Admin). Jede Berechnung wird in `schätzungs_log` protokolliert, inkl. Anlass und allen verwendeten Zahlen (z. B. "13,50 Std. Vorlauf (4 Aufträge davor) + 0,50 Std., 8,00 Std./Tag, 2 Arbeitstage").
+
+### 4.0a Bekannte vereinfachte Annahmen (Version 1)
+
+Bewusste Vereinfachungen für den Start, festgehalten für spätere Überarbeitung:
+
+- Pausierte Aufträge (siehe `unterbrechung`, 2.9) zählen voll zum Vorlauf mit; bereits geleistete Teilarbeit wird nicht vom Vorlauf abgezogen
+- Ändert sich die Warteschlange eines Mitarbeiters (z. B. neuer Eilauftrag mit hoher Priorität schiebt sich davor), werden die Termine der anderen, bereits laufenden Aufträge desselben Mitarbeiters nicht automatisch neu berechnet
+- Nach einer manuellen Korrektur der Stunden (4.2) wird der Termin nicht automatisch neu berechnet — die Werkstattleitung müsste das bei Bedarf manuell anstoßen (z. B. durch kurzes Ändern der Priorität)
+- Ohne hinterlegte `mitarbeiter_arbeitszeit` gilt ein Standard-Fallback von 40 Wochenstunden
+
+
 
 ### 4.1 Kostenschätzung (analoges Vorgehen)
 
