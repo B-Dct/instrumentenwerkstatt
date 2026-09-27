@@ -177,16 +177,24 @@ Erfasst Gründe für Verzögerungen — wichtig, damit das spätere Modell "haus
 
 ### 2.10 `schätzungs_log` (für Stufe 2 vorbereitet)
 
-Protokolliert jede automatische Schätzung — damit du später prüfen kannst, wie gut das Modell tatsächlich war (Ist- vs. Prognosewert).
+Protokolliert jede automatische Schätzung **und** jede manuelle Korrektur durch einen Mitarbeiter oder Werkstattleiter — damit du später prüfen kannst, wie gut das Modell tatsächlich war (Ist- vs. Prognosewert), und nachvollziehbar bleibt, wer wann aus welchem Grund manuell eingegriffen hat.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | auftrag_id | FK → auftrag | |
 | berechnet_am | TIMESTAMP | |
-| methode | VARCHAR | "regelbasiert" oder "ml_modell_v1" etc. |
-| geschätztes_datum | DATE | |
+| methode | VARCHAR | "regelbasiert" / "ml_modell_v1" / "manuelle_korrektur" |
+| geschätztes_datum | DATE | Optional, je nachdem was bei diesem Log-Eintrag geschätzt/korrigiert wurde |
+| geschätzte_stunden | DECIMAL | Optional, siehe oben |
+| geschätzte_kosten | DECIMAL | Optional, siehe oben |
 | eingabefaktoren | JSONB | Snapshot der Faktoren zum Berechnungszeitpunkt (Auftragsvolumen, verfügbare Mitarbeiter, Saison etc.) — wichtig für Nachvollziehbarkeit und späteres Modell-Debugging |
+| korrigiert_von_mitarbeiter_id | FK → mitarbeiter | NULL bei automatischer Berechnung, gesetzt bei `methode = "manuelle_korrektur"` |
+| grund | TEXT | Nur bei manueller Korrektur relevant, z. B. "Instrument in sehr schlechtem Zustand, deutlich mehr Aufwand als Standardfall" |
+
+**Ablauf bei manueller Korrektur:** Ein neuer Eintrag mit `methode = "manuelle_korrektur"` wird angelegt (der automatisch berechnete Wert bleibt als vorheriger Log-Eintrag erhalten, wird nicht überschrieben), und `auftrag.geschätzte_arbeitsstunden`/`geschätzte_kosten` werden auf den korrigierten Wert aktualisiert — das ist dann der für Dashboards und Kunden-Anzeige maßgebliche, aktuelle Wert.
+
+**Wichtig für Stufe 2:** Eine manuelle Korrektur der *Schätzung* verändert nicht die späteren *Ist-Werte* (`arbeitszeiterfassung`, `auftrag.tatsächliche_kosten`) — diese werden weiterhin unabhängig aus der echten Bearbeitung erfasst. Die Trainingsdaten für das spätere ML-Modell bleiben dadurch unverfälscht.
 
 ---
 
@@ -317,6 +325,10 @@ geschätzte_kosten =
 
 `bisherige_ist_kosten` bezieht sich auf `auftrag.tatsächliche_kosten` vergleichbarer, bereits abgerechneter Aufträge.
 
+### 4.2 Manuelle Korrektur der Schätzung
+
+Sowohl die automatisch berechneten Stunden als auch Kosten lassen sich manuell überschreiben — z. B. wenn ein Mitarbeiter beim Öffnen des Instruments feststellt, dass der Zustand deutlich schlechter ist als der Standardfall und mehr Aufwand nötig sein wird. Details zur technischen Umsetzung (Protokollierung, wer korrigieren darf) siehe `schätzungs_log` (2.10) und Berechtigungsmatrix (7.2). Wirkt sich eine Korrektur voraussichtlich auch auf den Fertigstellungstermin aus, sollte das dem Werkstattleiter auffallen (z. B. durch eine Markierung im Dashboard) — eine automatische Neuberechnung des Termins aus korrigierten Stunden ist möglich, aber kein Muss für den Start.
+
 ---
 
 ## 5. Übergang zu Stufe 2 (ML-Modell)
@@ -394,6 +406,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Alle Aufträge werkstattweit einsehen | ❌ | ✅ | ✅ |
 | Aufträge einem Mitarbeiter zuweisen/umverteilen | ❌ | ✅ | ✅ |
 | Geschätztes Fertigstellungsdatum manuell korrigieren | ❌ | ✅ | ✅ |
+| Geschätzte Arbeitsstunden/Kosten für eigene zugewiesene Aufträge manuell korrigieren (mit Begründung) | ✅ | ✅ | ✅ |
 | Abwesenheiten (Urlaub/Krankheit) für Mitarbeiter eintragen | ❌ | ✅ | ✅ |
 | Betriebsweite Abwesenheit eintragen (z. B. Betriebsurlaub) | ❌ | ✅ | ✅ |
 | Gleitzeit-Anpassung erfassen | ❌ | ✅ | ✅ |
@@ -406,6 +419,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Mitarbeiter deaktivieren | ❌ | ❌ | ✅ |
 | Systemrollen vergeben (wer ist Werkstattleiter/Admin) | ❌ | ❌ | ✅ |
 | Parameter der Stufe-1-Berechnungslogik anpassen (z. B. Komplexitätsfaktoren) | ❌ | ❌ | ✅ |
+| Abfrage-Assistent für historische Erfahrungswerte nutzen (Abschnitt 8a) | ❌ | ✅ | ✅ |
 
 In einer kleinen Werkstatt ist es üblich, dass der Werkstattleiter zusätzlich als Admin eingerichtet wird — die Trennung kostet dich beim Bauen kaum Mehraufwand (es ist im Kern eine zusätzliche Prüfung "ist systemrolle = admin?"), gibt dir aber die Flexibilität, es später sauber zu trennen, falls z. B. ein externer IT-Dienstleister die technische Pflege übernimmt.
 
@@ -458,6 +472,32 @@ Diese Berechnung läuft automatisch im Hintergrund und muss von niemandem manuel
 ### 8.3 Warum keine feinere Tagesplanung nötig ist
 
 Eine Reparaturwerkstatt hat in der Regel keine exakt terminierten Slots wie ein Frisör oder eine Arztpraxis — die Reihenfolge der Bearbeitung ergibt sich ohnehin aus Priorität und Auftragseingang (siehe Mitarbeiter-Dashboard, Abschnitt 9.4). Eine wochenweise Kapazitätsübersicht reicht daher aus, um zu erkennen: "Mitarbeiter X ist diese und nächste Woche schon voll ausgelastet, neue Aufträge besser an Mitarbeiter Y vergeben." Sollte sich später herausstellen, dass doch eine feinere Terminplanung nötig ist (z. B. bei Zusagen fester Abholtermine), lässt sich das Modell erweitern, ohne die Grundstruktur zu ändern.
+
+---
+
+## 8a. Abfrage-Assistent für historische Erfahrungswerte (spätere Erweiterung)
+
+**Status:** Noch nicht umzusetzen — Voraussetzung ist die Berechnungslogik aus Abschnitt 4/4.1 sowie Login/Rollen (Abschnitt 7), da dies ein Werkstattleiter-Feature ist. Hier dokumentiert, damit die Kernberechnung von Anfang an so gebaut wird, dass sie sich später ohne Umbau wiederverwenden lässt.
+
+### 8a.1 Zielbild
+
+Der Werkstattleiter kann eine Frage in normaler Sprache stellen, z. B. *"Ich habe einen Saitenwechsel an einer Gibson vorzunehmen, gibt es hierzu Erfahrungswerte aus der Vergangenheit, wie hoch die Aufwände waren?"*, und erhält eine Antwort auf Basis echter historischer Daten aus der eigenen Werkstatt-Datenbank.
+
+### 8a.2 Funktionsweise (kein "Erfinden" von Werten)
+
+Der Ablauf hat drei getrennte Schritte, damit die Antwort immer auf echten Daten beruht und nicht auf plausibel klingenden, aber erfundenen Zahlen:
+
+1. **Frage verstehen:** Ein Sprachmodell (Claude API) übersetzt die freie Texteingabe in strukturierte Suchkriterien (`reparaturart`, `instrumentenklasse`, ggf. `hersteller` — z. B. wird "Gibson" als Gitarrenhersteller erkannt und auf `instrumentenklasse = Gitarre` abgebildet)
+2. **Echte Datenbankabfrage:** Mit diesen Kriterien wird dieselbe historische Durchschnittsberechnung ausgeführt, die auch für die automatische Kosten-/Terminschätzung genutzt wird (Abschnitt 4/4.1) — inklusive Fallzahl und ggf. Fallback auf `reparatur_vorgabewert`, falls zu wenig historische Daten vorliegen
+3. **Antwort formulieren:** Erst mit dem echten Ergebnis aus Schritt 2 im Kontext formuliert das Sprachmodell eine natürlichsprachliche Antwort. Technisch über "Tool Use" der Anthropic-API umgesetzt — das Modell antwortet ausschließlich auf Basis des zurückgegebenen Datenbankergebnisses, nie aus eigenem, antrainiertem "Wissen"
+
+### 8a.3 Wiederverwendbarkeit als Bauprinzip
+
+Damit diese Erweiterung später ohne Umbau der Kernlogik möglich ist: Die Berechnungsfunktionen aus Abschnitt 4/4.1 (historischer Durchschnitt inkl. Fallback-Logik) sollten von Anfang an als eigenständige, aufrufbare Funktionen gebaut werden (nicht fest in einen einzelnen API-Endpunkt verwoben) — genau das ist bereits so beauftragt.
+
+### 8a.4 Zugriff
+
+Nur für die Systemrolle `werkstattleiter` und `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — ergänzt dort als neue Zeile, sobald umgesetzt.
 
 ---
 
@@ -549,4 +589,5 @@ Umsetzung der Kapazitätsplanung aus Abschnitt 8 als einfache, wöchentliche Bal
 6. Internes Dashboard (Mitarbeitersicht) gemäß Abschnitt 9.4
 7. Administrationsbereich (Werkstattleiter- und Admin-Ansicht gemäß Berechtigungsmatrix in Abschnitt 7, Werkstattleiter-Dashboard gemäß 9.5, Kapazitäts-Dashboard gemäß 8 und 9.9)
 8. Kunden-Dashboard (Auftragsnummer + Zugriffstoken gemäß Abschnitt 6)
-9. Erst nach einigen Monaten Echtbetrieb: Stufe 2 evaluieren
+9. Abfrage-Assistent für historische Erfahrungswerte (Abschnitt 8a) — nach Login/Rollen
+10. Erst nach einigen Monaten Echtbetrieb: Stufe 2 evaluieren
