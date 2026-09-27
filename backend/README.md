@@ -12,7 +12,7 @@ uv run uvicorn app.main:app --reload
 ## Beispieldaten zum Ausprobieren
 
 ```bash
-uv run python -m app.demo_daten anlegen     # Stammdaten, Demo-Kunden, Instrumente, Historie
+uv run python -m app.demo_daten anlegen     # Stammdaten, Demo-Kunden, Instrumente, offene Aufträge, Historie
 uv run python -m app.demo_daten anzeigen    # IDs und fertige Beispiel-Anfragen erneut anzeigen
 uv run python -m app.demo_daten entfernen   # Demo-Kunden samt Instrumenten und Aufträgen entfernen
 ```

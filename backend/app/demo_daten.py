@@ -9,6 +9,8 @@ Angelegt werden:
 - Stammdaten (2.4 Instrumentenklassen, 2.6 Reparaturarten, 2.6a Vorgabewerte). Die sind
   realistisch und bleiben beim Entfernen erhalten – sie können auch echt genutzt werden.
 - Demo-Kunden (Kundennummer "DEMO-…") mit Instrumenten (2.1, 2.5)
+- Vier offene Demo-Aufträge in verschiedenen Status (einer mit hoher Priorität, einer
+  überfällig), um Statusdarstellung und Markierungen zu sehen
 - Fünf abgeschlossene Demo-Aufträge "Saitenwechsel an Violine" (Nummer "DEMO-…") mit
   Arbeitszeit und Kosten. Damit greift für diese Kombination die historische Schätzung
   (ab 5 Vergleichsfällen) statt des Vorgabewerts – so sieht man beide Wege.
@@ -90,6 +92,16 @@ KUNDEN = [  # (Kundennummer, Name, E-Mail, Telefon, [(Klasse, Hersteller, Typ, B
     ]),
 ]
 
+# Offene Demo-Aufträge in verschiedenen Status (zeigen Statusfarben, Priorität, "überfällig"):
+# (Nummer, Kunde, Instrumentenklasse, Reparaturart, Status, Priorität, vor wie vielen Tagen,
+#  voraussichtlich fertig in Tagen – negativ = überfällig)
+OFFENE_AUFTRAEGE = [
+    ("DEMO-0101", "DEMO-002", "Trompete", "Ventil-Überholung", "angenommen", "hoch", 1, 6),
+    ("DEMO-0102", "DEMO-003", "Violoncello", "Rissreparatur Decke", "in_bearbeitung", "normal", 9, 5),
+    ("DEMO-0103", "DEMO-002", "Klarinette", "Polster erneuern", "wartet_auf_ersatzteil", "normal", 21, -3),
+    ("DEMO-0104", "DEMO-003", "Klavier", "Stimmen", "qualitaetspruefung", "normal", 4, 1),
+]
+
 # Historie: Saitenwechsel an Violinen der Musikschule, (Minuten, Euro, vor wie vielen Tagen)
 HISTORIE = [(40, "30.00", 120), (45, "30.00", 95), (35, "28.00", 70), (50, "35.00", 42), (40, "30.00", 20)]
 
@@ -125,7 +137,52 @@ def anlegen(db: Session) -> None:
             )
 
     _historie_anlegen(db, klassen["Violine"], arten["Saitenwechsel"])
+    _offene_auftraege_anlegen(db, klassen, arten)
     db.commit()
+
+
+def _offene_auftraege_anlegen(db: Session, klassen: dict, arten: dict) -> None:
+    bearbeiter = db.scalar(select(Mitarbeiter).where(Mitarbeiter.email == DEMO_MITARBEITER_EMAIL))
+    status = {s.schluessel: s for s in db.scalars(select(Auftragsstatus))}
+    heute = datetime.now(UTC)
+    for nummer, kundennr, klasse, art, schluessel, prioritaet, vor_tagen, fertig_in in OFFENE_AUFTRAEGE:
+        if db.scalar(select(Auftrag).where(Auftrag.auftragsnummer == nummer)) is not None:
+            continue
+        instrument = db.scalar(
+            select(Instrument).join(Kunde).where(
+                Kunde.kundennummer == kundennr, Instrument.instrumentenklasse_id == klassen[klasse].id
+            )
+        )
+        vorgabe = db.scalar(select(ReparaturVorgabewert).where(
+            ReparaturVorgabewert.reparaturart_id == arten[art].id,
+            (ReparaturVorgabewert.instrumentenklasse_id == klassen[klasse].id)
+            | ReparaturVorgabewert.instrumentenklasse_id.is_(None),
+        ).order_by(ReparaturVorgabewert.instrumentenklasse_id.is_(None)).limit(1))
+        angelegt = heute - timedelta(days=vor_tagen)
+        auftrag = Auftrag(
+            auftragsnummer=nummer,
+            zugriffstoken=secrets.token_hex(6).upper(),
+            kunde_id=instrument.kunde_id,
+            instrument_id=instrument.id,
+            reparaturart_id=arten[art].id,
+            zugewiesener_mitarbeiter_id=bearbeiter.id,
+            prioritaet=prioritaet,
+            komplexitaet=arten[art].standard_komplexitaet,
+            status_aktuell_id=status[schluessel].id,
+            erstellt_am=angelegt,
+            geschaetzte_arbeitsstunden=vorgabe.vorgabe_stunden if vorgabe else None,
+            geschaetzte_kosten=vorgabe.vorgabe_kosten if vorgabe else None,
+            geschaetztes_fertigstellungsdatum=(heute + timedelta(days=fertig_in)).date(),
+            notizen="Demo-Auftrag (offen)",
+        )
+        db.add(auftrag)
+        db.flush()
+        verlauf = ["angenommen"] if schluessel == "angenommen" else ["angenommen", schluessel]
+        for i, s in enumerate(verlauf):
+            db.add(AuftragStatusverlauf(auftrag_id=auftrag.id, status_id=status[s].id,
+                                        geaendert_am=angelegt + timedelta(days=i * 2),
+                                        geaendert_von_mitarbeiter_id=bearbeiter.id,
+                                        kommentar="Auftrag angelegt" if i == 0 else None))
 
 
 def _historie_anlegen(db: Session, violine: Instrumentenklasse, saitenwechsel: Reparaturart) -> None:

@@ -36,6 +36,7 @@ def test_anlegen_ist_wiederholbar(db):
     nachher = [_anzahl(db, m) for m in (Instrumentenklasse, Reparaturart, ReparaturVorgabewert, Kunde, Instrument, Auftrag)]
     assert vorher == nachher
     assert _anzahl(db, Kunde, Kunde.kundennummer.startswith("DEMO-")) == 3
+    assert _anzahl(db, Auftrag, Auftrag.auftragsnummer.startswith("DEMO-01")) == 4
 
 
 def test_schaetzungen_wie_im_spickzettel_angekuendigt(db):

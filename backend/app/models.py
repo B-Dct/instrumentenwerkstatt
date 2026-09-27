@@ -198,7 +198,8 @@ class Auftragsstatus(Base):
     schluessel: Mapped[str] = mapped_column(String(50), unique=True)  # stabil, für Code: "fertig"
     bezeichnung: Mapped[str] = mapped_column(String(100), unique=True)  # Anzeige: "Fertig"
     reihenfolge: Mapped[int] = mapped_column(SmallInteger)
-    farbe: Mapped[str] = mapped_column(String(7))  # Hex, z. B. #2E7D32
+    farbe: Mapped[str] = mapped_column(String(7))  # Hex, z. B. #4B6B4F (Design-System 9.6)
+    symbol: Mapped[str] = mapped_column(String(4), server_default="○")  # Farbe nie allein (9.3)
     # Beim Wechsel in diesen Status muss Arbeitszeit erfasst werden (Datenmodell 9.8)
     erfordert_zeiterfassung: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Auftrag gilt in diesem Status als abgeschlossen (zählt nicht mehr zur Auslastung)

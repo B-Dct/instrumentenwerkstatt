@@ -1,0 +1,62 @@
+/*
+ * Design-Tokens – einzige Quelle für Farben, Schrift, Abstände und Radien.
+ * Grundlage: docs/datenmodell.md, Abschnitt 9.6 (Design-System).
+ * Nirgends sonst feste Farb-/Größenwerte verwenden, immer var(--…).
+ *
+ * Ausnahme Statusfarben: Die Auftragsstatus sind eine pflegbare Tabelle in der
+ * Datenbank (auftragsstatus.farbe/.symbol). Das Frontend übernimmt Farbe und Symbol
+ * von dort über die Variable --status-farbe, damit neue Status ohne Code-Änderung
+ * funktionieren. Die Werte in der Datenbank entsprechen der Tabelle in 9.6.
+ */
+:root {
+  /* Farbpalette (9.6) */
+  --farbe-hintergrund: #faf8f4;
+  --farbe-text: #2b2420;
+  --farbe-primaer: #8a6d3b;       /* gedecktes Messing: Primär-Buttons, Links, aktive Navigation */
+  --farbe-erfolg: #4b6b4f;        /* gedämpftes Fichtengrün: Erfolgsmeldungen */
+  --farbe-warnung: #b23a34;       /* gedecktes Rot: überfällig, Gefahren-Aktionen, Fehler */
+  --farbe-rand: #d9d2c7;          /* Trennlinien, Tabellenränder */
+
+  /* Abgeleitete Töne – nur als Mischung der Palette, keine neuen Farben */
+  --farbe-text-leise: color-mix(in srgb, var(--farbe-text) 65%, var(--farbe-hintergrund));
+  --farbe-flaeche-leise: color-mix(in srgb, var(--farbe-rand) 30%, var(--farbe-hintergrund));
+  --farbe-primaer-dunkel: color-mix(in srgb, var(--farbe-primaer) 80%, var(--farbe-text));
+  --farbe-auf-primaer: var(--farbe-hintergrund);
+
+  /* Typografie (9.6) */
+  --schrift-ui: 'Inter Variable', system-ui, sans-serif;
+  --schrift-titel: 'Fraunces Variable', Georgia, serif;
+  --groesse-12: 0.75rem;
+  --groesse-14: 0.875rem;
+  --groesse-16: 1rem;
+  --groesse-20: 1.25rem;
+  --groesse-28: 1.75rem;
+  --groesse-36: 2.25rem;
+  --zeilenhoehe: 1.5;
+  --zeilenhoehe-titel: 1.2;
+  --gewicht-normal: 400;
+  --gewicht-halbfett: 600;
+
+  /* Abstands-Raster, 4-px-Basis (9.6) */
+  --abstand-1: 4px;
+  --abstand-2: 8px;
+  --abstand-3: 12px;
+  --abstand-4: 16px;
+  --abstand-5: 24px;
+  --abstand-6: 32px;
+  --abstand-7: 48px;
+
+  /* Form */
+  --radius: 4px;
+  --randbreite: 1px;
+  --markierungsbreite: var(--abstand-1);  /* farbige Kennlinie an Status/überfälligen Zeilen */
+  --fokusbreite: 2px;
+
+  /* Layout-Breiten */
+  --seitenleiste-breite: 240px;
+  --inhalt-max: 1200px;
+  --formular-max: 560px;
+  --login-max: 360px;
+  --spalte-min: 320px;
+  --spalte-min-eng: 160px;
+}

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { angemeldeterNutzer, api } from '../api.js'
 
 const instrumentName = (i) =>
-  [i.instrumentenklasse_bezeichnung, i.hersteller, i.typenbezeichnung].filter(Boolean).join(' – ')
+  [i.instrumentenklasse_bezeichnung, i.hersteller, i.typenbezeichnung].filter(Boolean).join(' · ')
 
 export default function AuftragNeu() {
   const navigate = useNavigate()
@@ -53,55 +53,69 @@ export default function AuftragNeu() {
     }
   }
 
-  if (!listen) return fehler ? <p className="fehler">{fehler}</p> : <p>Lädt …</p>
-
   return (
-    <form onSubmit={absenden}>
+    <>
+      <nav className="brotkrumen"><span><Link to="/">Aufträge</Link></span><span>Neuer Auftrag</span></nav>
       <h1>Neuer Auftrag</h1>
-      <fieldset>
-        <label>Kunde
-          <select value={form.kunde_id} onChange={setze('kunde_id')} required>
-            <option value="">– bitte wählen –</option>
-            {listen.kunden.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.kundennummer})</option>)}
-          </select>
-        </label>
-        <label>Instrument
-          <select value={form.instrument_id} onChange={setze('instrument_id')} required disabled={!form.kunde_id}>
-            <option value="">{form.kunde_id ? '– bitte wählen –' : '– erst Kunde wählen –'}</option>
-            {instrumente.map((i) => <option key={i.id} value={i.id}>{instrumentName(i)}</option>)}
-          </select>
-        </label>
-        <label>Reparaturart
-          <select value={form.reparaturart_id} onChange={setze('reparaturart_id')} required>
-            <option value="">– bitte wählen –</option>
-            {listen.reparaturarten.map((r) => (
-              <option key={r.id} value={r.id}>{r.bezeichnung} (Komplexität {r.standard_komplexitaet})</option>
-            ))}
-          </select>
-        </label>
-        <label>Zugewiesen an
-          <select value={form.zugewiesener_mitarbeiter_id} onChange={setze('zugewiesener_mitarbeiter_id')}>
-            <option value="">– noch niemand –</option>
-            {listen.mitarbeiter.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </label>
-        <label>Priorität
-          <select value={form.prioritaet} onChange={setze('prioritaet')}>
-            <option value="normal">normal</option>
-            <option value="hoch">hoch</option>
-          </select>
-        </label>
-        <label>Komplexität
-          <select value={form.komplexitaet} onChange={setze('komplexitaet')}>
-            <option value="">Standard der Reparaturart</option>
-            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-        <label>Notizen <br /><textarea rows={3} value={form.notizen} onChange={setze('notizen')} /></label>
-      </fieldset>
-      <p>Stunden und Kosten werden beim Anlegen automatisch geschätzt.</p>
-      <button disabled={sendet}>{sendet ? 'Wird angelegt …' : 'Auftrag anlegen'}</button>
-      {fehler && <p className="fehler">{fehler}</p>}
-    </form>
+      {!listen && (fehler ? <p className="meldung meldung--fehler">{fehler}</p> : <p className="leise">Lädt …</p>)}
+      {listen && (
+        <form className="formular" onSubmit={absenden}>
+          <label className="feld">
+            <span>Kunde</span>
+            <select value={form.kunde_id} onChange={setze('kunde_id')} required>
+              <option value="">Bitte wählen</option>
+              {listen.kunden.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.kundennummer})</option>)}
+            </select>
+          </label>
+          <label className="feld">
+            <span>Instrument</span>
+            <select value={form.instrument_id} onChange={setze('instrument_id')} required disabled={!form.kunde_id}>
+              <option value="">{form.kunde_id ? 'Bitte wählen' : 'Erst Kunde wählen'}</option>
+              {instrumente.map((i) => <option key={i.id} value={i.id}>{instrumentName(i)}</option>)}
+            </select>
+          </label>
+          <label className="feld">
+            <span>Reparaturart</span>
+            <select value={form.reparaturart_id} onChange={setze('reparaturart_id')} required>
+              <option value="">Bitte wählen</option>
+              {listen.reparaturarten.map((r) => (
+                <option key={r.id} value={r.id}>{r.bezeichnung} (Komplexität {r.standard_komplexitaet})</option>
+              ))}
+            </select>
+          </label>
+          <label className="feld">
+            <span>Zugewiesen an</span>
+            <select value={form.zugewiesener_mitarbeiter_id} onChange={setze('zugewiesener_mitarbeiter_id')}>
+              <option value="">Noch niemand</option>
+              {listen.mitarbeiter.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
+          <div className="spalten spalten--eng">
+            <label className="feld">
+              <span>Priorität</span>
+              <select value={form.prioritaet} onChange={setze('prioritaet')}>
+                <option value="normal">Normal</option>
+                <option value="hoch">Hoch</option>
+              </select>
+            </label>
+            <label className="feld">
+              <span>Komplexität</span>
+              <select value={form.komplexitaet} onChange={setze('komplexitaet')}>
+                <option value="">Standard der Reparaturart</option>
+                {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="feld">
+            <span>Notizen</span>
+            <textarea rows={3} value={form.notizen} onChange={setze('notizen')} />
+            <small>Nur intern sichtbar.</small>
+          </label>
+          <p className="leise">Arbeitsstunden und Kosten werden beim Anlegen automatisch geschätzt.</p>
+          <button className="btn btn--primaer" disabled={sendet}>{sendet ? 'Wird angelegt …' : 'Auftrag anlegen'}</button>
+          {fehler && <p className="meldung meldung--fehler" role="alert">{fehler}</p>}
+        </form>
+      )}
+    </>
   )
 }

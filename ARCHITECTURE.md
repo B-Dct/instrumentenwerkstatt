@@ -8,7 +8,7 @@ Dieses Dokument hält die zentralen Architekturentscheidungen fest — als Gedä
 |---|---|---|
 | Datenbank | PostgreSQL (gehostet bei Supabase) | Relationale Struktur passt zu Kunden/Aufträgen/Mitarbeitern; weit verbreitet, gut dokumentiert |
 | Backend | Python 3.12 / FastAPI, SQLAlchemy 2, psycopg 3 | Breite Trainingsbasis für KI-Tools, große Community, stabile Konventionen |
-| Frontend | React (mit Vite), `react-router`; derzeit Klick-Prototyp ohne Gestaltung | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
+| Frontend | React (mit Vite), `react-router`, CSS-Variablen als Design-Tokens | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
 
 **Prinzip:** Bewusst "langweiliger", breit verbreiteter Stack statt exotischer Frameworks — wichtig, damit KI-Tools auch in ein paar Jahren noch zuverlässig helfen können.
 
@@ -84,11 +84,18 @@ Wochenbasiertes Kapazitätsmodell (angelehnt an Ressourcenplanungs-Tools wie Flo
 
 Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 
+**Umsetzung Design-System (Stand 27.09.2026):**
+- Design-Tokens als CSS-Variablen in `frontend/src/styles/tokens.css` (einzige Quelle für Farben, Typskala, 4-px-Raster, Radius)
+- Statusfarben/-symbole liegen in der Datenbank (`auftragsstatus.farbe`, `.symbol`), passend zur pflegbaren Status-Tabelle. Werte entsprechen der Tabelle in 9.6. „Abgeholt“ ist dort nicht festgelegt und vorläufig `#5E554C` / ●
+- Schriften Inter/Fraunces lokal eingebunden (`@fontsource-variable`) statt über Google Fonts, damit keine IP-Adressen an Google übertragen werden (DSGVO)
+- „Überfällig“ wird im Frontend aus `geschaetztes_fertigstellungsdatum` berechnet. Wirkt erst, sobald die Terminschätzung umgesetzt ist (bisher nur in Demo-Daten gesetzt)
+
 ## 8. Änderungsprotokoll dieses Dokuments
 
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Design-System umgesetzt (Tokens, Seitenleiste, Statusfarben/-symbole aus der DB, lokale Schriften) |
 | 27.09.2026 | React-Klick-Prototyp (nur funktional, wird mit dem Design-System ersetzt); Lese-Endpunkte für Auswahllisten |
 | 27.09.2026 | Beispieldaten-Skript `app/demo_daten.py` (anlegen/anzeigen/entfernen) |
 | 27.09.2026 | Login (JWT, Argon2) und Rollenprüfung; Header `X-Mitarbeiter-Id` entfernt; Skript für den ersten Admin |

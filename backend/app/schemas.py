@@ -71,6 +71,8 @@ class StatusKurz(BaseModel):
     schluessel: str
     bezeichnung: str
     farbe: str
+    symbol: str
+    ist_abgeschlossen: bool
 
 
 class AuftragKurz(BaseModel):
@@ -178,6 +180,7 @@ class StatusEintrag(BaseModel):
     bezeichnung: str
     reihenfolge: int
     farbe: str
+    symbol: str
     erfordert_zeiterfassung: bool
     ist_abgeschlossen: bool
 

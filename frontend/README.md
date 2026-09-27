@@ -1,8 +1,7 @@
-# Frontend (React / Vite) – Klick-Prototyp
+# Frontend (React / Vite)
 
-> **Nur funktional, ohne Design-Anspruch.** Wird komplett neu gestaltet, sobald das
-> Design-System (Datenmodell 9.6) feststeht. UI-Richtlinien aus Abschnitt 9 sind hier
-> bewusst noch nicht umgesetzt.
+Interne Oberfläche für Mitarbeiter, Werkstattleitung und Admin. Gestaltet nach dem
+Design-System in `docs/datenmodell.md`, Abschnitt 9.6.
 
 ## Starten
 
@@ -25,8 +24,22 @@ Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env
 | `/neu` | Auftrag anlegen (Kunde → Instrument → Reparaturart; Schätzung erfolgt automatisch) |
 | `/auftrag/:id` | Details, Statuswechsel (bei „Fertig“ mit Pflicht-Arbeitszeit), Schätzungs-Korrektur, Statusverlauf, Schätzungsprotokoll |
 
+## Design-System
+
+- **Alle Farben, Schriftgrößen, Abstände und Radien** stehen als CSS-Variablen in
+  `src/styles/tokens.css`. In Komponenten und `src/styles/basis.css` werden nur diese
+  Variablen verwendet, keine festen Werte.
+- **Statusfarben und -symbole** kommen aus der Datenbank (`auftragsstatus.farbe`/`.symbol`),
+  weil die Status pflegbar sind. Die Komponente `komponenten/Status.jsx` zeigt immer
+  Farbe, Symbol und Text zusammen (9.3).
+- **Schriften** Inter und Fraunces sind lokal eingebunden (`@fontsource-variable/…`).
+  Es gibt keine Anfrage an Google-Server (Datenschutz).
+- Layout: feste linke Seitenleiste; der Werkstattname oben links führt zur Startseite (9.2).
+
 ## Aufbau
 
 - `src/api.js`: alle Backend-Aufrufe, Token-Verwaltung und Anzeige-Helfer (Datum, Euro)
 - `src/seiten/`: eine Datei pro Seite
+- `src/komponenten/`: wiederverwendbare Bausteine (Statusanzeige, Markierungen)
+- `src/styles/`: `tokens.css` (Design-Tokens) und `basis.css` (Grundstile, Bausteine)
 - Bei abgelaufener Anmeldung (401) geht es automatisch zurück zur Login-Seite

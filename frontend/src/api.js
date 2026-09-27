@@ -81,9 +81,12 @@ export const api = {
   mitarbeiter: () => anfrage('/mitarbeiter'),
 }
 
-// Anzeige-Helfer
-export const datum = (wert) => (wert ? new Date(wert).toLocaleDateString('de-DE') : '–')
-export const zeit = (wert) => (wert ? new Date(wert).toLocaleString('de-DE') : '–')
-export const stunden = (wert) => (wert == null ? '–' : `${wert.toLocaleString('de-DE')} Std.`)
+// Anzeige-Helfer – Datumsformat einheitlich TT.MM.JJJJ (Design-System 9.6)
+const DATUM = { day: '2-digit', month: '2-digit', year: 'numeric' }
+export const datum = (wert) => (wert ? new Date(wert).toLocaleDateString('de-DE', DATUM) : '–')
+export const zeit = (wert) =>
+  wert ? new Date(wert).toLocaleString('de-DE', { ...DATUM, hour: '2-digit', minute: '2-digit' }) : '–'
+export const zahl = (wert) => (wert == null ? '–' : wert.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+export const stunden = (wert) => (wert == null ? '–' : `${zahl(wert)} Std.`)
 export const euro = (wert) =>
   wert == null ? '–' : wert.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })

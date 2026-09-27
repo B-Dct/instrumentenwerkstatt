@@ -100,7 +100,10 @@ def _listen_abfrage() -> Select:
 
 
 def _status_kurz(s: Auftragsstatus) -> StatusKurz:
-    return StatusKurz(id=s.id, schluessel=s.schluessel, bezeichnung=s.bezeichnung, farbe=s.farbe)
+    return StatusKurz(
+        id=s.id, schluessel=s.schluessel, bezeichnung=s.bezeichnung,
+        farbe=s.farbe, symbol=s.symbol, ist_abgeschlossen=s.ist_abgeschlossen,
+    )
 
 
 def _kurz_felder(zeile) -> dict:

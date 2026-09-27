@@ -25,12 +25,21 @@ export default function Login() {
   }
 
   return (
-    <form onSubmit={absenden}>
-      <h1>Anmelden</h1>
-      <label>E-Mail <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
-      <label>Passwort <input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} required /></label>
-      <button disabled={laedt}>{laedt ? 'Anmelden …' : 'Anmelden'}</button>
-      {fehler && <p className="fehler">{fehler}</p>}
-    </form>
+    <main className="login">
+      <h1>Instrumenten&shy;werkstatt</h1>
+      <p className="leise">Anmeldung für Mitarbeiter</p>
+      <form onSubmit={absenden}>
+        <label className="feld">
+          <span>E-Mail</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+        </label>
+        <label className="feld">
+          <span>Passwort</span>
+          <input type="password" value={passwort} onChange={(e) => setPasswort(e.target.value)} required />
+        </label>
+        <button className="btn btn--primaer" disabled={laedt}>{laedt ? 'Anmelden …' : 'Anmelden'}</button>
+        {fehler && <p className="meldung meldung--fehler" role="alert">{fehler}</p>}
+      </form>
+    </main>
   )
 }
