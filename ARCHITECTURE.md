@@ -89,6 +89,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Beispieldaten-Skript `app/demo_daten.py` (anlegen/anzeigen/entfernen) |
 | 27.09.2026 | Login (JWT, Argon2) und Rollenprüfung; Header `X-Mitarbeiter-Id` entfernt; Skript für den ersten Admin |
 | 27.09.2026 | Auftrags-Endpunkte (Anlegen mit Schätzung, Liste, Detail, Statuswechsel, manuelle Korrektur); vorläufige Identifikation per `X-Mitarbeiter-Id`; alle Zeitstempel auf `clock_timestamp()` |
 | 27.09.2026 | Stufe-1-Schätzung für Arbeitsstunden und Kosten (isoliert, noch nicht angebunden) |

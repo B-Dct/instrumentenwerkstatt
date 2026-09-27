@@ -9,6 +9,18 @@ uv run uvicorn app.main:app --reload
 - http://localhost:8000/health/db – Datenbankverbindung funktioniert
 - http://localhost:8000/docs – automatische API-Doku (zum Ausprobieren der Endpunkte)
 
+## Beispieldaten zum Ausprobieren
+
+```bash
+uv run python -m app.demo_daten anlegen     # Stammdaten, Demo-Kunden, Instrumente, Historie
+uv run python -m app.demo_daten anzeigen    # IDs und fertige Beispiel-Anfragen erneut anzeigen
+uv run python -m app.demo_daten entfernen   # Demo-Kunden samt Instrumenten und Aufträgen entfernen
+```
+
+Demo-Daten erkennt man an Kundennummern und Auftragsnummern mit `DEMO-`. Beim Entfernen
+bleiben die Stammdaten (Instrumentenklassen, Reparaturarten, Vorgabewerte) erhalten.
+Mit ihnen kann man auch echt arbeiten.
+
 ## Tests
 
 ```bash
