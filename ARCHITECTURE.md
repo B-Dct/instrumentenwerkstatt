@@ -37,6 +37,13 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 
 Details und Berechnungsformeln: siehe Datenmodell-Dokument, Abschnitte 4–5.
 
+**Umsetzung Stufe 1, Teil Arbeitsstunden/Kosten (Stand 27.09.2026):** `backend/app/schaetzung.py`, Funktionen `schaetze_arbeitsstunden` und `schaetze_kosten`
+- Vergleichsfälle = Aufträge mit gleicher Instrumentenklasse (über `instrument`) + Reparaturart, deren aktueller Status `ist_abgeschlossen` ist (derzeit „Fertig“ und „Abgeholt“) **und** die einen Ist-Wert haben (mind. ein `arbeitszeiterfassung`-Eintrag bzw. `tatsaechliche_kosten` gesetzt)
+- Arbeitszeit: erst je Auftrag alle Zeiteinträge summieren, dann über die Aufträge mitteln
+- Ab `MINDESTANZAHL_VERGLEICHSFAELLE = 5` Vergleichsfällen → historischer Durchschnitt; sonst Vorgabewert (spezifisch vor allgemein); sonst keine Schätzung
+- Ergebnis enthält neben dem Wert auch die Quelle und die Anzahl Vergleichsfälle (für das spätere `schaetzungs_log`)
+- Noch **nicht** umgesetzt: Komplexitätsfaktor, Terminschätzung (Fertigstellungsdatum), Anbindung an Auftragserstellung/Statuswechsel
+
 ## 4. Berechtigungskonzept
 
 Drei Systemrollen, kumulativ (Admin ⊇ Werkstattleiter ⊇ Mitarbeiter):
@@ -76,6 +83,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Stufe-1-Schätzung für Arbeitsstunden und Kosten (isoliert, noch nicht angebunden) |
 | 27.09.2026 | Tabelle `reparatur_vorgabewert` + Kostenfelder in `auftrag`; Admin-Endpunkte für Vorgabewerte (noch ohne Berechtigungsprüfung, siehe Abschnitt 4) |
 | 27.09.2026 | Grundschema angelegt (Alembic-Migration), Datenbank-Konventionen festgelegt (siehe Abschnitt 2) |
 | 27.09.2026 | Tech-Stack festgelegt (FastAPI, React/Vite, PostgreSQL bei Supabase); Datenbankzugriff über Supabase Session Pooler (IPv4) |
