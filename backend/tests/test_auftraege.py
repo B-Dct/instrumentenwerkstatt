@@ -1,6 +1,5 @@
 """Tests der Auftrags-Endpunkte (Datenmodell 2.7, 2.8, 2.10, 4.2)."""
 
-import itertools
 import re
 import uuid
 from datetime import date
@@ -10,7 +9,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Arbeitszeiterfassung, Auftrag, Kunde, SchaetzungsLog
-from app.routers import auftraege
+from app.routers.auftraege import _neue_auftragsnummer  # Original (Tests nutzen Ersatz)
 from tests.beispieldaten import Werkstatt
 from tests.conftest import OHNE_ANMELDUNG, angemeldet_als
 
@@ -18,12 +17,7 @@ URL = "/auftraege"
 
 
 @pytest.fixture
-def w(db, client, monkeypatch):
-    # Der Nummernzähler der Datenbank wird beim Rollback nicht zurückgesetzt –
-    # Tests sollen keine echten Auftragsnummern verbrauchen.
-    zaehler = itertools.count(1)
-    monkeypatch.setattr(auftraege, "_neue_auftragsnummer", lambda db: f"TEST-{next(zaehler):05d}")
-
+def w(db, client):
     werkstatt = Werkstatt(db)
     werkstatt.vorgabe(stunden="0.50", kosten="20.00")                       # allgemein
     werkstatt.vorgabe(werkstatt.kontrabass, stunden="1.50", kosten="60.00")  # Kontrabass
@@ -107,7 +101,7 @@ def test_auftragsnummer_format():
         def execute(self, _):
             return type("R", (), {"scalar_one": lambda self: 42})()
 
-    assert auftraege._neue_auftragsnummer(FakeDb()) == f"{date.today().year}-00042"
+    assert _neue_auftragsnummer(FakeDb()) == f"{date.today().year}-00042"
 
 
 # --- Auflisten / Abrufen -----------------------------------------------------

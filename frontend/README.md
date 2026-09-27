@@ -1,16 +1,32 @@
-# React + Vite
+# Frontend (React / Vite) – Klick-Prototyp
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> **Nur funktional, ohne Design-Anspruch.** Wird komplett neu gestaltet, sobald das
+> Design-System (Datenmodell 9.6) feststeht. UI-Richtlinien aus Abschnitt 9 sind hier
+> bewusst noch nicht umgesetzt.
 
-Currently, two official plugins are available:
+## Starten
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Voraussetzung: Das Backend läuft auf http://localhost:8000 (siehe `backend/README.md`).
 
-## React Compiler
+```bash
+npm install     # einmalig bzw. nach Änderungen an package.json
+npm run dev     # startet auf http://localhost:5173
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Anmelden mit einem Konto, das per `uv run python -m app.konto_anlegen` im Backend angelegt wurde.
+Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env.example`).
 
-## Expanding the Oxlint configuration
+## Seiten
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+| Adresse | Inhalt |
+|---|---|
+| `/login` | Anmeldung (Token wird im `localStorage` des Browsers gespeichert) |
+| `/` | Auftragsliste (Sortierung vom Backend: Priorität hoch zuerst, dann älteste) |
+| `/neu` | Auftrag anlegen (Kunde → Instrument → Reparaturart; Schätzung erfolgt automatisch) |
+| `/auftrag/:id` | Details, Statuswechsel (bei „Fertig“ mit Pflicht-Arbeitszeit), Schätzungs-Korrektur, Statusverlauf, Schätzungsprotokoll |
+
+## Aufbau
+
+- `src/api.js`: alle Backend-Aufrufe, Token-Verwaltung und Anzeige-Helfer (Datum, Euro)
+- `src/seiten/`: eine Datei pro Seite
+- Bei abgelaufener Anmeldung (401) geht es automatisch zurück zur Login-Seite

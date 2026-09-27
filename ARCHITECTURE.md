@@ -8,7 +8,7 @@ Dieses Dokument hält die zentralen Architekturentscheidungen fest — als Gedä
 |---|---|---|
 | Datenbank | PostgreSQL (gehostet bei Supabase) | Relationale Struktur passt zu Kunden/Aufträgen/Mitarbeitern; weit verbreitet, gut dokumentiert |
 | Backend | Python 3.12 / FastAPI, SQLAlchemy 2, psycopg 3 | Breite Trainingsbasis für KI-Tools, große Community, stabile Konventionen |
-| Frontend | React (mit Vite) | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
+| Frontend | React (mit Vite), `react-router`; derzeit Klick-Prototyp ohne Gestaltung | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
 
 **Prinzip:** Bewusst "langweiliger", breit verbreiteter Stack statt exotischer Frameworks — wichtig, damit KI-Tools auch in ein paar Jahren noch zuverlässig helfen können.
 
@@ -89,6 +89,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | React-Klick-Prototyp (nur funktional, wird mit dem Design-System ersetzt); Lese-Endpunkte für Auswahllisten |
 | 27.09.2026 | Beispieldaten-Skript `app/demo_daten.py` (anlegen/anzeigen/entfernen) |
 | 27.09.2026 | Login (JWT, Argon2) und Rollenprüfung; Header `X-Mitarbeiter-Id` entfernt; Skript für den ersten Admin |
 | 27.09.2026 | Auftrags-Endpunkte (Anlegen mit Schätzung, Liste, Detail, Statuswechsel, manuelle Korrektur); vorläufige Identifikation per `X-Mitarbeiter-Id`; alle Zeitstempel auf `clock_timestamp()` |

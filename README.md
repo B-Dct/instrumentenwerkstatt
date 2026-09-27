@@ -36,16 +36,18 @@ Details und Begründung der Wahl siehe [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 Voraussetzungen: [uv](https://docs.astral.sh/uv/) und Node.js.
 
 ```bash
-# Backend (läuft auf http://localhost:8000)
+# Backend (läuft auf http://localhost:8000, API-Doku unter /docs)
 cd backend
-cp .env.example .env        # einmalig, dann DATABASE_URL eintragen
+cp .env.example .env        # einmalig, dann DATABASE_URL und JWT_SECRET eintragen
 uv run uvicorn app.main:app --reload
 
-# Frontend (läuft auf http://localhost:5173)
+# Frontend (läuft auf http://localhost:5173) – in einem zweiten Terminal
 cd frontend
 npm install                 # einmalig
 npm run dev
 ```
+
+Erstes Konto und Beispieldaten: siehe `backend/README.md` (`app.konto_anlegen`, `app.demo_daten`).
 
 Verbindung prüfen: http://localhost:8000/health/db sollte `"datenbank": "verbunden"` zurückgeben.
 

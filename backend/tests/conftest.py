@@ -1,6 +1,7 @@
 """Test-Setup: Jeder Test läuft gegen die echte Datenbank, aber in einer Transaktion,
 die am Ende zurückgerollt wird – es bleiben keine Testdaten zurück."""
 
+import itertools
 import secrets
 
 import pytest
@@ -11,6 +12,7 @@ from app.auth import passwort_hashen, token_erstellen
 from app.db import engine, get_db
 from app.main import app
 from app.models import Mitarbeiter, Systemrolle
+from app.routers import auftraege
 
 TEST_PASSWORT = "richtig-langes-passwort"
 _TEST_PASSWORT_HASH = passwort_hashen(TEST_PASSWORT)  # einmal hashen (Argon2 ist absichtlich langsam)
@@ -36,6 +38,14 @@ def angemeldet_als(mitarbeiter: Mitarbeiter) -> dict:
 
 # Header-Wert, der die Standard-Anmeldung des Test-Clients aufhebt
 OHNE_ANMELDUNG = {"Authorization": ""}
+
+
+@pytest.fixture(autouse=True)
+def keine_echten_auftragsnummern(monkeypatch):
+    """Der Nummernzähler der Datenbank wird beim Rollback NICHT zurückgesetzt –
+    Tests dürfen deshalb keine echten Auftragsnummern verbrauchen (gilt für alle Tests)."""
+    zaehler = itertools.count(1)
+    monkeypatch.setattr(auftraege, "_neue_auftragsnummer", lambda db: f"TEST-{next(zaehler):05d}")
 
 
 @pytest.fixture

@@ -140,3 +140,51 @@ class SchaetzungKorrektur(BaseModel):
     grund: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
         description="Begründung der Korrektur (Pflicht)"
     )
+
+
+# --- Auswahllisten (nur lesen) -----------------------------------------------
+
+class KundeKurz(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kundennummer: str
+    name: str
+
+
+class InstrumentKurz(BaseModel):
+    id: uuid.UUID
+    kunde_id: uuid.UUID
+    instrumentenklasse_id: uuid.UUID
+    instrumentenklasse_bezeichnung: str
+    hersteller: str | None
+    typenbezeichnung: str | None
+    seriennummer: str | None
+
+
+class ReparaturartKurz(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    bezeichnung: str
+    standard_komplexitaet: int
+
+
+class StatusEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    schluessel: str
+    bezeichnung: str
+    reihenfolge: int
+    farbe: str
+    erfordert_zeiterfassung: bool
+    ist_abgeschlossen: bool
+
+
+class MitarbeiterKurz(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    rolle: str | None
