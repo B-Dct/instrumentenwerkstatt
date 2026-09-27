@@ -133,7 +133,7 @@ Die zentrale Tabelle.
 | zugewiesener_mitarbeiter_id | FK → mitarbeiter | Kann initial NULL sein (noch nicht zugewiesen) |
 | priorität | ENUM (`normal` / `hoch`) | Manuell durch Werkstattleiter/Admin setzbar, z. B. bei Eilaufträgen oder Kulanzfällen. Fließt in die Sortierung der Mitarbeiter- und Werkstattleiter-Dashboards ein (siehe Abschnitt 9) |
 | komplexität | INT (1–5) | Vom Mitarbeiter bei Anlage geschätzt |
-| status_aktuell | VARCHAR | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
+| status_aktuell_id | FK → status | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
 | erstellt_am | TIMESTAMP | |
 | geschätztes_fertigstellungsdatum | DATE | Ergebnis der Berechnung (Stufe 1 oder 2) |
 | geschätzte_bandbreite_von | DATE | z. B. für Anzeige "zwischen dem 12. und 16.10." |
@@ -146,6 +146,22 @@ Die zentrale Tabelle.
 
 ---
 
+### 2.7a `status`
+
+Nachschlagetabelle für Auftragsstatus — eingeführt bei der UI-Umsetzung, damit Farbe und Symbol (Abschnitt 9.3/9.6) direkt aus der Datenbank kommen, statt im Frontend-Code hinterlegt zu sein. Neue Status lassen sich damit ohne Code-Änderung ergänzen.
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| id | UUID / SERIAL | Primärschlüssel |
+| bezeichnung | VARCHAR | z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
+| farbe | VARCHAR | Hex-Wert, siehe Statusfarben-Tabelle in Abschnitt 9.6 |
+| symbol | VARCHAR | z. B. "○", "◐", "⏸", "◑", "✓", "●" |
+| reihenfolge | INT | Für konsistente Sortierung/Anzeige (z. B. in Auswahllisten) |
+
+**Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün), Abgeholt (●, dunkles Neutral `#5E554C`).
+
+---
+
 ### 2.8 `auftrag_statusverlauf`
 
 Kernstück für spätere Auswertung — jeder Wechsel wird protokolliert, nichts wird überschrieben.
@@ -154,7 +170,7 @@ Kernstück für spätere Auswertung — jeder Wechsel wird protokolliert, nichts
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | auftrag_id | FK → auftrag | |
-| status | VARCHAR | z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
+| status_id | FK → status | |
 | geändert_am | TIMESTAMP | |
 | geändert_von_mitarbeiter_id | FK → mitarbeiter | |
 | kommentar | TEXT | Optional |
@@ -283,6 +299,8 @@ erDiagram
     REPARATURART ||--o{ REPARATUR_VORGABEWERT : hat
     INSTRUMENTENKLASSE ||--o{ REPARATUR_VORGABEWERT : verfeinert
     AUFTRAG ||--o{ AUFTRAG_STATUSVERLAUF : durchläuft
+    STATUS ||--o{ AUFTRAG_STATUSVERLAUF : ist
+    STATUS ||--o{ AUFTRAG : aktueller_status
     AUFTRAG ||--o{ UNTERBRECHUNG : hat
     AUFTRAG ||--o{ SCHÄTZUNGS_LOG : erhält
     AUFTRAG ||--o{ ARBEITSZEITERFASSUNG : hat
@@ -542,13 +560,49 @@ Diese Regeln gelten seitenübergreifend für die gesamte Software (internes Dash
 
 ### 9.6 Design-System (Farbgebung & Anmutung)
 
-Muss vor dem ersten UI-Baustein einmal festgelegt und danach konsequent eingehalten werden — verhindert, dass jede neu gebaute Seite optisch leicht anders wirkt:
+Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, damit keine Seite optisch aus der Reihe fällt. Bewusst am Thema Musikinstrumenten-Werkstatt orientiert statt an einer generischen Software-Optik.
 
-- Primär-, Sekundär- und Statusfarben als feste Werte definieren (nicht pro Seite neu wählen)
-- Einheitliche Typografie (Schriftart, Größenstufen für Überschriften/Fließtext)
-- Einheitliches Abstands-/Rastersystem (Spacing-Skala statt beliebiger Pixelwerte)
-- Einheitliches Datumsformat durchgängig (z. B. `TT.MM.JJJJ`)
-- Konsistente Button-Stile (Primär-/Sekundär-/Gefahren-Aktion optisch unterscheidbar, z. B. "Löschen"/Archivieren rot, "Speichern" in Primärfarbe)
+**Prinzip:** Werkstatt-Logbuch, keine Software-Demo. Ruhig, materialbezogen, funktional — die interne Oberfläche ist ein Arbeitswerkzeug (datendicht, klar), das Kunden-Dashboard bewusst ruhiger und einfacher.
+
+**Farbpalette:**
+
+| Rolle | Wert | Verwendung |
+|---|---|---|
+| Hintergrund | `#FAF8F4` | Seitenhintergrund |
+| Text/Grundfarbe | `#2B2420` | Fließtext, Standard-UI-Text |
+| Primärakzent | `#8A6D3B` (gedecktes Messing) | Primäre Buttons, Links, aktive Navigation |
+| Sekundärakzent / Erfolg | `#4B6B4F` (gedämpftes Fichtengrün) | Status "Fertig", Erfolgsmeldungen |
+| Warnung/Überfällig | `#B23A34` (gedecktes Rot) | Überfällige Aufträge, Gefahren-Aktionen (z. B. Archivieren) |
+| Neutral/Rand | `#D9D2C7` | Trennlinien, Tabellenränder |
+
+**Statusfarben (Auftragsstatus, Abschnitt 9.3):**
+
+| Status | Farbe | Symbol |
+|---|---|---|
+| Angenommen | Grau `#8A8378` | ○ |
+| In Bearbeitung | Blau `#4A6FA5` | ◐ |
+| Wartet auf Ersatzteil | Orange `#C97F2E` | ⏸ |
+| Qualitätsprüfung | Violett `#6B5B8A` | ◑ |
+| Fertig | Grün `#4B6B4F` | ✓ |
+| Abgeholt | Dunkles Neutral `#5E554C` | ● |
+| Überfällig (zusätzliche Markierung, kein eigener Status) | Rot `#B23A34` | ⚠ |
+
+**Typografie:**
+- UI-Schrift (Tabellen, Formulare, Fließtext): *Inter* — funktional, sehr gut lesbar bei kleinen Größen
+- Auszeichnungsschrift (Seitentitel, Werkstattname im Header): *Fraunces* — wärmer, mit handwerklichem Charakter, ausschließlich für Titel, nicht für datendichte Bereiche
+- Typskala: 12 / 14 / 16 / 20 / 28 / 36 px, Zeilenhöhe 1,5 für Fließtext
+
+**Layout:**
+- Interne Oberfläche (Mitarbeiter/Werkstattleiter/Admin): feste linke Seitenleiste mit Navigation (erfüllt zugleich die Regel "Startseite oben links erreichbar", Abschnitt 9.2), Inhalt datendicht und linksbündig, Tabellenzeilen mit klaren Trennlinien statt einheitlicher Card-Kacheln mit Schlagschatten
+- Kunden-Dashboard: einspaltig, zentriert, großzügiger Weißraum, ruhiger — andere Zielgruppe (kein Fachpersonal), anderer Zweck (kurzer Statuscheck statt Arbeiten)
+
+**Bewusst vermieden** (typische generische/KI-Standardoptik): warmes Creme mit Terracotta-Akzent, identische abgerundete Karten mit gleichem grauem Schlagschatten überall, ALL-CAPS-Eyebrow-Labels über Überschriften, Pfeile (→) an Buttons/Links.
+
+**Weitere feste Regeln:**
+- Abstands-/Rastersystem: 4-px-Basis (4, 8, 12, 16, 24, 32, 48 px) statt beliebiger Pixelwerte
+- Einheitliches Datumsformat: `TT.MM.JJJJ`
+- Button-Stile: Primär (Messing, gefüllt) für Hauptaktion pro Seite, Sekundär (Umriss) für Nebenaktionen, Gefahren-Aktion (Rot, z. B. "Archivieren") optisch klar abgesetzt
+- Eckenradius durchgängig 4 px (klein, nicht das stark abgerundete "SaaS-Card"-Aussehen)
 
 ### 9.7 Weitere Empfehlungen
 
