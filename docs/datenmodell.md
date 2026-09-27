@@ -99,6 +99,25 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 
 ---
 
+### 2.6a `reparatur_vorgabewert`
+
+Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenklasse), damit ein Mitarbeiter schon bei Auftragsannahme eine ungefähre Orientierung zu Dauer und Kosten hat — auch bevor genug reale historische Daten vorliegen. Dient außerdem als Ausgangswert ("Prior"), der mit zunehmender Anzahl abgeschlossener Aufträge zunehmend durch echte historische Durchschnittswerte ergänzt bzw. abgelöst wird (siehe Abschnitt 4).
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| id | UUID / SERIAL | Primärschlüssel |
+| reparaturart_id | FK → reparaturart | |
+| instrumentenklasse_id | FK → instrumentenklasse | Optional (NULL = gilt allgemein für die Reparaturart, unabhängig von der Instrumentenklasse). Ein Eintrag mit gesetzter Instrumentenklasse überschreibt für diese Kombination den allgemeinen Wert (z. B. "Saitenwechsel" allgemein 0,5 Std., aber für "Kontrabass" spezifisch 1,5 Std.) |
+| vorgabe_stunden | DECIMAL | Erwarteter Arbeitsaufwand in Stunden |
+| vorgabe_kosten | DECIMAL | Erwarteter Preis für den Kunden (Arbeits- + ggf. übliche Materialkosten als Pauschale) |
+| notiz | TEXT | Optional, z. B. "inkl. neuer Saiten, exkl. Spezialsaiten" |
+| geändert_von_mitarbeiter_id | FK → mitarbeiter | |
+| geändert_am | TIMESTAMP | |
+
+**Pflege:** Über den Administrationsbereich, Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — passt zur bestehenden Stammdatenpflege von Instrumentenklassen und Reparaturarten.
+
+---
+
 ### 2.7 `auftrag`
 
 Die zentrale Tabelle.
@@ -119,7 +138,9 @@ Die zentrale Tabelle.
 | geschätztes_fertigstellungsdatum | DATE | Ergebnis der Berechnung (Stufe 1 oder 2) |
 | geschätzte_bandbreite_von | DATE | z. B. für Anzeige "zwischen dem 12. und 16.10." |
 | geschätzte_bandbreite_bis | DATE | |
-| geschätzte_arbeitsstunden | DECIMAL | Geschätzter reiner Arbeitsaufwand in Stunden (nicht Kalenderdauer) — Grundlage für die Kapazitätsplanung (Abschnitt 9.9). Wird wie die Terminschätzung selbst aus historischen `arbeitszeiterfassung`-Werten vergleichbarer Kombinationen aus Instrumentenklasse/Reparaturart berechnet |
+| geschätzte_arbeitsstunden | DECIMAL | Geschätzter reiner Arbeitsaufwand in Stunden (nicht Kalenderdauer) — Grundlage für die Kapazitätsplanung (Abschnitt 9.9). Wird wie die Terminschätzung selbst aus historischen `arbeitszeiterfassung`-Werten vergleichbarer Kombinationen aus Instrumentenklasse/Reparaturart berechnet, mit Fallback auf `reparatur_vorgabewert` (2.6a), solange zu wenig historische Daten vorliegen |
+| geschätzte_kosten | DECIMAL | Voraussichtlicher Preis für den Kunden — analog zu `geschätzte_arbeitsstunden` berechnet (historischer Durchschnitt tatsächlicher Kosten vergleichbarer Aufträge, Fallback auf `reparatur_vorgabewert.vorgabe_kosten`) |
+| tatsächliche_kosten | DECIMAL | Tatsächlich abgerechneter Preis — NULL bis Abschluss. Wie `tatsächliches_fertigstellungsdatum` ein Trainingswert für Stufe 2, hier für die Kostenschätzung statt der Terminschätzung |
 | tatsächliches_fertigstellungsdatum | DATE | NULL bis abgeschlossen — **das ist dein Trainingslabel für Stufe 2** |
 | notizen | TEXT | Freitext für interne Zwecke |
 
@@ -251,6 +272,8 @@ erDiagram
     INSTRUMENTENKLASSE ||--o{ INSTRUMENT : klassifiziert
     INSTRUMENT ||--o{ AUFTRAG : betrifft
     REPARATURART ||--o{ AUFTRAG : ist
+    REPARATURART ||--o{ REPARATUR_VORGABEWERT : hat
+    INSTRUMENTENKLASSE ||--o{ REPARATUR_VORGABEWERT : verfeinert
     AUFTRAG ||--o{ AUFTRAG_STATUSVERLAUF : durchläuft
     AUFTRAG ||--o{ UNTERBRECHUNG : hat
     AUFTRAG ||--o{ SCHÄTZUNGS_LOG : erhält
@@ -275,9 +298,24 @@ geschätzte_dauer_tage =
 geschätztes_fertigstellungsdatum = erstellt_am + geschätzte_dauer_tage (Arbeitstage, keine Wochenenden/Feiertage)
 ```
 
-Für Instrumentenklasse/Reparaturart-Kombinationen ohne historische Daten: Fallback auf einen manuell hinterlegten Startwert pro `reparaturart.standard_komplexität`.
+Für Instrumentenklasse/Reparaturart-Kombinationen ohne (ausreichend) historische Daten: Fallback auf `reparatur_vorgabewert.vorgabe_stunden` (2.6a) — spezifischer Wert für die Instrumentenklasse, falls vorhanden, sonst der allgemeine Wert der Reparaturart. Mit wachsender Anzahl abgeschlossener Aufträge wird der historische Durchschnitt zunehmend gegenüber dem Vorgabewert gewichtet (einfachste Variante: sobald z. B. 5 abgeschlossene Vergleichsfälle vorliegen, komplett auf den historischen Durchschnitt umschalten).
 
 **Hinweis:** Sobald `arbeitszeiterfassung`-Daten vorliegen, kann `bisherige_ist_dauer` wahlweise auf Basis der Kalenderdauer oder der reinen Arbeitszeit berechnet werden — Letztere liefert genauere Durchschnittswerte, da sie nicht durch Wartezeiten auf Ersatzteile verzerrt wird.
+
+### 4.1 Kostenschätzung (analoges Vorgehen)
+
+Dieselbe Fallback-Logik wird für die Kostenschätzung verwendet — Grundlage für `auftrag.geschätzte_kosten`:
+
+```
+geschätzte_kosten =
+    durchschnitt(bisherige_ist_kosten WHERE instrumentenklasse = X AND reparaturart = Y)
+    (falls ausreichend historische Fälle vorhanden)
+  ODER
+    reparatur_vorgabewert.vorgabe_kosten (instrumentenklassen-spezifisch, sonst allgemein)
+    (als Fallback, solange zu wenig historische Daten vorliegen)
+```
+
+`bisherige_ist_kosten` bezieht sich auf `auftrag.tatsächliche_kosten` vergleichbarer, bereits abgerechneter Aufträge.
 
 ---
 
@@ -287,6 +325,7 @@ Sobald ausreichend abgeschlossene Aufträge vorliegen (Richtwert: mind. 200–30
 
 - **Zielgröße (Label):** wahlweise `tatsächliches_fertigstellungsdatum − erstellt_am` (Kalenderdauer, ggf. abzüglich `unterbrechung`-Zeiten) oder die Summe der `arbeitszeiterfassung.dauer_minuten` je Auftrag (reine Bearbeitungszeit) — Letztere ist präziser, da sie Wartezeiten auf Ersatzteile o. ä. automatisch ausklammert
 - **Merkmale (Features):** Instrumentenklasse, Hersteller, Baujahr, Reparaturart, Komplexität, Mitarbeiter, aktuelles Auftragsvolumen zum Erstellzeitpunkt, Monat/Saison, Anzahl gleichzeitig abwesender Mitarbeiter, historische durchschnittliche Arbeitszeit für vergleichbare Kombinationen aus Instrumentenklasse/Reparaturart
+- **Zweites Modell für Kostenschätzung:** Analog zur Terminschätzung lässt sich ein zweites, gleich aufgebautes Modell für `tatsächliche_kosten` trainieren (dieselben Merkmale, eigenes Label). Beide Modelle teilen sich Trainingsdaten und Infrastruktur, sind aber unabhängig — Genauigkeit bei der Terminschätzung sagt nichts über die Genauigkeit der Kostenschätzung aus
 - **Modelltyp:** Gradient Boosting (z. B. XGBoost/LightGBM) oder einfache multiple Regression — beides deutlich transparenter als neuronale Netze und für diese Datenmenge völlig ausreichend
 - **Ausgabe:** idealerweise ein Vorhersageintervall statt eines Einzelwerts (z. B. 10./90. Perzentil), damit das Kunden-Dashboard eine Bandbreite statt eines Fixdatums anzeigen kann
 - **Re-Training:** periodisch (z. B. monatlich) auf Basis aller neu abgeschlossenen Aufträge
@@ -362,6 +401,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Wochenarbeitsstunden je Mitarbeiter festlegen | ❌ | ❌ | ✅ |
 | Instrumentenklassen pflegen | ❌ | ❌ | ✅ |
 | Reparaturarten + Standard-Komplexität pflegen | ❌ | ❌ | ✅ |
+| Vorgabewerte (Dauer/Kosten) je Reparaturart pflegen | ❌ | ❌ | ✅ |
 | Neue Mitarbeiter-Accounts anlegen | ❌ | ❌ | ✅ |
 | Mitarbeiter deaktivieren | ❌ | ❌ | ✅ |
 | Systemrollen vergeben (wer ist Werkstattleiter/Admin) | ❌ | ❌ | ✅ |
@@ -388,7 +428,7 @@ Empfehlenswert, sobald mehrere Personen administrative Rechte haben — protokol
 - **Mitarbeiterverwaltung** (nur Admin): Accounts anlegen, Systemrolle zuweisen, deaktivieren (nie hart löschen — sonst verwaisen vergangene Aufträge), Wochenarbeitsstunden festlegen (2.12), Qualifikationen pflegen (2.13)
 - **Abwesenheitskalender** (Werkstattleiter + Admin): idealerweise als Kalenderansicht pro Mitarbeiter und für die gesamte Werkstatt, direkt verknüpft mit der `abwesenheit`-Tabelle (2.3, inkl. Typ "Schulung" und reduzierter Stunden) und damit unmittelbar wirksam für die Terminschätzung (Stufe 1) sowie die Kapazitätsplanung (Abschnitt 8)
 - **Gleitzeit-Anpassungen** (Werkstattleiter + Admin): einzelne Wochen-Abweichungen erfassen (2.14), operativ genutzt, ohne vollständige Zeiterfassung
-- **Stammdatenpflege** (nur Admin): Instrumentenklassen (2.4) und Reparaturarten (2.6) inkl. Standardkomplexität
+- **Stammdatenpflege** (nur Admin): Instrumentenklassen (2.4), Reparaturarten (2.6) inkl. Standardkomplexität, sowie Vorgabewerte für Dauer und Kosten je Reparaturart/Instrumentenklasse (2.6a)
 - **Werkstattübersicht** (Werkstattleiter + Admin): alle laufenden Aufträge, Auslastung pro Mitarbeiter, überfällige/kritische Aufträge hervorgehoben
 - **Änderungsprotokoll** (nur Admin einsehbar): Anzeige des `system_ereignis_log`
 
