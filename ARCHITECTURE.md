@@ -56,6 +56,7 @@ Details und Berechnungsformeln: siehe Datenmodell-Dokument, Abschnitte 4–5.
 - Ohne Zuweisung: durchschnittliche offene Stunden je aktivem Mitarbeiter als Vorlauf
 - Neuberechnung beim Anlegen und bei Änderung von Zuweisung/Priorität (`PATCH /auftraege/{id}`, Werkstattleitung/Admin), jeweils mit Eintrag im `schaetzungs_log` (Anlass + Eingabefaktoren)
 - Bewusst **nicht**: Neuberechnung der *anderen* Aufträge, wenn sich die Warteschlange ändert; Neuberechnung nach manueller Korrektur der Stunden
+- Befehl `uv run python -m app.termine_nachrechnen` berechnet Termine offener Aufträge (nach), z. B. nach neuen Abwesenheiten (`--alle`). Protokoll-Anlass „nachberechnet“
 - „Überfällig“ berechnet das Backend (`ist_ueberfaellig`: Termin vor heute und Status nicht abgeschlossen)
 
 ## 4. Berechtigungskonzept
@@ -106,6 +107,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Befehl `app.termine_nachrechnen`; einmalig für offene Aufträge ohne Termin angewendet |
 | 27.09.2026 | Terminschätzung (Fertigstellungsdatum + Bandbreite) mit Neuberechnung bei Anlegen, Umzuweisung, Prioritätsänderung; `PATCH /auftraege/{id}`; „überfällig“ im Backend |
 | 27.09.2026 | Unterbrechungen automatisch bei pausierenden Status (z. B. „Wartet auf Ersatzteil“); Datenmodell-Doku an Tabelle `auftragsstatus` angeglichen |
 | 27.09.2026 | Design-System umgesetzt (Tokens, Seitenleiste, Statusfarben/-symbole aus der DB, lokale Schriften) |

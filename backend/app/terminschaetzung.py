@@ -15,7 +15,8 @@ Bewusst einfache, nachvollziehbare erste Version:
 Ohne zugewiesenen Mitarbeiter: Warteschlange = durchschnittliche offene Stunden je aktivem
 Mitarbeiter, Wochenstunden = Durchschnitt der aktiven Mitarbeiter.
 
-Reine Berechnung – speichert nichts. Speichern und Protokollieren macht der Aufrufer.
+`schaetze_fertigstellung` rechnet nur; `termin_uebernehmen` / `termin_neu_berechnen` schreiben
+das Ergebnis in den Auftrag (und ins schaetzungs_log). Committen muss der Aufrufer.
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ from decimal import Decimal
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Abwesenheit, Auftrag, Auftragsstatus, Mitarbeiter, MitarbeiterArbeitszeit
+from app.models import Abwesenheit, Auftrag, Auftragsstatus, Mitarbeiter, MitarbeiterArbeitszeit, SchaetzungsLog
 
 # Gilt, solange für einen Mitarbeiter keine Wochenarbeitszeit hinterlegt ist (2.12)
 STANDARD_WOCHENSTUNDEN = Decimal("40")
@@ -205,3 +206,24 @@ def schaetze_fertigstellung(db: Session, auftrag: Auftrag, heute: date | None = 
     else:
         faktoren["ohne_zuweisung"] = {"verfahren": "durchschnittliche Warteschlange", "aktive_mitarbeiter": anzahl_aktive}
     return Terminschaetzung(tag, von, bis, faktoren)
+
+
+def termin_uebernehmen(db: Session, auftrag: Auftrag) -> Terminschaetzung:
+    """Termin berechnen und in den Auftrag schreiben (ohne Protokoll)."""
+    termin = schaetze_fertigstellung(db, auftrag)
+    auftrag.geschaetztes_fertigstellungsdatum = termin.datum
+    auftrag.geschaetzte_bandbreite_von = termin.bandbreite_von
+    auftrag.geschaetzte_bandbreite_bis = termin.bandbreite_bis
+    return termin
+
+
+def termin_neu_berechnen(db: Session, auftrag: Auftrag, anlass: str) -> Terminschaetzung:
+    """Termin neu berechnen, in den Auftrag schreiben und als eigenen Eintrag protokollieren."""
+    termin = termin_uebernehmen(db, auftrag)
+    db.add(SchaetzungsLog(
+        auftrag_id=auftrag.id,
+        methode="regelbasiert",
+        geschaetztes_datum=termin.datum,
+        eingabefaktoren={"anlass": anlass, "termin": termin.eingabefaktoren},
+    ))
+    return termin

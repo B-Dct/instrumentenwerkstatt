@@ -40,7 +40,7 @@ from app.models import (
     Unterbrechung,
 )
 from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, schaetze_arbeitsstunden, schaetze_kosten
-from app.terminschaetzung import Terminschaetzung, schaetze_fertigstellung
+from app.terminschaetzung import termin_neu_berechnen, termin_uebernehmen
 from app.schemas import (
     AuftragAenderung,
     AuftragDetail,
@@ -264,7 +264,7 @@ def auftrag_anlegen(
     db.add(auftrag)
     db.flush()  # erzeugt die ID
     db.refresh(auftrag, ["erstellt_am"])  # für die Position in der Warteschlange
-    termin = _termin_uebernehmen(db, auftrag)
+    termin = termin_uebernehmen(db, auftrag)
 
     db.add(AuftragStatusverlauf(
         auftrag_id=auftrag.id,
@@ -293,27 +293,7 @@ def auftrag_anlegen(
     return _detail(db, auftrag.id)
 
 
-# --- Terminschätzung (Datenmodell 4) ----------------------------------------
-
-def _termin_uebernehmen(db: Session, auftrag: Auftrag) -> Terminschaetzung:
-    """Termin berechnen und in den Auftrag schreiben (ohne Protokoll)."""
-    termin = schaetze_fertigstellung(db, auftrag)
-    auftrag.geschaetztes_fertigstellungsdatum = termin.datum
-    auftrag.geschaetzte_bandbreite_von = termin.bandbreite_von
-    auftrag.geschaetzte_bandbreite_bis = termin.bandbreite_bis
-    return termin
-
-
-def _termin_neu_berechnen(db: Session, auftrag: Auftrag, anlass: str) -> None:
-    """Termin neu berechnen und als eigenen Eintrag im schaetzungs_log protokollieren."""
-    termin = _termin_uebernehmen(db, auftrag)
-    db.add(SchaetzungsLog(
-        auftrag_id=auftrag.id,
-        methode=METHODE_REGELBASIERT,
-        geschaetztes_datum=termin.datum,
-        eingabefaktoren={"anlass": anlass, "termin": termin.eingabefaktoren},
-    ))
-
+# --- Zuweisung/Priorität ändern (löst Terminschätzung aus, Datenmodell 4) -----
 
 @router.patch("/{auftrag_id}", response_model=AuftragDetail,
               dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
@@ -344,7 +324,7 @@ def auftrag_aendern(
 
     if anlaesse:
         db.flush()
-        _termin_neu_berechnen(db, auftrag, "+".join(anlaesse))
+        termin_neu_berechnen(db, auftrag, "+".join(anlaesse))
         db.commit()
     return _detail(db, auftrag.id)
 

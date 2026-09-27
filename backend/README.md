@@ -21,6 +21,16 @@ Demo-Daten erkennt man an Kundennummern und Auftragsnummern mit `DEMO-`. Beim En
 bleiben die Stammdaten (Instrumentenklassen, Reparaturarten, Vorgabewerte) erhalten.
 Mit ihnen kann man auch echt arbeiten.
 
+## Termine nachrechnen
+
+```bash
+uv run python -m app.termine_nachrechnen --probelauf   # nur anzeigen
+uv run python -m app.termine_nachrechnen               # offene Aufträge ohne Termin
+uv run python -m app.termine_nachrechnen --alle        # alle offenen Aufträge neu (z. B. nach neuen Abwesenheiten)
+```
+
+Aufträge ohne geschätzte Arbeitsstunden werden übersprungen (ohne Stunden kein Termin).
+
 ## Tests
 
 ```bash

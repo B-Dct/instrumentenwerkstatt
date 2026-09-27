@@ -325,8 +325,10 @@ vorlauf_stunden =
 benötigte_stunden = vorlauf_stunden + auftrag.geschätzte_arbeitsstunden (siehe 4.1)
 
 verfügbare_stunden_pro_tag = mitarbeiter_arbeitszeit.wochenstunden / 5
-    (Wochenenden, Betriebsschließungen, Feiertage, Urlaub übersprungen;
-     an Tagen mit abwesenheit.reduzierte_stunden gilt reduzierte_stunden / 5 statt der vollen Wochenstunden)
+    (Wochenenden, Betriebsschließungen, Feiertage und alle ganztägigen Abwesenheiten des
+     Mitarbeiters – Urlaub, Krankheit, Schulung usw. – übersprungen;
+     an Tagen mit abwesenheit.reduzierte_stunden gilt reduzierte_stunden / 5 statt der vollen
+     Wochenstunden, höchstens jedoch die regulären Wochenstunden / 5)
 
 geschätztes_fertigstellungsdatum = der Arbeitstag, an dem benötigte_stunden 
     durch tägliches Abarbeiten ab morgen aufgebraucht sind
@@ -498,7 +500,10 @@ Statt einer detaillierten Tages-/Stundenplanung (wie sie klassische Schichtplanu
 ```
 verfügbare_stunden(mitarbeiter, woche) =
     wochenstunden                                    (aus mitarbeiter_arbeitszeit, 2.12)
-    − abwesenheitsstunden in dieser Woche             (aus abwesenheit, 2.3 — ganztägig oder reduzierte_stunden)
+    − abwesenheitsstunden in dieser Woche             (aus abwesenheit, 2.3 — bei ganztägiger Abwesenheit
+                                                       die Tagesstunden; bei reduzierter Verfügbarkeit die
+                                                       Differenz wochenstunden − reduzierte_stunden, da
+                                                       reduzierte_stunden die verfügbare Zahl ist)
     − Summe(geschätzte_arbeitsstunden aller zugewiesenen, noch offenen Aufträge)   (aus auftrag, 2.7)
 
 auslastung_prozent = gebundene_stunden / wochenstunden * 100
