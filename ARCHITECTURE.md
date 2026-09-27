@@ -6,15 +6,15 @@ Dieses Dokument hält die zentralen Architekturentscheidungen fest — als Gedä
 
 | Schicht | Wahl | Begründung |
 |---|---|---|
-| Datenbank | PostgreSQL | Relationale Struktur passt zu Kunden/Aufträgen/Mitarbeitern; weit verbreitet, gut dokumentiert |
-| Backend | *(z. B. Python/FastAPI)* | Breite Trainingsbasis für KI-Tools, große Community, stabile Konventionen |
-| Frontend | *(z. B. React)* | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
+| Datenbank | PostgreSQL (gehostet bei Supabase) | Relationale Struktur passt zu Kunden/Aufträgen/Mitarbeitern; weit verbreitet, gut dokumentiert |
+| Backend | Python 3.12 / FastAPI, SQLAlchemy 2, psycopg 3 | Breite Trainingsbasis für KI-Tools, große Community, stabile Konventionen |
+| Frontend | React (mit Vite) | Ebenso weit verbreitet, gute Unterstützung durch KI-Coding-Tools |
 
 **Prinzip:** Bewusst "langweiliger", breit verbreiteter Stack statt exotischer Frameworks — wichtig, damit KI-Tools auch in ein paar Jahren noch zuverlässig helfen können.
 
 ## 2. Datenmodell
 
-Das vollständige Datenmodell (alle Tabellen, Felder, Beziehungen) ist im separaten Datenmodell-Dokument festgehalten: *(Link/Ablageort hier ergänzen)*.
+Das vollständige Datenmodell (alle Tabellen, Felder, Beziehungen) ist im separaten Datenmodell-Dokument festgehalten: [`docs/datenmodell.md`](./docs/datenmodell.md).
 
 Kernprinzipien:
 - **Statushistorie statt Statusfeld:** Jeder Statuswechsel eines Auftrags wird als eigener Datensatz mit Zeitstempel gespeichert
@@ -62,4 +62,5 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Tech-Stack festgelegt (FastAPI, React/Vite, PostgreSQL bei Supabase); Datenbankzugriff über Supabase Session Pooler (IPv4) |
 

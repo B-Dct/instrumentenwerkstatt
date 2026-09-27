@@ -2,7 +2,7 @@
 
 Software zur Verwaltung von Reparaturaufträgen einer Musikinstrumenten-Werkstatt: Zuordnung von Aufträgen zu Mitarbeitern, Status- und Kapazitätsübersicht für die Werkstatt, sowie ein öffentliches Kunden-Dashboard zur Statusabfrage.
 
-> **Status:** In Entwicklung / Konzeptphase. Das vollständige Datenmodell und die Architekturentscheidungen sind in [`ARCHITECTURE.md`](./ARCHITECTURE.md) sowie im begleitenden Datenmodell-Dokument beschrieben.
+> **Status:** In Entwicklung / Konzeptphase. Das vollständige Datenmodell und die Architekturentscheidungen sind in [`ARCHITECTURE.md`](./ARCHITECTURE.md) sowie in [`docs/datenmodell.md`](./docs/datenmodell.md) beschrieben.
 
 ## Was die Software kann (Zielbild)
 
@@ -17,9 +17,9 @@ Software zur Verwaltung von Reparaturaufträgen einer Musikinstrumenten-Werkstat
 
 | Schicht | Technologie |
 |---|---|
-| Datenbank | PostgreSQL |
-| Backend | *(hier eintragen, z. B. Python/FastAPI oder Node.js/Express)* |
-| Frontend | *(hier eintragen, z. B. React)* |
+| Datenbank | PostgreSQL (gehostet bei Supabase) |
+| Backend | Python 3.12 / FastAPI, SQLAlchemy 2, psycopg 3 (Paketverwaltung mit `uv`) |
+| Frontend | React (mit Vite) |
 
 Details und Begründung der Wahl siehe [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -31,21 +31,25 @@ Details und Begründung der Wahl siehe [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 /docs         Datenmodell, Architekturentscheidungen, weitere Dokumentation
 ```
 
-*(Struktur bei Bedarf anpassen, sobald der konkrete Stack feststeht.)*
-
 ## Lokale Entwicklung
 
-> Wird ergänzt, sobald das Grundgerüst steht (Schritt 3 im Umsetzungsplan).
+Voraussetzungen: [uv](https://docs.astral.sh/uv/) und Node.js.
 
 ```bash
-# Backend
+# Backend (läuft auf http://localhost:8000)
 cd backend
-# Setup-Befehle hier ergänzen
+cp .env.example .env        # einmalig, dann DATABASE_URL eintragen
+uv run uvicorn app.main:app --reload
 
-# Frontend
+# Frontend (läuft auf http://localhost:5173)
 cd frontend
-# Setup-Befehle hier ergänzen
+npm install                 # einmalig
+npm run dev
 ```
+
+Verbindung prüfen: http://localhost:8000/health/db sollte `"datenbank": "verbunden"` zurückgeben.
+
+**Hinweis Supabase:** Die direkte Datenbankadresse (`db.<projekt>.supabase.co`) ist nur per IPv6 erreichbar. In der `.env` wird deshalb die Adresse des **Session Poolers** (IPv4) verwendet. Man findet sie im Supabase-Dashboard unter „Connect“.
 
 ## Entwicklungsprinzipien
 
@@ -57,5 +61,5 @@ cd frontend
 ## Weiterführende Dokumentation
 
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — Architekturentscheidungen im Überblick
-- Datenmodell-Dokument (Tabellen, Sicherheitskonzept, UI-Richtlinien, Kapazitätsplanung) — Link/Ablageort hier ergänzen
+- [`docs/datenmodell.md`](./docs/datenmodell.md) — Datenmodell (Tabellen, Sicherheitskonzept, UI-Richtlinien, Kapazitätsplanung)
 
