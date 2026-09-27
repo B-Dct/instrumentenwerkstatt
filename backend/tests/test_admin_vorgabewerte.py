@@ -3,18 +3,26 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.models import Instrumentenklasse, Reparaturart, SystemEreignisLog
+from app.models import Instrumentenklasse, Reparaturart, Systemrolle, SystemEreignisLog
+from tests.conftest import angemeldet_als, konto_anlegen
 
 URL = "/admin/vorgabewerte"
 
 
 @pytest.fixture
-def stammdaten(db):
+def admin(db, client):
+    admin = konto_anlegen(db, Systemrolle.admin, name="Test Admin")
+    client.headers.update(angemeldet_als(admin))
+    return admin
+
+
+@pytest.fixture
+def stammdaten(db, admin):
     saitenwechsel = Reparaturart(bezeichnung="TEST Saitenwechsel", standard_komplexitaet=1)
     kontrabass = Instrumentenklasse(bezeichnung="TEST Kontrabass", oberkategorie="Streichinstrument")
     db.add_all([saitenwechsel, kontrabass])
     db.flush()
-    return {"reparaturart": saitenwechsel.id, "klasse": kontrabass.id}
+    return {"reparaturart": saitenwechsel.id, "klasse": kontrabass.id, "admin": admin.id}
 
 
 def neu(stammdaten, **extra):
@@ -34,6 +42,7 @@ def test_anlegen_und_abrufen(client, stammdaten):
     assert daten["instrumentenklasse_id"] is None
     assert daten["vorgabe_stunden"] == 0.5
     assert daten["vorgabe_kosten"] == 25.0
+    assert daten["geaendert_von_mitarbeiter_id"] == str(stammdaten["admin"])
 
     assert client.get(f"{URL}/{daten['id']}").json() == daten
 
@@ -87,6 +96,7 @@ def test_bearbeiten_aendert_nur_mitgeschickte_felder(client, stammdaten, db):
         SystemEreignisLog.betroffene_id == uuid.UUID(vorher["id"])
     ).order_by(SystemEreignisLog.zeitpunkt)).all()
     assert [e.aktion for e in log] == ["vorgabewert_angelegt", "vorgabewert_geaendert"]
+    assert all(e.ausgefuehrt_von_mitarbeiter_id == stammdaten["admin"] for e in log)
     assert log[1].details["alt"]["vorgabe_kosten"] == "25.00"
     assert log[1].details["neu"]["vorgabe_kosten"] == "30.00"
 
@@ -111,6 +121,6 @@ def test_bearbeiten_in_bestehende_kombination_abgelehnt(client, stammdaten):
     assert antwort.status_code == 409
 
 
-def test_nicht_gefunden(client):
+def test_nicht_gefunden(client, admin):
     assert client.get(f"{URL}/{uuid.uuid4()}").status_code == 404
     assert client.patch(f"{URL}/{uuid.uuid4()}", json={"notiz": "x"}).status_code == 404

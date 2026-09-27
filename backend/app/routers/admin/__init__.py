@@ -9,8 +9,6 @@ from fastapi import APIRouter, Depends
 from app.auth import require_admin
 from app.routers.admin import vorgabewerte
 
-# TODO: Sobald Login/Rollen implementiert sind (siehe ARCHITECTURE.md, Abschnitt 4
-# "Berechtigungskonzept") – require_admin beschränkt dann den Zugriff auf Systemrolle
-# "admin". Derzeit sind alle Endpunkte unter /admin UNGESCHÜTZT.
+# Nur Systemrolle "admin" (Berechtigungsmatrix 7.2)
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
 router.include_router(vorgabewerte.router)

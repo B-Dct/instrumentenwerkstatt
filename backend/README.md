@@ -22,6 +22,8 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 
 | Methode | Pfad | Zweck |
 |---|---|---|
+| POST | `/auth/login` | Anmelden (E-Mail als `username` + Passwort) → Token |
+| GET | `/auth/ich` | Wer bin ich? (prüft die Anmeldung) |
 | GET | `/admin/vorgabewerte` | Vorgabewerte auflisten (Filter: `reparaturart_id`, `instrumentenklasse_id`) |
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
@@ -32,11 +34,21 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) |
 | POST | `/auftraege/{id}/schaetzung-korrektur` | Geschätzte Stunden/Kosten manuell korrigieren (Pflicht: `grund`) |
 
-⚠️ Alle Endpunkte sind **noch ungeschützt**, bis Login/Rollen umgesetzt sind (siehe `app/auth.py`).
+Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.
 
-**Vorläufig bis zum Login:** Aktionen, die einem Mitarbeiter zugeordnet werden müssen
-(manuelle Korrektur, Arbeitszeit beim Status „Fertig“), brauchen den Header
-`X-Mitarbeiter-Id: <UUID des Mitarbeiters>`. Das ist nur eine Zuordnung und keine Sicherheit.
+## Erster Admin und Anmeldung
+
+```bash
+# Ersten Admin anlegen (Passwort wird verdeckt abgefragt, mind. 12 Zeichen):
+uv run python -m app.konto_anlegen --email chefin@werkstatt.de --name "Anna Beispiel"
+
+# Weitere Konten, z. B. zum Testen der Rollen:
+uv run python -m app.konto_anlegen --email max@werkstatt.de --name "Max" --rolle mitarbeiter
+```
+
+Anmelden in http://localhost:8000/docs: oben rechts **Authorize**, bei `username` die
+E-Mail und bei `password` das Passwort eintragen. Danach schickt /docs das Token automatisch mit.
+Das Token gilt 8 Stunden.
 
 ## Datenbank-Schema (Alembic)
 

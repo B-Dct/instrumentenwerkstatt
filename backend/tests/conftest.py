@@ -1,12 +1,41 @@
 """Test-Setup: Jeder Test läuft gegen die echte Datenbank, aber in einer Transaktion,
 die am Ende zurückgerollt wird – es bleiben keine Testdaten zurück."""
 
+import secrets
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.auth import passwort_hashen, token_erstellen
 from app.db import engine, get_db
 from app.main import app
+from app.models import Mitarbeiter, Systemrolle
+
+TEST_PASSWORT = "richtig-langes-passwort"
+_TEST_PASSWORT_HASH = passwort_hashen(TEST_PASSWORT)  # einmal hashen (Argon2 ist absichtlich langsam)
+
+
+def konto_anlegen(db, rolle: Systemrolle = Systemrolle.mitarbeiter, name: str = "Test Konto", **extra) -> Mitarbeiter:
+    mitarbeiter = Mitarbeiter(
+        name=name,
+        email=f"{secrets.token_hex(4)}@test.invalid",
+        systemrolle=rolle,
+        passwort_hash=_TEST_PASSWORT_HASH,
+        **extra,
+    )
+    db.add(mitarbeiter)
+    db.flush()
+    return mitarbeiter
+
+
+def angemeldet_als(mitarbeiter: Mitarbeiter) -> dict:
+    """Header für Anfragen als dieser Mitarbeiter."""
+    return {"Authorization": f"Bearer {token_erstellen(mitarbeiter)}"}
+
+
+# Header-Wert, der die Standard-Anmeldung des Test-Clients aufhebt
+OHNE_ANMELDUNG = {"Authorization": ""}
 
 
 @pytest.fixture
@@ -25,6 +54,7 @@ def db():
 
 @pytest.fixture
 def client(db):
+    """Test-Client ohne Anmeldung (Tests setzen client.headers bei Bedarf)."""
     app.dependency_overrides[get_db] = lambda: db
     try:
         yield TestClient(app)

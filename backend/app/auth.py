@@ -1,72 +1,147 @@
-"""Identifikation und Berechtigungsprüfung – derzeit nur Platzhalter.
+"""Login, Identifikation und Berechtigungsprüfung (Datenmodell 2.2 und 7.2).
 
-Login und Rollen (Systemrolle mitarbeiter/werkstattleiter/admin) sind noch nicht
-implementiert. Die Dependencies hier sind bereits an den richtigen Stellen
-eingehängt (z. B. am gesamten Admin-Router), prüfen aber noch nichts.
-Beim Nachrüsten muss nur diese Datei angepasst werden, nicht die Endpunkte.
+- Passwörter werden mit Argon2 gehasht (nie im Klartext gespeichert).
+- Nach dem Login erhält der Mitarbeiter ein signiertes Token (JWT) mit
+  mitarbeiter_id und systemrolle, das er bei jeder Anfrage mitschickt
+  (Header "Authorization: Bearer <token>").
+- Für die Berechtigung zählen Rolle und Aktiv-Status aus der DATENBANK, nicht aus dem
+  Token: Wird jemand deaktiviert oder seine Rolle geändert, gilt das sofort – auch
+  für bereits ausgestellte Tokens.
+- Rollen sind kumulativ: admin ⊇ werkstattleiter ⊇ mitarbeiter (7.1).
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
-from fastapi import Depends, Header, HTTPException, status
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
-from app.models import Mitarbeiter
+from app.models import Auftrag, Mitarbeiter, Systemrolle
+
+_passwort_hash = PasswordHash.recommended()  # Argon2
+_ALGORITHMUS = "HS256"
+
+# Liefert /docs den "Authorize"-Knopf; liest "Authorization: Bearer <token>"
+oauth2_schema = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+_RANG = {Systemrolle.mitarbeiter: 1, Systemrolle.werkstattleiter: 2, Systemrolle.admin: 3}
 
 
-def aktueller_mitarbeiter_id(
-    x_mitarbeiter_id: uuid.UUID | None = Header(
-        None,
-        description="VORLÄUFIG bis Login/Rollen: ID des handelnden Mitarbeiters. "
-        "Wird ungeprüft geglaubt – keine Sicherheit, nur Zuordnung.",
-    ),
-    db: Session = Depends(get_db),
-) -> uuid.UUID | None:
-    """ID des handelnden Mitarbeiters, falls bekannt.
+# --- Passwörter -------------------------------------------------------------
 
-    TODO: Sobald Login/Rollen implementiert sind (siehe ARCHITECTURE.md, Abschnitt 4
-    "Berechtigungskonzept") – Mitarbeiter aus dem Login-Token ermitteln statt aus dem
-    Header X-Mitarbeiter-Id, und bei fehlender/ungültiger Anmeldung mit 401 abbrechen.
-    """
-    if x_mitarbeiter_id is None:
+def passwort_hashen(passwort: str) -> str:
+    return _passwort_hash.hash(passwort)
+
+
+def passwort_pruefen(passwort: str, passwort_hash: str) -> bool:
+    return _passwort_hash.verify(passwort, passwort_hash)
+
+
+# Zum Zeitausgleich bei unbekannter E-Mail (siehe anmelden)
+_DUMMY_HASH = passwort_hashen("dummy-passwort-zum-zeitausgleich")
+
+
+def email_normalisieren(email: str) -> str:
+    return email.strip().lower()
+
+
+def anmelden(db: Session, email: str, passwort: str) -> Mitarbeiter | None:
+    """Prüft E-Mail + Passwort. None bei jedem Fehler (bewusst ohne Unterscheidung)."""
+    mitarbeiter = db.query(Mitarbeiter).filter(Mitarbeiter.email == email_normalisieren(email)).one_or_none()
+    if mitarbeiter is None:
+        # Trotzdem einen Hash prüfen, damit die Antwortzeit nicht verrät,
+        # ob die E-Mail-Adresse existiert
+        passwort_pruefen(passwort, _DUMMY_HASH)
         return None
-    mitarbeiter = db.get(Mitarbeiter, x_mitarbeiter_id)
+    if not passwort_pruefen(passwort, mitarbeiter.passwort_hash) or not mitarbeiter.aktiv:
+        return None
+    return mitarbeiter
+
+
+# --- Tokens -----------------------------------------------------------------
+
+def token_erstellen(mitarbeiter: Mitarbeiter) -> str:
+    jetzt = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(mitarbeiter.id),
+            "systemrolle": mitarbeiter.systemrolle.value,
+            "iat": jetzt,
+            "exp": jetzt + timedelta(minutes=settings.token_gueltigkeit_minuten),
+        },
+        settings.jwt_secret,
+        algorithm=_ALGORITHMUS,
+    )
+
+
+def _nicht_angemeldet(meldung: str = "Nicht angemeldet oder Anmeldung abgelaufen") -> HTTPException:
+    return HTTPException(status.HTTP_401_UNAUTHORIZED, meldung, headers={"WWW-Authenticate": "Bearer"})
+
+
+def _keine_berechtigung() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Keine Berechtigung für diese Aktion")
+
+
+# --- Dependencies für Endpunkte ---------------------------------------------
+
+def aktueller_mitarbeiter(
+    token: str = Depends(oauth2_schema), db: Session = Depends(get_db)
+) -> Mitarbeiter:
+    """Prüft das Token und liefert den angemeldeten, aktiven Mitarbeiter (sonst 401)."""
+    try:
+        inhalt = jwt.decode(token, settings.jwt_secret, algorithms=[_ALGORITHMUS], options={"require": ["sub", "exp"]})
+        mitarbeiter_id = uuid.UUID(inhalt["sub"])
+    except (jwt.PyJWTError, ValueError):
+        raise _nicht_angemeldet() from None
+    mitarbeiter = db.get(Mitarbeiter, mitarbeiter_id)
     if mitarbeiter is None or not mitarbeiter.aktiv:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unbekannter oder deaktivierter Mitarbeiter")
+        raise _nicht_angemeldet()
+    return mitarbeiter
+
+
+def aktueller_mitarbeiter_id(mitarbeiter: Mitarbeiter = Depends(aktueller_mitarbeiter)) -> uuid.UUID:
     return mitarbeiter.id
 
 
-def angemeldeter_mitarbeiter_id(
-    mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id),
-) -> uuid.UUID:
-    """Wie aktueller_mitarbeiter_id, aber für Aktionen, die zwingend einer Person zugeordnet
-    werden müssen (z. B. manuelle Korrektur, Arbeitszeiterfassung)."""
-    if mitarbeiter_id is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Diese Aktion muss einem Mitarbeiter zugeordnet werden (vorläufig: Header X-Mitarbeiter-Id)",
-        )
-    return mitarbeiter_id
+def hat_mindestens(mitarbeiter: Mitarbeiter, rolle: Systemrolle) -> bool:
+    return _RANG[mitarbeiter.systemrolle] >= _RANG[rolle]
 
 
-def require_admin(mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id)) -> None:
-    """Lässt nur Mitarbeiter mit Systemrolle "admin" durch.
+def rolle_mindestens(rolle: Systemrolle):
+    """Dependency-Fabrik: nur Mitarbeiter mit dieser oder einer höheren Systemrolle (sonst 403).
 
-    TODO: Sobald Login/Rollen implementiert sind (siehe ARCHITECTURE.md, Abschnitt 4
-    "Berechtigungskonzept") – Zugriff auf Systemrolle "admin" beschränken (sonst 403).
-    ACHTUNG: Derzeit wird NICHTS geprüft – alle Admin-Endpunkte sind ungeschützt.
+    Beispiel: dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))]
     """
-    return None
+
+    def pruefen(mitarbeiter: Mitarbeiter = Depends(aktueller_mitarbeiter)) -> Mitarbeiter:
+        if not hat_mindestens(mitarbeiter, rolle):
+            raise _keine_berechtigung()
+        return mitarbeiter
+
+    return pruefen
 
 
-def darf_auftrag_bearbeiten(mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id)) -> None:
-    """Zugriff auf einen einzelnen Auftrag (Statuswechsel, Korrektur der Schätzung).
+require_admin = rolle_mindestens(Systemrolle.admin)
 
-    TODO: Sobald Login/Rollen implementiert sind (siehe ARCHITECTURE.md, Abschnitt 4
-    "Berechtigungskonzept") – nur der zugewiesene Mitarbeiter oder Systemrolle
-    "werkstattleiter"/"admin" (Berechtigungsmatrix 7.2), sonst 403.
-    Braucht dann zusätzlich die auftrag_id aus dem Pfad.
-    ACHTUNG: Derzeit wird NICHTS geprüft.
+
+def darf_auftrag_bearbeiten(
+    auftrag_id: uuid.UUID,
+    mitarbeiter: Mitarbeiter = Depends(aktueller_mitarbeiter),
+    db: Session = Depends(get_db),
+) -> None:
+    """Statuswechsel/Korrektur (7.2): zugewiesener Mitarbeiter oder Werkstattleiter/Admin.
+
+    Existiert der Auftrag nicht, wird hier nichts entschieden – der Endpunkt meldet 404.
     """
-    return None
+    if hat_mindestens(mitarbeiter, Systemrolle.werkstattleiter):
+        return
+    auftrag = db.get(Auftrag, auftrag_id)
+    if auftrag is None:
+        return
+    if auftrag.zugewiesener_mitarbeiter_id != mitarbeiter.id:
+        raise _keine_berechtigung()

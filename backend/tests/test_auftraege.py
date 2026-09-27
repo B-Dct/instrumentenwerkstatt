@@ -12,12 +12,13 @@ from sqlalchemy import select
 from app.models import Arbeitszeiterfassung, Auftrag, Kunde, SchaetzungsLog
 from app.routers import auftraege
 from tests.beispieldaten import Werkstatt
+from tests.conftest import OHNE_ANMELDUNG, angemeldet_als
 
 URL = "/auftraege"
 
 
 @pytest.fixture
-def w(db, monkeypatch):
+def w(db, client, monkeypatch):
     # Der Nummernzähler der Datenbank wird beim Rollback nicht zurückgesetzt –
     # Tests sollen keine echten Auftragsnummern verbrauchen.
     zaehler = itertools.count(1)
@@ -26,22 +27,21 @@ def w(db, monkeypatch):
     werkstatt = Werkstatt(db)
     werkstatt.vorgabe(stunden="0.50", kosten="20.00")                       # allgemein
     werkstatt.vorgabe(werkstatt.kontrabass, stunden="1.50", kosten="60.00")  # Kontrabass
+    # Standard: angemeldet als der (zugewiesene) Mitarbeiter
+    client.headers.update(angemeldet_als(werkstatt.mitarbeiter))
     return werkstatt
 
 
 def neuer_auftrag(w, **extra):
+    """Standardmäßig dem angemeldeten Test-Mitarbeiter zugewiesen."""
     instrument = w.instrument(extra.pop("klasse", None))
     return {
         "kunde_id": str(w.kunde.id),
         "instrument_id": str(instrument.id),
         "reparaturart_id": str(w.saitenwechsel.id),
+        "zugewiesener_mitarbeiter_id": str(w.mitarbeiter.id),
         **extra,
     }
-
-
-def als(w):
-    """Vorläufige Identifikation als Mitarbeiter (bis Login/Rollen)."""
-    return {"X-Mitarbeiter-Id": str(w.mitarbeiter.id)}
 
 
 # --- Anlegen inkl. Schätzung -------------------------------------------------
@@ -138,7 +138,7 @@ def test_nicht_gefunden(client, w):
 def test_statuswechsel_erzeugt_historieneintrag(client, w):
     a = client.post(URL, json=neuer_auftrag(w)).json()
 
-    antwort = client.post(f"{URL}/{a['id']}/status", headers=als(w), json={
+    antwort = client.post(f"{URL}/{a['id']}/status", json={
         "status_id": str(w.in_bearbeitung), "kommentar": "Begonnen",
     })
     assert antwort.status_code == 200
@@ -160,10 +160,9 @@ def test_fertig_erfordert_arbeitszeit(client, w, db):
     a = client.post(URL, json=neuer_auftrag(w)).json()
     pfad = f"{URL}/{a['id']}/status"
 
-    assert client.post(pfad, headers=als(w), json={"status_id": str(w.fertig)}).status_code == 422
-    assert client.post(pfad, json={"status_id": str(w.fertig), "arbeitszeit_minuten": 90}).status_code == 401
+    assert client.post(pfad, json={"status_id": str(w.fertig)}).status_code == 422
 
-    antwort = client.post(pfad, headers=als(w), json={"status_id": str(w.fertig), "arbeitszeit_minuten": 90})
+    antwort = client.post(pfad, json={"status_id": str(w.fertig), "arbeitszeit_minuten": 90})
     assert antwort.status_code == 200
     assert antwort.json()["tatsaechliches_fertigstellungsdatum"] == date.today().isoformat()
     [zeit] = db.scalars(select(Arbeitszeiterfassung).where(
@@ -177,20 +176,13 @@ def test_fertig_erfordert_arbeitszeit(client, w, db):
     assert len(zurueck["statusverlauf"]) == 3
 
 
-def test_unbekannter_mitarbeiter_im_header(client, w):
-    a = client.post(URL, json=neuer_auftrag(w)).json()
-    antwort = client.post(f"{URL}/{a['id']}/status", headers={"X-Mitarbeiter-Id": str(uuid.uuid4())},
-                          json={"status_id": str(w.in_bearbeitung)})
-    assert antwort.status_code == 401
-
-
 # --- Manuelle Korrektur ------------------------------------------------------
 
 def test_korrektur_erzeugt_log_eintrag_und_aktualisiert_auftrag(client, w, db):
     a = client.post(URL, json=neuer_auftrag(w)).json()
     automatisch_vorher = a["schaetzungen"][0]
 
-    antwort = client.post(f"{URL}/{a['id']}/schaetzung-korrektur", headers=als(w), json={
+    antwort = client.post(f"{URL}/{a['id']}/schaetzung-korrektur", json={
         "geschaetzte_arbeitsstunden": 4.25,
         "grund": "Decke gerissen, deutlich mehr Aufwand",
     })
@@ -221,8 +213,8 @@ def test_korrektur_erzeugt_log_eintrag_und_aktualisiert_auftrag(client, w, db):
 def test_korrektur_beide_werte_mehrfach(client, w):
     a = client.post(URL, json=neuer_auftrag(w)).json()
     pfad = f"{URL}/{a['id']}/schaetzung-korrektur"
-    client.post(pfad, headers=als(w), json={"geschaetzte_kosten": 90, "grund": "Ersatzteil teurer"})
-    a = client.post(pfad, headers=als(w), json={
+    client.post(pfad, json={"geschaetzte_kosten": 90, "grund": "Ersatzteil teurer"})
+    a = client.post(pfad, json={
         "geschaetzte_arbeitsstunden": 3, "geschaetzte_kosten": 120, "grund": "Zusatzschaden"
     }).json()
 
@@ -232,7 +224,7 @@ def test_korrektur_beide_werte_mehrfach(client, w):
 
 
 @pytest.mark.parametrize("header, daten, erwartet", [
-    (False, {"geschaetzte_kosten": 90, "grund": "x"}, 401),  # nicht zugeordnet
+    (False, {"geschaetzte_kosten": 90, "grund": "x"}, 401),  # nicht angemeldet
     (True, {"geschaetzte_kosten": 90}, 422),                  # Grund fehlt
     (True, {"geschaetzte_kosten": 90, "grund": "   "}, 422),  # Grund nur Leerzeichen
     (True, {"grund": "nichts korrigiert"}, 422),              # kein Wert angegeben
@@ -240,7 +232,7 @@ def test_korrektur_beide_werte_mehrfach(client, w):
 ])
 def test_korrektur_ungueltig(client, w, db, header, daten, erwartet):
     a = client.post(URL, json=neuer_auftrag(w)).json()
-    antwort = client.post(f"{URL}/{a['id']}/schaetzung-korrektur", headers=als(w) if header else {}, json=daten)
+    antwort = client.post(f"{URL}/{a['id']}/schaetzung-korrektur", headers={} if header else OHNE_ANMELDUNG, json=daten)
     assert antwort.status_code == erwartet
     anzahl_logs = len(db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(a["id"]))).all())
     assert anzahl_logs == 1  # nichts protokolliert

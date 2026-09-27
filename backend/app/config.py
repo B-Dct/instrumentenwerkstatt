@@ -8,5 +8,9 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    # Login-Tokens (JWT)
+    jwt_secret: str
+    token_gueltigkeit_minuten: int = 8 * 60  # ein Arbeitstag
+
 
 settings = Settings()

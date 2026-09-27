@@ -113,7 +113,7 @@ def vorgabewert_abrufen(vorgabewert_id: uuid.UUID, db: Session = Depends(get_db)
 def vorgabewert_anlegen(
     daten: VorgabewertNeu,
     db: Session = Depends(get_db),
-    mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> Vorgabewert:
     _verweise_pruefen(db, daten.reparaturart_id, daten.instrumentenklasse_id)
     eintrag = ReparaturVorgabewert(**daten.model_dump(), geaendert_von_mitarbeiter_id=mitarbeiter_id)
@@ -136,7 +136,7 @@ def vorgabewert_bearbeiten(
     vorgabewert_id: uuid.UUID,
     daten: VorgabewertAenderung,
     db: Session = Depends(get_db),
-    mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> Vorgabewert:
     eintrag = db.get(ReparaturVorgabewert, vorgabewert_id)
     if eintrag is None:

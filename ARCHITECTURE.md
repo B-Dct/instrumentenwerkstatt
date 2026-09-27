@@ -57,12 +57,13 @@ Drei Systemrollen, kumulativ (Admin ⊇ Werkstattleiter ⊇ Mitarbeiter):
 
 Details: siehe Datenmodell-Dokument, Abschnitt 7.
 
-**Technische Umsetzung (Stand 27.09.2026 — noch unvollständig):**
-- Berechtigungsprüfung ist als FastAPI-Dependency gekapselt in `backend/app/auth.py` (`aktueller_mitarbeiter_id`, `require_admin`). Endpunkte enthalten selbst keine Prüflogik
-- `require_admin` hängt am gesamten Router unter `/admin` (`backend/app/routers/admin/__init__.py`) — neue Admin-Endpunkte dort einhängen, dann sind sie automatisch mitgeschützt
-- ⚠️ **Login/Rollen sind noch nicht implementiert: Die Dependencies prüfen derzeit nichts, alle `/admin`-Endpunkte sind ungeschützt.** Vor jedem Betrieb außerhalb des lokalen Rechners zwingend nachrüsten (Stellen sind mit `TODO` markiert)
-- **Vorläufige Identifikation:** Bis zum Login wird der handelnde Mitarbeiter über den Header `X-Mitarbeiter-Id` angegeben (nur Zuordnung, *keine* Sicherheit — der Wert wird ungeprüft geglaubt). Nötig für Aktionen, die einer Person zugeordnet sein müssen (manuelle Korrektur, Arbeitszeit). Wird beim Login in `aktueller_mitarbeiter_id` durch das Login-Token ersetzt
-- Auch `/auftraege` ist derzeit ungeschützt; vorgesehene Prüfung je Auftrag: `darf_auftrag_bearbeiten` (zugewiesener Mitarbeiter oder Werkstattleiter/Admin)
+**Technische Umsetzung (Stand 27.09.2026):** alles in `backend/app/auth.py`
+- **Login:** `POST /auth/login` mit E-Mail + Passwort (OAuth2-Formular, Feld `username` = E-Mail) → signiertes Token (JWT, HS256) mit `mitarbeiter_id` (`sub`) und `systemrolle`, gültig 8 Stunden. Schlüssel `JWT_SECRET` in der `.env`
+- **Passwörter:** Argon2 (`pwdlib`), nie im Klartext. Fehlermeldung beim Login unterscheidet bewusst nicht zwischen „E-Mail unbekannt“ und „Passwort falsch“
+- **Jede Anfrage:** Dependency `aktueller_mitarbeiter` prüft das Token und lädt den Mitarbeiter. **Rolle und Aktiv-Status kommen aus der Datenbank**, nicht aus dem Token — Deaktivierung/Rollenänderung wirkt sofort
+- **Rollenprüfung:** `rolle_mindestens(Systemrolle.X)` (Rollen kumulativ); `require_admin` am gesamten `/admin`-Router; `darf_auftrag_bearbeiten` für Statuswechsel/Korrektur (zugewiesener Mitarbeiter oder Werkstattleiter/Admin)
+- **Erster Admin:** Kommandozeilen-Skript `uv run python -m app.konto_anlegen` (siehe `backend/README.md`)
+- Offen: Auftragsliste/-details für Rolle `mitarbeiter` ggf. auf eigene Aufträge einschränken; Passwort ändern/zurücksetzen; Begrenzung von Login-Fehlversuchen
 
 ## 5. Kundenauthentifizierung
 
@@ -88,6 +89,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Login (JWT, Argon2) und Rollenprüfung; Header `X-Mitarbeiter-Id` entfernt; Skript für den ersten Admin |
 | 27.09.2026 | Auftrags-Endpunkte (Anlegen mit Schätzung, Liste, Detail, Statuswechsel, manuelle Korrektur); vorläufige Identifikation per `X-Mitarbeiter-Id`; alle Zeitstempel auf `clock_timestamp()` |
 | 27.09.2026 | Stufe-1-Schätzung für Arbeitsstunden und Kosten (isoliert, noch nicht angebunden) |
 | 27.09.2026 | Tabelle `reparatur_vorgabewert` + Kostenfelder in `auftrag`; Admin-Endpunkte für Vorgabewerte (noch ohne Berechtigungsprüfung, siehe Abschnitt 4) |

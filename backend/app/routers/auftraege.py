@@ -6,10 +6,12 @@ Grundsätze:
 - Schätzungen werden nie überschrieben: jede automatische Schätzung und jede manuelle
   Korrektur ist ein eigener Eintrag im schaetzungs_log.
 
-TODO: Sobald Login/Rollen implementiert sind (siehe ARCHITECTURE.md, Abschnitt 4
-"Berechtigungskonzept") – Liste für Systemrolle "mitarbeiter" auf eigene Aufträge
-einschränken; Zugriffe auf einzelne Aufträge über darf_auftrag_bearbeiten prüfen.
-Derzeit sind alle Endpunkte hier UNGESCHÜTZT.
+Berechtigungen (7.2): Alle Endpunkte erfordern Anmeldung. Anlegen, Liste und Details
+für alle Mitarbeiter; Statuswechsel und Korrektur nur für den zugewiesenen Mitarbeiter
+oder Werkstattleiter/Admin (darf_auftrag_bearbeiten).
+
+TODO: Liste/Details für Systemrolle "mitarbeiter" ggf. auf eigene Aufträge einschränken
+(Berechtigungsmatrix 7.2: "Alle Aufträge werkstattweit einsehen" nur Werkstattleiter/Admin).
 """
 
 import secrets
@@ -20,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, select, text
 from sqlalchemy.orm import Session
 
-from app.auth import aktueller_mitarbeiter_id, angemeldeter_mitarbeiter_id, darf_auftrag_bearbeiten
+from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten
 from app.db import get_db
 from app.models import (
     Arbeitszeiterfassung,
@@ -47,7 +49,7 @@ from app.schemas import (
     Statuswechsel,
 )
 
-router = APIRouter(prefix="/auftraege", tags=["Aufträge"])
+router = APIRouter(prefix="/auftraege", tags=["Aufträge"], dependencies=[Depends(aktueller_mitarbeiter)])
 
 STARTSTATUS = "angenommen"
 METHODE_REGELBASIERT = "regelbasiert"
@@ -204,7 +206,7 @@ def auftrag_abrufen(auftrag_id: uuid.UUID, db: Session = Depends(get_db)) -> Auf
 def auftrag_anlegen(
     daten: AuftragNeu,
     db: Session = Depends(get_db),
-    mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> AuftragDetail:
     if db.get(Kunde, daten.kunde_id) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kunde existiert nicht")
@@ -275,7 +277,7 @@ def status_wechseln(
     auftrag_id: uuid.UUID,
     daten: Statuswechsel,
     db: Session = Depends(get_db),
-    mitarbeiter_id: uuid.UUID | None = Depends(aktueller_mitarbeiter_id),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> AuftragDetail:
     auftrag = _auftrag_laden(db, auftrag_id)
     neu = db.get(Auftragsstatus, daten.status_id)
@@ -289,9 +291,6 @@ def status_wechseln(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             f"Für den Status \"{neu.bezeichnung}\" muss die Arbeitszeit angegeben werden")
     if daten.arbeitszeit_minuten is not None:
-        if mitarbeiter_id is None:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED,
-                                "Arbeitszeit muss einem Mitarbeiter zugeordnet werden (vorläufig: Header X-Mitarbeiter-Id)")
         db.add(Arbeitszeiterfassung(
             auftrag_id=auftrag.id,
             mitarbeiter_id=mitarbeiter_id,
@@ -326,7 +325,7 @@ def schaetzung_korrigieren(
     auftrag_id: uuid.UUID,
     daten: SchaetzungKorrektur,
     db: Session = Depends(get_db),
-    mitarbeiter_id: uuid.UUID = Depends(angemeldeter_mitarbeiter_id),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> AuftragDetail:
     if daten.geschaetzte_arbeitsstunden is None and daten.geschaetzte_kosten is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -25,9 +25,9 @@ class Werkstatt:
     def __init__(self, db):
         self.db = db
         self.kunde = Kunde(kundennummer=f"TEST-{secrets.token_hex(4)}", name="Test Kunde")
-        self.mitarbeiter = Mitarbeiter(
-            name="Test Geigenbauer", email=f"{secrets.token_hex(4)}@test.invalid", passwort_hash="x"
-        )
+        from tests.conftest import konto_anlegen
+
+        self.mitarbeiter = konto_anlegen(db, name="Test Geigenbauer")  # Systemrolle mitarbeiter
         self.saitenwechsel = Reparaturart(bezeichnung="TEST Saitenwechsel", standard_komplexitaet=1)
         self.kontrabass = Instrumentenklasse(bezeichnung="TEST Kontrabass", oberkategorie="Streich")
         self.violine = Instrumentenklasse(bezeichnung="TEST Violine", oberkategorie="Streich")
