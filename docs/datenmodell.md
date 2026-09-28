@@ -17,11 +17,14 @@ Jeder Statuswechsel eines Auftrags wird als eigener Datensatz mit Zeitstempel ge
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
-| kundennummer | VARCHAR, UNIQUE | Für das Kunden-Dashboard sichtbar (siehe Hinweis zu Sicherheit unten) |
+| kundennummer | VARCHAR, UNIQUE | Wird automatisch vergeben, Format `K-00001` (fortlaufend) |
 | name | VARCHAR | |
-| email | VARCHAR | Optional, für Statusbenachrichtigungen |
+| email | VARCHAR | Optional, für Statusbenachrichtigungen; wird auf gültiges Format geprüft |
 | telefon | VARCHAR | Optional |
 | erstellt_am | TIMESTAMP | |
+| archiviert_am | TIMESTAMP | NULL = aktiv. Archivierte Kunden fehlen in normalen Listen, sind für neue Aufträge gesperrt, bleiben mit allen alten Aufträgen aber erhalten |
+
+**Regeln:** Anlegen/Bearbeiten dürfen alle eingeloggten Mitarbeiter (gehört zur Auftragsannahme), Archivieren/Reaktivieren nur Werkstattleiter und Admin. Ein Kunde mit offenen Aufträgen lässt sich nicht archivieren. Jede Änderung (angelegt, geändert mit alt/neu, archiviert, reaktiviert) landet im Änderungsprotokoll (`system_ereignis_log`, 7.3).
 
 **Sicherheitshinweis:** Zum sicheren Dashboard-Zugriff wird zusätzlich zur Auftragsnummer ein Zugriffstoken benötigt — Details siehe Abschnitt 6 "Kundenauthentifizierung".
 
@@ -84,6 +87,9 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | baujahr | INT | Optional, falls bekannt/schätzbar |
 | seriennummer | VARCHAR | Optional, hilfreich zur eindeutigen Identifikation bei Folgeaufträgen |
 | notizen | TEXT | z. B. Besonderheiten, bekannte Vorschäden |
+| archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `kunde` (2.1) |
+
+**Regeln:** Der Besitzer (`kunde_id`) lässt sich nach dem Anlegen nicht ändern; bei einem Besitzerwechsel wird das alte Instrument archiviert und ein neues angelegt, damit die Historie sauber bleibt. Instrumente mit offenen Aufträgen lassen sich nicht archivieren. Berechtigungen und Protokollierung wie bei `kunde`.
 
 **Nutzen fürs spätere Modell (Stufe 2):** Hersteller/Baujahr können als zusätzliche Merkmale einfließen — ältere oder bestimmte Hersteller-Instrumente benötigen bei manchen Reparaturarten erfahrungsgemäß mehr Zeit (z. B. Ersatzteilbeschaffung bei alten oder seltenen Modellen).
 
@@ -325,10 +331,8 @@ vorlauf_stunden =
 benötigte_stunden = vorlauf_stunden + auftrag.geschätzte_arbeitsstunden (siehe 4.1)
 
 verfügbare_stunden_pro_tag = mitarbeiter_arbeitszeit.wochenstunden / 5
-    (Wochenenden, Betriebsschließungen, Feiertage und alle ganztägigen Abwesenheiten des
-     Mitarbeiters – Urlaub, Krankheit, Schulung usw. – übersprungen;
-     an Tagen mit abwesenheit.reduzierte_stunden gilt reduzierte_stunden / 5 statt der vollen
-     Wochenstunden, höchstens jedoch die regulären Wochenstunden / 5)
+    (Wochenenden, Betriebsschließungen, Feiertage, Urlaub übersprungen;
+     an Tagen mit abwesenheit.reduzierte_stunden gilt reduzierte_stunden / 5 statt der vollen Wochenstunden)
 
 geschätztes_fertigstellungsdatum = der Arbeitstag, an dem benötigte_stunden 
     durch tägliches Abarbeiten ab morgen aufgebraucht sind
@@ -502,10 +506,7 @@ Statt einer detaillierten Tages-/Stundenplanung (wie sie klassische Schichtplanu
 ```
 verfügbare_stunden(mitarbeiter, woche) =
     wochenstunden                                    (aus mitarbeiter_arbeitszeit, 2.12)
-    − abwesenheitsstunden in dieser Woche             (aus abwesenheit, 2.3 — bei ganztägiger Abwesenheit
-                                                       die Tagesstunden; bei reduzierter Verfügbarkeit die
-                                                       Differenz wochenstunden − reduzierte_stunden, da
-                                                       reduzierte_stunden die verfügbare Zahl ist)
+    − abwesenheitsstunden in dieser Woche             (aus abwesenheit, 2.3 — ganztägig oder reduzierte_stunden)
     − Summe(geschätzte_arbeitsstunden aller zugewiesenen, noch offenen Aufträge)   (aus auftrag, 2.7)
 
 auslastung_prozent = gebundene_stunden / wochenstunden * 100
