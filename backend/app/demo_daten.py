@@ -21,7 +21,7 @@ Angelegt werden:
 import argparse
 import secrets
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import delete, select

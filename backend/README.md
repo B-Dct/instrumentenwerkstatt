@@ -59,6 +59,10 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/instrumentenklassen`, `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, nur aktive, für alle Angemeldeten) |
 | GET, POST, PATCH | `/admin/instrumentenklassen`, `/admin/reparaturarten` (+ `/{id}`) | Stammdaten pflegen (nur Admin; `?archivierte=true` zeigt auch archivierte) |
 | POST | `/admin/…/{id}/archivieren`, `/admin/…/{id}/reaktivieren` | Stammdaten archivieren/zurückholen (nur Admin) |
+| GET | `/admin/mitarbeiter`, `/admin/mitarbeiter/{id}` | Mitarbeiter mit Rolle, Status, aktuellen Wochenstunden, offenen Aufträgen (nur Admin) |
+| POST | `/admin/mitarbeiter/{id}/deaktivieren`, `/…/aktivieren` | Deaktivieren/Reaktivieren (nicht sich selbst, nicht den letzten Admin, nicht bei offenen Aufträgen) |
+| PATCH | `/admin/mitarbeiter/{id}/systemrolle` | Systemrolle ändern (sich selbst nicht herabstufen, letzter Admin bleibt) |
+| GET, POST | `/admin/mitarbeiter/{id}/wochenstunden` | Verlauf ansehen / neuen Wert ab Datum festlegen (schließt den bisherigen ab) |
 | GET | `/auftraege` | Aufträge auflisten (Priorität hoch zuerst, dann älteste; Filter: `status_id`, `nur_offene`, `zugewiesener_mitarbeiter_id`, `kunde_id`, `prioritaet`) |
 | GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
 | POST | `/auftraege` | Auftrag anlegen – schätzt Stunden, Kosten und Fertigstellungstermin automatisch und protokolliert die Schätzung |

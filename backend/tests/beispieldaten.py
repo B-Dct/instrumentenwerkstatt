@@ -12,7 +12,6 @@ from app.models import (
     Instrument,
     Instrumentenklasse,
     Kunde,
-    Mitarbeiter,
     Reparaturart,
     ReparaturVorgabewert,
 )
@@ -55,8 +54,8 @@ class Werkstatt:
         self.db.flush()
         return instrument
 
-    def auftrag(self, klasse=None, status=None, minuten=(), kosten=None):
-        """Ein Auftrag; `minuten` = Zeiteinträge (mehrere Sitzungen möglich)."""
+    def auftrag(self, klasse=None, status=None, minuten=(), kosten=None, zugewiesen=None, stunden=None):
+        """Ein Auftrag; `minuten` = Zeiteinträge (mehrere Sitzungen möglich). Gibt den Auftrag zurück."""
         instrument = self.instrument(klasse)
         auftrag = Auftrag(
             auftragsnummer=f"T-{secrets.token_hex(5)}",
@@ -67,6 +66,8 @@ class Werkstatt:
             komplexitaet=1,
             status_aktuell_id=status or self.fertig,
             tatsaechliche_kosten=None if kosten is None else Decimal(kosten),
+            zugewiesener_mitarbeiter_id=zugewiesen.id if zugewiesen else None,
+            geschaetzte_arbeitsstunden=None if stunden is None else Decimal(stunden),
         )
         self.db.add(auftrag)
         self.db.flush()
@@ -75,6 +76,7 @@ class Werkstatt:
                 auftrag_id=auftrag.id, mitarbeiter_id=self.mitarbeiter.id, dauer_minuten=m
             ))
         self.db.flush()
+        return auftrag
 
     def stunden(self):
         return schaetze_arbeitsstunden(self.db, self.kontrabass.id, self.saitenwechsel.id)

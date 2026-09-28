@@ -9,12 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.schaetzung import (
-    MINDESTANZAHL_VERGLEICHSFAELLE,
-    Quelle,
-    schaetze_arbeitsstunden,
-    schaetze_kosten,
-)
+from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Quelle
 from tests.beispieldaten import Werkstatt
 
 

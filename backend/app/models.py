@@ -353,6 +353,9 @@ class MitarbeiterArbeitszeit(Base):
     __table_args__ = (
         CheckConstraint("wochenstunden >= 0", name="wochenstunden_positiv"),
         CheckConstraint("gueltig_bis IS NULL OR gueltig_bis >= gueltig_ab", name="zeitraum_gueltig"),
+        # Je Mitarbeiter höchstens ein aktuell gültiger (offener) Eintrag
+        Index("uq_mitarbeiter_arbeitszeit_aktuell", "mitarbeiter_id", unique=True,
+              postgresql_where=text("gueltig_bis IS NULL")),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()

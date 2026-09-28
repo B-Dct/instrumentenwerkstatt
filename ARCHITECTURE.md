@@ -76,6 +76,7 @@ Details: siehe Datenmodell-Dokument, Abschnitt 7.
 - **Passwörter:** Argon2 (`pwdlib`), nie im Klartext. Fehlermeldung beim Login unterscheidet bewusst nicht zwischen „E-Mail unbekannt“ und „Passwort falsch“
 - **Jede Anfrage:** Dependency `aktueller_mitarbeiter` prüft das Token und lädt den Mitarbeiter. **Rolle und Aktiv-Status kommen aus der Datenbank**, nicht aus dem Token — Deaktivierung/Rollenänderung wirkt sofort
 - **Rollenprüfung:** `rolle_mindestens(Systemrolle.X)` (Rollen kumulativ); `require_admin` am gesamten `/admin`-Router; `darf_auftrag_bearbeiten` für Statuswechsel/Korrektur (zugewiesener Mitarbeiter oder Werkstattleiter/Admin)
+- **Mitarbeiter-Verwaltung** (`/admin/mitarbeiter`): Schutz gegen Aussperren – kein Selbst-Deaktivieren/-Herabstufen, der letzte aktive Admin bleibt (mit Zeilensperre gegen gleichzeitige Änderungen), Deaktivieren erst ohne offene zugewiesene Aufträge
 - **Erster Admin:** Kommandozeilen-Skript `uv run python -m app.konto_anlegen` (siehe `backend/README.md`)
 - Offen: Auftragsliste/-details für Rolle `mitarbeiter` ggf. auf eigene Aufträge einschränken; Passwort ändern/zurücksetzen; Begrenzung von Login-Fehlversuchen
 
@@ -109,6 +110,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 28.09.2026 | Mitarbeiter-Verwaltung und Wochenstunden mit Verlauf (Verwaltung Schritt 3, nur Admin) |
 | 28.09.2026 | Instrumentenklassen/Reparaturarten pflegen und archivieren (Verwaltung Schritt 2, nur Admin); `aktiv` → `archiviert_am` |
 | 27.09.2026 | Kunden/Instrumente anlegen, bearbeiten, archivieren (Verwaltung Schritt 1); Kundennummern `K-00001` |
 | 27.09.2026 | Befehl `app.termine_nachrechnen`; einmalig für offene Aufträge ohne Termin angewendet |

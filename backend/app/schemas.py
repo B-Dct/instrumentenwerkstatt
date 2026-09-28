@@ -3,11 +3,11 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
 
-from app.models import Prioritaet
+from app.models import Prioritaet, Systemrolle
 
 # Dezimalwerte als JSON-Zahl ausgeben (statt als Text "12.50")
 Stunden = Annotated[
@@ -309,3 +309,50 @@ class ReparaturartEintrag(BaseModel):
     bezeichnung: str
     standard_komplexitaet: int
     archiviert_am: datetime | None
+
+
+# --- Mitarbeiter-Verwaltung (2.2, 2.12, 7.4) – nur Admin ------------------------
+
+class AktuelleWochenstunden(BaseModel):
+    wochenstunden: Stunden
+    # "hinterlegt" = Eintrag in mitarbeiter_arbeitszeit; "standard" = Fallback (nichts hinterlegt)
+    quelle: Literal["hinterlegt", "standard"]
+    gueltig_ab: date | None  # None beim Standard
+
+
+class MitarbeiterVerwaltung(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+    rolle: str | None  # fachliche Rolle
+    systemrolle: Systemrolle
+    aktiv: bool
+    erstellt_am: datetime
+    deaktiviert_am: datetime | None
+    wochenstunden: AktuelleWochenstunden
+    offene_auftraege: int  # zugewiesene, noch nicht abgeschlossene Aufträge
+
+
+class SystemrolleAenderung(BaseModel):
+    systemrolle: Systemrolle
+
+
+class WochenstundenNeu(BaseModel):
+    wochenstunden: Annotated[Decimal, Field(gt=0, le=80, max_digits=5, decimal_places=2)]
+    gueltig_ab: date
+
+
+class WochenstundenEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    wochenstunden: Stunden
+    gueltig_ab: date
+    gueltig_bis: date | None  # None = aktuell gültig
+    geaendert_von_mitarbeiter_id: uuid.UUID | None
+    geaendert_am: datetime
+
+
+class WochenstundenVerlauf(BaseModel):
+    aktuell: AktuelleWochenstunden
+    eintraege: list[WochenstundenEintrag]  # neueste zuerst

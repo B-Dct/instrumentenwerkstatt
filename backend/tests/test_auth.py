@@ -12,7 +12,7 @@ from app.auth import passwort_pruefen
 from app.config import settings
 from app.models import Mitarbeiter, SchaetzungsLog, Systemrolle
 from tests.beispieldaten import Werkstatt
-from tests.conftest import OHNE_ANMELDUNG, TEST_PASSWORT, angemeldet_als, konto_anlegen
+from tests.conftest import TEST_PASSWORT, angemeldet_als, konto_anlegen
 
 
 def einloggen(client, email, passwort):
