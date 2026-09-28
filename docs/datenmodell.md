@@ -557,6 +557,7 @@ Diese Regeln gelten seitenübergreifend für die gesamte Software (internes Dash
 - **Keine Popups/modale Dialoge** für Dateneingabe — Formulare sind eigene Seiten oder fest eingebettete Bereiche, keine Overlays
 - **Inline-Validierung:** Fehler (Pflichtfeld leer, falsches Format) werden direkt am betroffenen Feld angezeigt, nicht als Dialog oder Sammel-Fehlermeldung am Seitenende
 - **Speichern-Bestätigung:** Nach erfolgreichem Speichern erhält der Nutzer eine sichtbare, aber nicht blockierende Bestätigung (z. B. eine kurze Erfolgsmeldung/Toast am Bildschirmrand), kein Popup, das weggeklickt werden muss
+- **Formulare erscheinen nur auf Wunsch:** Bearbeitungsmasken sind standardmäßig nicht sichtbar, sondern öffnen sich erst, wenn der Nutzer die jeweilige Aktion wählt (siehe 9.10)
 - **Warnung bei ungespeicherten Änderungen:** Verlässt der Nutzer eine Seite mit ungespeicherten Änderungen (Navigation, Schließen), erscheint eine Rückfrage, ob er wirklich verlassen möchte
 
 ### 9.2 Navigation
@@ -659,6 +660,54 @@ Umsetzung der Kapazitätsplanung aus Abschnitt 8 als einfache, wöchentliche Bal
 - Klick auf eine Zelle zeigt Details: welche Aufträge sind zugewiesen, welche Abwesenheit liegt vor
 - Von hier aus direkter Sprung zur Auftragsumverteilung (bei Überbuchung) oder zur Abwesenheitspflege
 - Bewusst **keine** Tages- oder Uhrzeit-genaue Planung (siehe Begründung in Abschnitt 8.3) — das hält die Ansicht einfach und für den Werkstattleiter auf einen Blick erfassbar
+
+### 9.10 Fokussierte Oberflächen (Formulare nur auf Wunsch)
+
+**Prinzip: Lesen zuerst, Bearbeiten auf Wunsch.** Eine Seite zeigt im Normalzustand nur, was man zum Lesen braucht. Ein Formular erscheint erst, wenn der Nutzer die passende Aktion bewusst wählt, und verschwindet nach dem Speichern oder Abbrechen wieder. Der Auftrag ist damit im Normalzustand "geschlossen" und sauber strukturiert. Die Regel gilt für die gesamte Anwendung, nicht nur für die Auftragsdetailseite.
+
+**Aufbau der Auftragsdetailseite:**
+
+```
+Aufträge / 2026-00007
+Auftrag 2026-00007          ◐ In Bearbeitung    ⚑ hohe Priorität
+Kunde · Instrument · Reparaturart · Mitarbeiter · Termin 29.09.2026
+Schätzung: 0,7 Std. · 30,60 €
+
+[ Status ändern ]  [ Schätzung korrigieren ]  [ Zuweisung & Priorität ]
+
+▸ Statusverlauf (4 Einträge, zuletzt: In Bearbeitung, 27.09.2026)
+▸ Schätzungen (2 Einträge, zuletzt: manuell korrigiert am 27.09.2026)
+```
+
+Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter der Aktionsleiste:
+
+```
+[ Status ändern ]  [■ Schätzung korrigieren ]  [ Zuweisung & Priorität ]
+┌────────────────────────────────────────────────────┐
+│ Schätzung korrigieren                              │
+│ Stunden [ 1,5 ]    Kosten [        ]               │
+│ Begründung [                                    ]  │
+│ [ Speichern ]  [ Abbrechen ]                       │
+└────────────────────────────────────────────────────┘
+▸ Statusverlauf ...
+▸ Schätzungen ...
+```
+
+**Regeln:**
+
+1. **Ruhige Standardansicht:** Kopf, Eckdaten und Aktionsleiste. Keine Formularfelder sichtbar, solange keine Aktion gewählt ist.
+2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin).
+3. **Eingebettet, kein Popup:** Das Formular öffnet sich direkt unter der Aktionsleiste (konform mit 9.1). Der aktive Button ist markiert.
+4. **Nur ein Formular gleichzeitig:** Wählt der Nutzer eine andere Aktion, während im offenen Formular ungespeicherte Änderungen stehen, erscheint die Rückfrage "Änderungen verwerfen?" als eingebetteter Hinweis, nicht als Popup.
+5. **Nach dem Speichern schließt sich das Formular automatisch.** Die Erfolgsbestätigung folgt 9.1, der geänderte Wert wird kurz hervorgehoben. "Abbrechen" schließt ohne Speichern.
+6. **Lese-Bereiche sind zugeklappt:** Statusverlauf, Schätzprotokoll u. ä. zeigen eine einzeilige Zusammenfassung (Anzahl Einträge, letzter Eintrag) und klappen per Klick auf.
+7. **Tastatur und Barrierefreiheit:** Aktions- und Aufklapp-Buttons sind echte Buttons mit `aria-expanded`. Beim Öffnen springt der Fokus ins erste Feld, Escape schließt (mit Rückfrage bei Änderungen).
+8. **Gilt seitenübergreifend:** In der Verwaltung steht die Liste im Vordergrund. "Neu anlegen" oder ein Klick auf eine Zeile öffnet das Formular, es gibt keine dauerhaft offene Formular-plus-Liste-Kombination.
+
+**Verworfene Alternativen:**
+- *Seitenpanel/Drawer:* ist ein Overlay und widerspricht der Regel "keine Popups" (9.1)
+- *Tabs für die Formulare:* Formulare wären versteckt und schlechter auffindbar als Buttons in einer Aktionsleiste
+- *Direktes Bearbeiten einzelner Felder per Klick:* passt nicht zu Aktionen mit Pflichtbegründung (z. B. Schätzungs-Korrektur)
 
 ---
 
