@@ -68,8 +68,11 @@ Strukturierte Kategorie statt Freitext — Pflicht für spätere Auswertbarkeit.
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
-| bezeichnung | VARCHAR | z. B. "Violine", "Trompete", "Klarinette", "Klavier" |
+| bezeichnung | VARCHAR, UNIQUE | z. B. "Violine", "Trompete", "Klarinette", "Klavier" |
 | oberkategorie | VARCHAR | z. B. "Streichinstrument", "Blechblas", "Holzblas", "Tasteninstrument" |
+| archiviert_am | TIMESTAMP | NULL = aktiv. Archivierte Einträge fehlen in den Auswahllisten und sind für neue Aufträge, Instrumente und Vorgabewerte gesperrt; bestehende Datensätze behalten sie |
+
+**Pflege:** nur Admin (anlegen, bearbeiten, archivieren, reaktivieren). Eine doppelte Bezeichnung wird mit dem Hinweis abgelehnt, einen eventuell archivierten Eintrag zu reaktivieren.
 
 ---
 
@@ -100,8 +103,11 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
-| bezeichnung | VARCHAR | z. B. "Saitenwechsel", "Ventil-Überholung", "Rissreparatur Decke" |
+| bezeichnung | VARCHAR, UNIQUE | z. B. "Saitenwechsel", "Ventil-Überholung", "Rissreparatur Decke" |
 | standard_komplexität | INT (1–5) | Vorbelegung, kann pro Auftrag überschrieben werden |
+| archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `instrumentenklasse` (2.4) |
+
+**Pflege:** nur Admin, Regeln wie bei `instrumentenklasse`.
 
 ---
 
@@ -121,6 +127,8 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 | geändert_am | TIMESTAMP | |
 
 **Pflege:** Über den Administrationsbereich, Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — passt zur bestehenden Stammdatenpflege von Instrumentenklassen und Reparaturarten.
+
+**Regel bei Archivierung:** Neue Vorgabewerte dürfen nicht auf archivierte Reparaturarten oder Instrumentenklassen verweisen. Bestehende Vorgabewerte bleiben auch dann bearbeitbar (z. B. um den Preis anzupassen).
 
 ---
 
@@ -472,14 +480,14 @@ In einer kleinen Werkstatt ist es üblich, dass der Werkstattleiter zusätzlich 
 
 ### 7.3 Neue Tabelle: `system_ereignis_log`
 
-Empfehlenswert, sobald mehrere Personen administrative Rechte haben — protokolliert sicherheitsrelevante Änderungen nachvollziehbar.
+Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, und zwar von allen Rollen, nicht nur vom Admin: Anlegen, Ändern (mit altem und neuem Wert), Archivieren und Reaktivieren von Kunden, Instrumenten, Instrumentenklassen und Reparaturarten sowie Mitarbeiter- und Rollenänderungen. Kunden und Instrumente dürfen auch normale Mitarbeiter ändern, das wird ebenfalls protokolliert.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | ausgeführt_von_mitarbeiter_id | FK → mitarbeiter | |
-| aktion | VARCHAR | z. B. "mitarbeiter_angelegt", "mitarbeiter_deaktiviert", "reparaturart_geändert", "rolle_geändert" |
-| betroffene_entität | VARCHAR | z. B. "mitarbeiter", "reparaturart" |
+| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
+| betroffene_entität | VARCHAR | z. B. "mitarbeiter", "reparaturart", "kunde", "instrument", "instrumentenklasse" |
 | betroffene_id | UUID | ID des betroffenen Datensatzes |
 | details | JSONB | Was genau geändert wurde (alter/neuer Wert) |
 | zeitpunkt | TIMESTAMP | |
