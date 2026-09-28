@@ -727,6 +727,15 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 7. **Tastatur und Barrierefreiheit:** Aktions- und Aufklapp-Buttons sind echte Buttons mit `aria-expanded`. Beim Öffnen springt der Fokus ins erste Feld, Escape schließt (mit Rückfrage bei Änderungen).
 8. **Gilt seitenübergreifend:** In der Verwaltung steht die Liste im Vordergrund. "Neu anlegen" oder ein Klick auf eine Zeile öffnet das Formular, es gibt keine dauerhaft offene Formular-plus-Liste-Kombination.
 
+**Präzisierungen aus der Umsetzung (Kunden und Instrumente):**
+
+- **Liste, Leseseite oder Formular:** Hat ein Objekt eigene Unterobjekte (z. B. ein Kunde mit Instrumenten), öffnet der Klick auf die Listenzeile zuerst eine Leseseite mit Aktionsleiste ("Lesen zuerst"). Hat es keine, öffnet der Klick direkt das Formular.
+- **Archivieren und Deaktivieren** sitzen in der Zeile bzw. der Aktionsleiste, nicht im Bearbeitungsformular, damit ungespeicherte Änderungen nicht unbemerkt verworfen werden. Ist ein Formular mit ungespeicherten Änderungen offen, wird die Aktion mit einem Hinweis verweigert.
+- **Keine Zusatzbestätigung bei umkehrbaren Aktionen:** Archivieren läuft ohne weiteren Dialog, weil es per "Reaktivieren" rückgängig gemacht werden kann. Archivierte Einträge erscheinen ausgegraut und als "archiviert" markiert, mit dem Hinweis, dass sie erhalten bleiben. Endgültig nicht umkehrbare Aktionen gibt es in der Oberfläche nicht (siehe 9.2).
+- **Wegnavigieren mit ungespeicherten Änderungen:** Die Rückfrage "Änderungen verwerfen?" erscheint eingebettet, auch beim Klick auf die Seitenleiste. Einzige Ausnahme vom Verzicht auf Popups: Beim Schließen des Browser-Tabs zeigt der Browser selbst seine Standardabfrage, eine eingebettete Rückfrage ist dort technisch nicht möglich.
+- **Erfolgsbestätigung:** unten rechts, verschwindet nach etwa 4 Sekunden, die geänderte Zeile wird kurz hervorgehoben. Die Meldung ist für Screenreader als Statusmeldung ausgezeichnet (`aria-live`).
+- **Sichtbarkeit nach Rolle:** Filter wie "archivierte anzeigen" sehen nur Werkstattleitung und Admin (siehe 7.2). Die eigene Rolle holt das Frontend beim Start frisch vom Backend, Rollenänderungen greifen so nach dem nächsten Neuladen.
+
 **Verworfene Alternativen:**
 - *Seitenpanel/Drawer:* ist ein Overlay und widerspricht der Regel "keine Popups" (9.1)
 - *Tabs für die Formulare:* Formulare wären versteckt und schlechter auffindbar als Buttons in einer Aktionsleiste
