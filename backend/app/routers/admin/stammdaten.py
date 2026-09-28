@@ -10,12 +10,12 @@ from typing import TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
 from app.ereignisse import protokollieren, werte
+from app.speichern import sicher_speichern
 from app.models import Instrumentenklasse, Reparaturart
 from app.schemas import (
     InstrumentenklasseAenderung,
@@ -40,25 +40,6 @@ def _laden(db: Session, modell: type[M], eintrag_id: uuid.UUID, name: str) -> M:
     return eintrag
 
 
-def _speichern(db: Session, name: str, neu=None, aenderungen: tuple = ()) -> None:
-    """Speichert. Neuer Datensatz bzw. Feldänderungen ((objekt, feld, wert), …) werden innerhalb
-    des Speicherpunkts gesetzt, damit sie bei einem Fehler wieder aus der Sitzung verschwinden."""
-    try:
-        with db.begin_nested():  # bei Fehler nur diesen Speicherversuch zurücknehmen
-            if neu is not None:
-                db.add(neu)
-            for objekt, feld, wert in aenderungen:
-                setattr(objekt, feld, wert)
-            db.flush()
-    except IntegrityError as e:
-        if "unique" in str(e.orig).lower():
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"{name} mit dieser Bezeichnung gibt es bereits (ggf. archiviert – dann reaktivieren)",
-            ) from e
-        raise
-
-
 def _auflisten(db: Session, modell, archivierte: bool, *sortierung):
     abfrage = select(modell).order_by(*sortierung)
     if not archivierte:
@@ -68,7 +49,8 @@ def _auflisten(db: Session, modell, archivierte: bool, *sortierung):
 
 def _anlegen(db: Session, modell, daten, felder, entitaet, name, mitarbeiter_id):
     eintrag = modell(**daten.model_dump())
-    _speichern(db, name, neu=eintrag)
+    with sicher_speichern(db):
+        db.add(eintrag)
     protokollieren(db, mitarbeiter_id, f"{entitaet}_angelegt", entitaet, eintrag.id, {"neu": werte(eintrag, felder)})
     db.commit()
     return eintrag
@@ -82,7 +64,9 @@ def _bearbeiten(db: Session, eintrag, daten, felder, entitaet, name, mitarbeiter
     alt = werte(eintrag, felder)
     neu = {**alt, **werte(daten, list(aenderungen))}
     if neu != alt:
-        _speichern(db, name, aenderungen=tuple((eintrag, f, w) for f, w in aenderungen.items()))
+        with sicher_speichern(db):
+            for feld, wert in aenderungen.items():
+                setattr(eintrag, feld, wert)
         protokollieren(db, mitarbeiter_id, f"{entitaet}_geaendert", entitaet, eintrag.id, {"alt": alt, "neu": neu})
         db.commit()
     return eintrag
@@ -92,7 +76,9 @@ def _archivieren(db: Session, eintrag, entitaet, name, mitarbeiter_id, archivier
     if (eintrag.archiviert_am is not None) == archivieren:
         raise HTTPException(status.HTTP_409_CONFLICT,
                             f"{name} ist {'bereits' if archivieren else 'nicht'} archiviert")
-    eintrag.archiviert_am = db.scalar(select(func.clock_timestamp())) if archivieren else None
+    zeitpunkt = db.scalar(select(func.clock_timestamp())) if archivieren else None
+    with sicher_speichern(db):
+        eintrag.archiviert_am = zeitpunkt
     protokollieren(db, mitarbeiter_id, f"{entitaet}_{'archiviert' if archivieren else 'reaktiviert'}",
                    entitaet, eintrag.id)
     db.commit()

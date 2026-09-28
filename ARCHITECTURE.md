@@ -30,6 +30,7 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Unterbrechungen automatisch aus dem Status:** Status mit gesetztem `auftragsstatus.unterbrechungsgrund` (derzeit „Wartet auf Ersatzteil“) öffnen beim Wechsel hinein einen `unterbrechung`-Eintrag und schließen ihn beim Wechsel heraus. Höchstens eine offene Unterbrechung je Auftrag (Datenbank-Index). Grundlage, um Wartezeiten später aus der Bearbeitungsdauer herauszurechnen
 - **Archivieren statt Löschen:** Stammdaten bekommen `archiviert_am` (NULL = aktiv); archivierte Einträge fehlen in Standardlisten und sind für neue Aufträge gesperrt, bleiben aber erhalten und lassen sich reaktivieren. Kunden/Instrumente mit offenen Aufträgen können nicht archiviert werden
 - **Änderungsprotokoll:** Anlegen, Ändern, Archivieren und Reaktivieren von Stammdaten wird im `system_ereignis_log` festgehalten (Helfer `app/ereignisse.py`)
+- **Speichern mit Datenbankregeln (zentral):** Änderungen, die eine Eindeutigkeitsregel verletzen könnten, laufen immer über `app/speichern.py` (`with sicher_speichern(db): …`). Der Baustein setzt die Änderungen in einem Speicherpunkt, nimmt bei Verletzung genau diese zurück und liefert 409 mit deutscher Meldung aus `KONFLIKT_MELDUNGEN`. Ein Sicherheitsnetz in `main.py` macht aus übersehenen Fällen ebenfalls 409 statt 500. Tests erzwingen: jede Eindeutigkeitsregel hat eine Meldung, niemand fängt `IntegrityError` selbst ab, nach einem Konflikt bleibt nichts in der Sitzung hängen
 - **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
 - **Row Level Security auf allen Tabellen aktiv, ohne Freigabe-Regeln:** sperrt die automatische öffentliche REST-API von Supabase. Zugriff auf Daten nur über unser Backend
 - **Zeitstempel = echte Uhrzeit des Eintrags** (`clock_timestamp()`), nicht Transaktionsbeginn (`now()`) — sonst hätten mehrere Einträge einer Transaktion denselben Zeitstempel und die Reihenfolge von Verläufen/Logs wäre zufällig
@@ -110,6 +111,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 28.09.2026 | Zentraler Speicher-Baustein `app/speichern.py` für Datenbankkonflikte + Sicherheitsnetz + Mustertests |
 | 28.09.2026 | Vorgabewerte archivierbar (Eindeutigkeit nur unter aktiven, Schätzung ignoriert archivierte) |
 | 28.09.2026 | Frontend: Verwaltung Instrumentenklassen, Reparaturarten, Vorgabewerte (Schritt 4b, nur Admin) |
 | 28.09.2026 | Frontend: Kunden und Instrumente nach 9.10 (Verwaltung Schritt 4a); Bausteine für fokussierte Formulare; Daten-Router |

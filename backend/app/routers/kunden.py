@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, rolle_mindestens
 from app.db import get_db
 from app.ereignisse import protokollieren, werte
+from app.speichern import sicher_speichern
 from app.models import Auftrag, Auftragsstatus, Instrument, Instrumentenklasse, Kunde, Systemrolle
 from app.schemas import (
     InstrumentAenderung,
@@ -97,8 +98,8 @@ def kunde_anlegen(
     daten: KundeNeu, db: Session = Depends(get_db), mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> KundeDetail:
     kunde = Kunde(kundennummer=_neue_kundennummer(db), **daten.model_dump())
-    db.add(kunde)
-    db.flush()
+    with sicher_speichern(db):
+        db.add(kunde)
     protokollieren(db, mitarbeiter_id, "kunde_angelegt", "kunde", kunde.id, {"neu": werte(kunde, KUNDE_FELDER)})
     db.commit()
     return _kunde_detail(db, kunde)
@@ -114,10 +115,11 @@ def kunde_bearbeiten(
     if "name" in aenderungen and aenderungen["name"] is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Name darf nicht leer sein")
     alt = werte(kunde, KUNDE_FELDER)
-    for feld, wert in aenderungen.items():
-        setattr(kunde, feld, wert)
-    neu = werte(kunde, KUNDE_FELDER)
+    neu = {**alt, **werte(daten, list(aenderungen))}
     if neu != alt:
+        with sicher_speichern(db):
+            for feld, wert in aenderungen.items():
+                setattr(kunde, feld, wert)
         protokollieren(db, mitarbeiter_id, "kunde_geaendert", "kunde", kunde.id, {"alt": alt, "neu": neu})
         db.commit()
     return _kunde_detail(db, kunde)

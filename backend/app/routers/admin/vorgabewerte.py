@@ -7,16 +7,14 @@ Einträgen; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reakti
 """
 
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
+from app.speichern import sicher_speichern
 from app.models import Instrumentenklasse, Reparaturart, ReparaturVorgabewert, SystemEreignisLog
 from app.schemas import Vorgabewert, VorgabewertAenderung, VorgabewertNeu
 
@@ -70,22 +68,12 @@ def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrument
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 
-@contextmanager
-def _doppelte_kombination_abfangen(db: Session, reaktivieren: bool = False) -> Iterator[None]:
-    """Wandelt Verstöße gegen "eine Kombination nur einmal" in eine verständliche 409 um."""
-    try:
-        with db.begin_nested():  # bei Fehler nur diesen Speicherversuch zurücknehmen
-            yield
-    except IntegrityError as e:
-        if "uq_reparatur_vorgabewert_kombination" in str(e.orig):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Für diese Kombination aus Reparaturart und Instrumentenklasse ist bereits ein anderer "
-                "Vorgabewert aktiv – diesen zuerst archivieren." if reaktivieren else
-                "Für diese Kombination aus Reparaturart und Instrumentenklasse gibt es bereits "
-                "einen aktiven Vorgabewert – bitte den bestehenden bearbeiten.",
-            ) from e
-        raise
+# Passendere Meldung beim Reaktivieren (sonst gilt die zentrale aus app/speichern.py)
+REAKTIVIEREN_MELDUNGEN = {
+    "uq_reparatur_vorgabewert_kombination":
+        "Für diese Kombination aus Reparaturart und Instrumentenklasse ist bereits ein anderer "
+        "Vorgabewert aktiv – diesen zuerst archivieren.",
+}
 
 
 def _werte(eintrag: ReparaturVorgabewert) -> dict:
@@ -132,9 +120,8 @@ def vorgabewert_anlegen(
 ) -> Vorgabewert:
     _verweise_pruefen(db, daten.reparaturart_id, daten.instrumentenklasse_id)
     eintrag = ReparaturVorgabewert(**daten.model_dump(), geaendert_von_mitarbeiter_id=mitarbeiter_id)
-    with _doppelte_kombination_abfangen(db):
-        db.add(eintrag)  # innerhalb des Speicherpunkts: bei Fehler wieder entfernt
-        db.flush()  # erzeugt die ID
+    with sicher_speichern(db):
+        db.add(eintrag)  # erzeugt beim Speichern die ID
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
         aktion="vorgabewert_angelegt",
@@ -171,11 +158,10 @@ def vorgabewert_bearbeiten(
         if aenderungen.get("instrumentenklasse_id") != eintrag.instrumentenklasse_id else None,
     )
     alt = _werte(eintrag)
-    with _doppelte_kombination_abfangen(db):  # Änderungen innerhalb: bei Fehler wieder verworfen
+    with sicher_speichern(db):
         for feld, wert in aenderungen.items():
             setattr(eintrag, feld, wert)
         eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
-        db.flush()
 
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
@@ -197,10 +183,10 @@ def _archiv_umschalten(db: Session, vorgabewert_id: uuid.UUID, mitarbeiter_id: u
                             f"Vorgabewert ist {'bereits' if archivieren else 'nicht'} archiviert")
     alt = eintrag.archiviert_am
     zeitpunkt = db.scalar(select(func.clock_timestamp())) if archivieren else None
-    with _doppelte_kombination_abfangen(db, reaktivieren=not archivieren):
+    # Beim Reaktivieren prüft die Datenbank, ob die Kombination schon aktiv vergeben ist
+    with sicher_speichern(db, None if archivieren else REAKTIVIEREN_MELDUNGEN):
         eintrag.archiviert_am = zeitpunkt
         eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
-        db.flush()  # beim Reaktivieren prüft die Datenbank, ob die Kombination schon aktiv vergeben ist
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
         aktion="vorgabewert_archiviert" if archivieren else "vorgabewert_reaktiviert",

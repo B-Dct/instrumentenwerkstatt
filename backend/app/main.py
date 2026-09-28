@@ -1,10 +1,13 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.routers import admin, auftraege, auswahllisten, auth, kunden
+from app.speichern import konflikt_meldung
 
 app = FastAPI(title="Werkstatt-Auftragsmanagement")
 
@@ -17,6 +20,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(IntegrityError)
+async def datenregel_verletzt(request: Request, fehler: IntegrityError) -> JSONResponse:
+    """Sicherheitsnetz: Datenbankregel verletzt, ohne dass der Endpunkt sicher_speichern nutzt.
+    Liefert 409 mit verständlicher Meldung statt 500. Die Sitzung dieser Anfrage wird danach
+    ohnehin verworfen (get_db schließt sie)."""
+    return JSONResponse(status_code=409, content={"detail": konflikt_meldung(fehler)})
+
 
 app.include_router(auth.router)
 app.include_router(admin.router)
