@@ -65,6 +65,8 @@ def test_doppelte_kombination_wird_abgelehnt(client, stammdaten, mit_klasse):
     assert client.post(URL, json=neu(stammdaten, **extra)).status_code == 201
     antwort = client.post(URL, json=neu(stammdaten, **extra))
     assert antwort.status_code == 409
+    # Danach funktioniert die nächste Anfrage normal weiter
+    assert client.get(URL).status_code == 200
 
 
 @pytest.mark.parametrize("feld, wert", [

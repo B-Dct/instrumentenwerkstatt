@@ -56,7 +56,9 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/instrumente?kunde_id=…&archivierte=…`, `/instrumente/{id}` | Instrumente auflisten/abrufen |
 | POST, PATCH | `/instrumente`, `/instrumente/{id}` | Instrument anlegen/bearbeiten (alle Angemeldeten) |
 | POST | `/instrumente/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin) |
-| GET | `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, für alle Angemeldeten) |
+| GET | `/instrumentenklassen`, `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, nur aktive, für alle Angemeldeten) |
+| GET, POST, PATCH | `/admin/instrumentenklassen`, `/admin/reparaturarten` (+ `/{id}`) | Stammdaten pflegen (nur Admin; `?archivierte=true` zeigt auch archivierte) |
+| POST | `/admin/…/{id}/archivieren`, `/admin/…/{id}/reaktivieren` | Stammdaten archivieren/zurückholen (nur Admin) |
 | GET | `/auftraege` | Aufträge auflisten (Priorität hoch zuerst, dann älteste; Filter: `status_id`, `nur_offene`, `zugewiesener_mitarbeiter_id`, `kunde_id`, `prioritaet`) |
 | GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
 | POST | `/auftraege` | Auftrag anlegen – schätzt Stunden, Kosten und Fertigstellungstermin automatisch und protokolliert die Schätzung |

@@ -235,7 +235,7 @@ def auftrag_anlegen(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "Instrument existiert nicht, gehört nicht zum Kunden oder ist archiviert")
     reparaturart = db.get(Reparaturart, daten.reparaturart_id)
-    if reparaturart is None or not reparaturart.aktiv:
+    if reparaturart is None or reparaturart.archiviert_am is not None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Reparaturart existiert nicht oder ist archiviert")
     if daten.zugewiesener_mitarbeiter_id is not None:
         zugewiesen = db.get(Mitarbeiter, daten.zugewiesener_mitarbeiter_id)

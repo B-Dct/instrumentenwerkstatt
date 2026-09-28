@@ -54,20 +54,26 @@ def _laden(db: Session, vorgabewert_id: uuid.UUID) -> Vorgabewert:
     return _als_antwort(zeile)
 
 
-def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID | None) -> None:
-    if db.get(Reparaturart, reparaturart_id) is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Reparaturart existiert nicht")
-    if instrumentenklasse_id is not None and db.get(Instrumentenklasse, instrumentenklasse_id) is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht")
+def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrumentenklasse_id: uuid.UUID | None) -> None:
+    """Prüft neu gewählte Verknüpfungen (None = nicht prüfen). Bestehende Verknüpfungen zu
+    inzwischen archivierten Einträgen bleiben bearbeitbar."""
+    if reparaturart_id is not None:
+        art = db.get(Reparaturart, reparaturart_id)
+        if art is None or art.archiviert_am is not None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Reparaturart existiert nicht oder ist archiviert")
+    if instrumentenklasse_id is not None:
+        klasse = db.get(Instrumentenklasse, instrumentenklasse_id)
+        if klasse is None or klasse.archiviert_am is not None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 
 @contextmanager
 def _doppelte_kombination_abfangen(db: Session) -> Iterator[None]:
     """Wandelt Verstöße gegen "eine Kombination nur einmal" in eine verständliche 409 um."""
     try:
-        yield
+        with db.begin_nested():  # bei Fehler nur diesen Speicherversuch zurücknehmen
+            yield
     except IntegrityError as e:
-        db.rollback()
         if "uq_reparatur_vorgabewert_kombination" in str(e.orig):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -117,8 +123,8 @@ def vorgabewert_anlegen(
 ) -> Vorgabewert:
     _verweise_pruefen(db, daten.reparaturart_id, daten.instrumentenklasse_id)
     eintrag = ReparaturVorgabewert(**daten.model_dump(), geaendert_von_mitarbeiter_id=mitarbeiter_id)
-    db.add(eintrag)
     with _doppelte_kombination_abfangen(db):
+        db.add(eintrag)  # innerhalb des Speicherpunkts: bei Fehler wieder entfernt
         db.flush()  # erzeugt die ID
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
@@ -149,8 +155,9 @@ def vorgabewert_bearbeiten(
 
     _verweise_pruefen(
         db,
-        aenderungen.get("reparaturart_id", eintrag.reparaturart_id),
-        aenderungen.get("instrumentenklasse_id", eintrag.instrumentenklasse_id),
+        aenderungen.get("reparaturart_id") if aenderungen.get("reparaturart_id") != eintrag.reparaturart_id else None,
+        aenderungen.get("instrumentenklasse_id")
+        if aenderungen.get("instrumentenklasse_id") != eintrag.instrumentenklasse_id else None,
     )
     alt = _werte(eintrag)
     for feld, wert in aenderungen.items():

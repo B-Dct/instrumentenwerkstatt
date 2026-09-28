@@ -109,6 +109,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 28.09.2026 | Instrumentenklassen/Reparaturarten pflegen und archivieren (Verwaltung Schritt 2, nur Admin); `aktiv` → `archiviert_am` |
 | 27.09.2026 | Kunden/Instrumente anlegen, bearbeiten, archivieren (Verwaltung Schritt 1); Kundennummern `K-00001` |
 | 27.09.2026 | Befehl `app.termine_nachrechnen`; einmalig für offene Aufträge ohne Termin angewendet |
 | 27.09.2026 | Terminschätzung (Fertigstellungsdatum + Bandbreite) mit Neuberechnung bei Anlegen, Umzuweisung, Prioritätsänderung; `PATCH /auftraege/{id}`; „überfällig“ im Backend |

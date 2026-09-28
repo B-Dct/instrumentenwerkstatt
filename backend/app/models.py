@@ -3,7 +3,7 @@
 Konventionen:
 - Primärschlüssel sind UUIDs (von PostgreSQL erzeugt).
 - Umlaute in Namen werden umgeschrieben (prioritaet, schaetzungs_log, ...).
-- Nichts wird hart gelöscht: Mitarbeiter/Stammdaten haben ein `aktiv`-Flag.
+- Nichts wird hart gelöscht: Stammdaten haben `archiviert_am`, Mitarbeiter `aktiv`/`deaktiviert_am`.
 """
 
 import enum
@@ -146,7 +146,7 @@ class Instrumentenklasse(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     bezeichnung: Mapped[str] = mapped_column(String(100), unique=True)
     oberkategorie: Mapped[str] = mapped_column(String(100))
-    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 
 class Reparaturart(Base):
@@ -158,7 +158,7 @@ class Reparaturart(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     bezeichnung: Mapped[str] = mapped_column(String(150), unique=True)
     standard_komplexitaet: Mapped[int] = mapped_column(SmallInteger)
-    aktiv: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 
 class ReparaturVorgabewert(Base):

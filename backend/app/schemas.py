@@ -265,3 +265,47 @@ class InstrumentAenderung(BaseModel):
 
 class KundeDetail(KundeEintrag):
     instrumente: list["InstrumentKurz"]
+
+
+# --- Stammdaten: Instrumentenklassen (2.4), Reparaturarten (2.6) --------------
+
+Text100 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Text150Pflicht = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
+
+
+class InstrumentenklasseNeu(BaseModel):
+    bezeichnung: Text100
+    oberkategorie: Text100
+
+
+class InstrumentenklasseAenderung(BaseModel):
+    bezeichnung: Text100 | None = None
+    oberkategorie: Text100 | None = None
+
+
+class InstrumentenklasseEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    bezeichnung: str
+    oberkategorie: str
+    archiviert_am: datetime | None
+
+
+class ReparaturartNeu(BaseModel):
+    bezeichnung: Text150Pflicht
+    standard_komplexitaet: int = Field(ge=1, le=5)
+
+
+class ReparaturartAenderung(BaseModel):
+    bezeichnung: Text150Pflicht | None = None
+    standard_komplexitaet: int | None = Field(None, ge=1, le=5)
+
+
+class ReparaturartEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    bezeichnung: str
+    standard_komplexitaet: int
+    archiviert_am: datetime | None

@@ -33,7 +33,7 @@ def test_kunden_und_instrumente_je_kunde(client, w):
 
 
 def test_archivierte_und_deaktivierte_ausgeblendet(client, w, db):
-    w.saitenwechsel.aktiv = False
+    w.saitenwechsel.archiviert_am = datetime.now(UTC)
     ehemalig = konto_anlegen(db, name="Ehemalig")
     ehemalig.aktiv, ehemalig.deaktiviert_am = False, datetime.now(UTC)
     db.flush()

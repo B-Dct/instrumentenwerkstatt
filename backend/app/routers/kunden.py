@@ -191,7 +191,7 @@ def _instrument_antwort(db: Session, instrument: Instrument) -> InstrumentKurz:
 
 def _klasse_pruefen(db: Session, klasse_id: uuid.UUID) -> None:
     klasse = db.get(Instrumentenklasse, klasse_id)
-    if klasse is None or not klasse.aktiv:
+    if klasse is None or klasse.archiviert_am is not None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 

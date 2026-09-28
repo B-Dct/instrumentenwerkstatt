@@ -11,15 +11,21 @@ from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter
 from app.db import get_db
-from app.models import Auftragsstatus, Mitarbeiter, Reparaturart
-from app.schemas import MitarbeiterKurz, ReparaturartKurz, StatusEintrag
+from app.models import Auftragsstatus, Instrumentenklasse, Mitarbeiter, Reparaturart
+from app.schemas import InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
 
 router = APIRouter(tags=["Auswahllisten"], dependencies=[Depends(aktueller_mitarbeiter)])
 
 
+@router.get("/instrumentenklassen", response_model=list[InstrumentenklasseEintrag])
+def instrumentenklassen_auflisten(db: Session = Depends(get_db)) -> list[Instrumentenklasse]:
+    return list(db.scalars(select(Instrumentenklasse).where(Instrumentenklasse.archiviert_am.is_(None))
+                           .order_by(Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung)))
+
+
 @router.get("/reparaturarten", response_model=list[ReparaturartKurz])
 def reparaturarten_auflisten(db: Session = Depends(get_db)) -> list[Reparaturart]:
-    return list(db.scalars(select(Reparaturart).where(Reparaturart.aktiv).order_by(Reparaturart.bezeichnung)))
+    return list(db.scalars(select(Reparaturart).where(Reparaturart.archiviert_am.is_(None)).order_by(Reparaturart.bezeichnung)))
 
 
 @router.get("/auftragsstatus", response_model=list[StatusEintrag])
