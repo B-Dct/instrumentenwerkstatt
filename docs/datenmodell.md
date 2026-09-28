@@ -130,10 +130,13 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 | vorgabe_stunden | DECIMAL | Erwarteter Arbeitsaufwand in Stunden |
 | vorgabe_kosten | DECIMAL | Erwarteter Preis für den Kunden (Arbeits- + ggf. übliche Materialkosten als Pauschale) |
 | notiz | TEXT | Optional, z. B. "inkl. neuer Saiten, exkl. Spezialsaiten" |
+| archiviert_am | TIMESTAMP | NULL = aktiv. Archivierte Vorgabewerte werden von der Schätzung ignoriert (es greift dann der allgemeine Wert bzw. der historische Durchschnitt) |
 | geändert_von_mitarbeiter_id | FK → mitarbeiter | |
 | geändert_am | TIMESTAMP | |
 
 **Pflege:** Über den Administrationsbereich, Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — passt zur bestehenden Stammdatenpflege von Instrumentenklassen und Reparaturarten.
+
+**Archivieren und Reaktivieren:** Nur Admin. Damit lässt sich ein versehentlich angelegter spezifischer Wert (z. B. für eine einzelne Instrumentenklasse) wieder zurücknehmen, sodass der allgemeine Wert nicht dauerhaft überschattet bleibt. Die Eindeutigkeit der Kombination aus Reparaturart und Instrumentenklasse gilt nur für aktive Einträge.
 
 **Regel bei Archivierung:** Neue Vorgabewerte dürfen nicht auf archivierte Reparaturarten oder Instrumentenklassen verweisen. Bestehende Vorgabewerte bleiben auch dann bearbeitbar (z. B. um den Preis anzupassen).
 
@@ -737,6 +740,9 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 - **Keine Zusatzbestätigung bei umkehrbaren Aktionen:** Archivieren läuft ohne weiteren Dialog, weil es per "Reaktivieren" rückgängig gemacht werden kann. Archivierte Einträge erscheinen ausgegraut und als "archiviert" markiert, mit dem Hinweis, dass sie erhalten bleiben. Endgültig nicht umkehrbare Aktionen gibt es in der Oberfläche nicht (siehe 9.2).
 - **Wegnavigieren mit ungespeicherten Änderungen:** Die Rückfrage "Änderungen verwerfen?" erscheint eingebettet, auch beim Klick auf die Seitenleiste. Einzige Ausnahme vom Verzicht auf Popups: Beim Schließen des Browser-Tabs zeigt der Browser selbst seine Standardabfrage, eine eingebettete Rückfrage ist dort technisch nicht möglich.
 - **Erfolgsbestätigung:** unten rechts, verschwindet nach etwa 4 Sekunden, die geänderte Zeile wird kurz hervorgehoben. Die Meldung ist für Screenreader als Statusmeldung ausgezeichnet (`aria-live`).
+- **Zeilenaktionen:** Seltene Nebenaktionen (z. B. "Archivieren") erscheinen auf Geräten mit Maus erst beim Zeigen auf die Zeile oder bei Tastaturfokus, auf Touch-Geräten sind sie immer sichtbar. Hauptaktionen (Neu anlegen, Bearbeiten) sind nie versteckt.
+- **Fehlende Berechtigung:** Ruft jemand eine Verwaltungsseite ohne passende Rolle direkt auf, erscheint "Für diesen Bereich fehlt die Berechtigung". Die eigentliche Absicherung übernimmt das Backend.
+- **Fehlermeldungen am Feld:** Meldungen wie "gibt es bereits" stehen am betroffenen Feld, nicht gesammelt am Formularende.
 - **Sichtbarkeit nach Rolle:** Filter wie "archivierte anzeigen" sehen nur Werkstattleitung und Admin (siehe 7.2). Die eigene Rolle holt das Frontend beim Start frisch vom Backend, Rollenänderungen greifen so nach dem nächsten Neuladen.
 
 **Verworfene Alternativen:**
@@ -758,14 +764,14 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Design-System (9.6), Frontend-Prototyp für Aufträge
 - Stammdaten im Backend: Kunden, Instrumente, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter-Verwaltung, Wochenarbeitsstunden
 - Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
+- Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (Teil 4b)
+- Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
 
 ### 10.2 In Arbeit
 
-- Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (4b), Mitarbeiter und Wochenstunden (4c)
-
-### 10.3 Zu prüfen
-
-- Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9): Umsetzung bestätigen lassen
+- Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
+- Externe Kundennummer am Kunden (siehe 2.1)
+- Frontend Verwaltung: Mitarbeiter und Wochenstunden (Teil 4c)
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
