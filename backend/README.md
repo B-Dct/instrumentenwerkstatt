@@ -50,7 +50,13 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
-| GET | `/kunden`, `/instrumente?kunde_id=…`, `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, für alle Angemeldeten) |
+| GET | `/kunden?suche=…&archivierte=…`, `/kunden/{id}` | Kunden auflisten/suchen, Kunde mit Instrumenten |
+| POST, PATCH | `/kunden`, `/kunden/{id}` | Kunde anlegen/bearbeiten (alle Angemeldeten; Kundennummer wird vergeben) |
+| POST | `/kunden/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin; nicht bei offenen Aufträgen) |
+| GET | `/instrumente?kunde_id=…&archivierte=…`, `/instrumente/{id}` | Instrumente auflisten/abrufen |
+| POST, PATCH | `/instrumente`, `/instrumente/{id}` | Instrument anlegen/bearbeiten (alle Angemeldeten) |
+| POST | `/instrumente/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin) |
+| GET | `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, für alle Angemeldeten) |
 | GET | `/auftraege` | Aufträge auflisten (Priorität hoch zuerst, dann älteste; Filter: `status_id`, `nur_offene`, `zugewiesener_mitarbeiter_id`, `kunde_id`, `prioritaet`) |
 | GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
 | POST | `/auftraege` | Auftrag anlegen – schätzt Stunden, Kosten und Fertigstellungstermin automatisch und protokolliert die Schätzung |

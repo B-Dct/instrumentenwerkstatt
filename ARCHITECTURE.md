@@ -28,6 +28,8 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Auftragsstatus als eigene, pflegbare Tabelle** `auftragsstatus` (statt fester Liste): mit stabilem `schluessel` für den Code, Anzeigename, Reihenfolge, Farbe sowie den Schaltern `erfordert_zeiterfassung` (z. B. „Fertig“) und `ist_abgeschlossen`. `auftrag.status_aktuell_id` und `auftrag_statusverlauf.status_id` verweisen darauf. Die UI darf Status/Farben daher nicht hart kodieren
 - **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
 - **Unterbrechungen automatisch aus dem Status:** Status mit gesetztem `auftragsstatus.unterbrechungsgrund` (derzeit „Wartet auf Ersatzteil“) öffnen beim Wechsel hinein einen `unterbrechung`-Eintrag und schließen ihn beim Wechsel heraus. Höchstens eine offene Unterbrechung je Auftrag (Datenbank-Index). Grundlage, um Wartezeiten später aus der Bearbeitungsdauer herauszurechnen
+- **Archivieren statt Löschen:** Stammdaten bekommen `archiviert_am` (NULL = aktiv); archivierte Einträge fehlen in Standardlisten und sind für neue Aufträge gesperrt, bleiben aber erhalten und lassen sich reaktivieren. Kunden/Instrumente mit offenen Aufträgen können nicht archiviert werden
+- **Änderungsprotokoll:** Anlegen, Ändern, Archivieren und Reaktivieren von Stammdaten wird im `system_ereignis_log` festgehalten (Helfer `app/ereignisse.py`)
 - **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
 - **Row Level Security auf allen Tabellen aktiv, ohne Freigabe-Regeln:** sperrt die automatische öffentliche REST-API von Supabase. Zugriff auf Daten nur über unser Backend
 - **Zeitstempel = echte Uhrzeit des Eintrags** (`clock_timestamp()`), nicht Transaktionsbeginn (`now()`) — sonst hätten mehrere Einträge einer Transaktion denselben Zeitstempel und die Reihenfolge von Verläufen/Logs wäre zufällig
@@ -107,6 +109,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 27.09.2026 | Kunden/Instrumente anlegen, bearbeiten, archivieren (Verwaltung Schritt 1); Kundennummern `K-00001` |
 | 27.09.2026 | Befehl `app.termine_nachrechnen`; einmalig für offene Aufträge ohne Termin angewendet |
 | 27.09.2026 | Terminschätzung (Fertigstellungsdatum + Bandbreite) mit Neuberechnung bei Anlegen, Umzuweisung, Prioritätsänderung; `PATCH /auftraege/{id}`; „überfällig“ im Backend |
 | 27.09.2026 | Unterbrechungen automatisch bei pausierenden Status (z. B. „Wartet auf Ersatzteil“); Datenmodell-Doku an Tabelle `auftragsstatus` angeglichen |

@@ -227,11 +227,13 @@ def auftrag_anlegen(
     db: Session = Depends(get_db),
     mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> AuftragDetail:
-    if db.get(Kunde, daten.kunde_id) is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kunde existiert nicht")
+    kunde = db.get(Kunde, daten.kunde_id)
+    if kunde is None or kunde.archiviert_am is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kunde existiert nicht oder ist archiviert")
     instrument = db.get(Instrument, daten.instrument_id)
-    if instrument is None or instrument.kunde_id != daten.kunde_id:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrument existiert nicht oder gehört nicht zum Kunden")
+    if instrument is None or instrument.kunde_id != daten.kunde_id or instrument.archiviert_am is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            "Instrument existiert nicht, gehört nicht zum Kunden oder ist archiviert")
     reparaturart = db.get(Reparaturart, daten.reparaturart_id)
     if reparaturart is None or not reparaturart.aktiv:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Reparaturart existiert nicht oder ist archiviert")

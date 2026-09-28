@@ -93,6 +93,7 @@ class Kunde(Base):
     email: Mapped[str | None] = mapped_column(String(254))
     telefon: Mapped[str | None] = mapped_column(String(50))
     erstellt_am: Mapped[datetime] = zeitstempel_jetzt()
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 
 # --- 2.2 Mitarbeiter --------------------------------------------------------
@@ -225,6 +226,7 @@ class Instrument(Base):
     baujahr: Mapped[int | None] = mapped_column(Integer)
     seriennummer: Mapped[str | None] = mapped_column(String(100))
     notizen: Mapped[str | None] = mapped_column(Text)
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 
 # --- 2.7 Auftrag ------------------------------------------------------------

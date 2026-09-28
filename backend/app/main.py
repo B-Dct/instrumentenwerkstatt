@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.routers import admin, auftraege, auswahllisten, auth
+from app.routers import admin, auftraege, auswahllisten, auth, kunden
 
 app = FastAPI(title="Werkstatt-Auftragsmanagement")
 
@@ -22,6 +22,7 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(auftraege.router)
 app.include_router(auswahllisten.router)
+app.include_router(kunden.router)
 
 
 @app.get("/health")

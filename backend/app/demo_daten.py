@@ -78,15 +78,15 @@ VORGABEWERTE = [  # (Reparaturart, Instrumentenklasse oder None = allgemein, Stu
 ]
 
 KUNDEN = [  # (Kundennummer, Name, E-Mail, Telefon, [(Klasse, Hersteller, Typ, Baujahr, Seriennummer)])
-    ("DEMO-001", "Marie Schneider", "marie.schneider@beispiel.invalid", "0151 0000001", [
+    ("DEMO-001", "Marie Schneider", "marie.schneider@example.com", "0151 0000001", [
         ("Violine", "Höfner", "H11", 2012, "HV-48213"),
         ("Gitarre", "Yamaha", "C40", 2019, None),
     ]),
-    ("DEMO-002", "Jonas Weber", "jonas.weber@beispiel.invalid", None, [
+    ("DEMO-002", "Jonas Weber", "jonas.weber@example.com", None, [
         ("Trompete", "Yamaha", "YTR-2330", 2016, "T-330981"),
         ("Klarinette", "Buffet Crampon", "E11", 2008, "E11-77120"),
     ]),
-    ("DEMO-003", "Musikschule Lindenhof", "verwaltung@musikschule-lindenhof.invalid", "030 0000003", [
+    ("DEMO-003", "Musikschule Lindenhof", "verwaltung.lindenhof@example.com", "030 0000003", [
         ("Violoncello", "Gewa", "Ideale", 2015, None),
         ("Klavier", "Yamaha", "U1", 1998, "U1-3312045"),
     ]),

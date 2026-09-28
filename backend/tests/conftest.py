@@ -12,7 +12,7 @@ from app.auth import passwort_hashen, token_erstellen
 from app.db import engine, get_db
 from app.main import app
 from app.models import Mitarbeiter, Systemrolle
-from app.routers import auftraege
+from app.routers import auftraege, kunden
 
 TEST_PASSWORT = "richtig-langes-passwort"
 _TEST_PASSWORT_HASH = passwort_hashen(TEST_PASSWORT)  # einmal hashen (Argon2 ist absichtlich langsam)
@@ -41,11 +41,14 @@ OHNE_ANMELDUNG = {"Authorization": ""}
 
 
 @pytest.fixture(autouse=True)
-def keine_echten_auftragsnummern(monkeypatch):
-    """Der Nummernzähler der Datenbank wird beim Rollback NICHT zurückgesetzt –
-    Tests dürfen deshalb keine echten Auftragsnummern verbrauchen (gilt für alle Tests)."""
+def keine_echten_nummern(monkeypatch):
+    """Nummernzähler der Datenbank werden beim Rollback NICHT zurückgesetzt –
+    Tests dürfen deshalb keine echten Auftrags-/Kundennummern verbrauchen (gilt für alle Tests)."""
     zaehler = itertools.count(1)
     monkeypatch.setattr(auftraege, "_neue_auftragsnummer", lambda db: f"TEST-{next(zaehler):05d}")
+    # Gleiches gilt für Kundennummern
+    kunden_zaehler = itertools.count(1)
+    monkeypatch.setattr(kunden, "_neue_kundennummer", lambda db: f"TEST-K-{next(kunden_zaehler):05d}")
 
 
 @pytest.fixture

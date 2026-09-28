@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
 
 from app.models import Prioritaet
 
@@ -167,14 +167,6 @@ class SchaetzungKorrektur(BaseModel):
 
 # --- Auswahllisten (nur lesen) -----------------------------------------------
 
-class KundeKurz(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    kundennummer: str
-    name: str
-
-
 class InstrumentKurz(BaseModel):
     id: uuid.UUID
     kunde_id: uuid.UUID
@@ -182,7 +174,10 @@ class InstrumentKurz(BaseModel):
     instrumentenklasse_bezeichnung: str
     hersteller: str | None
     typenbezeichnung: str | None
+    baujahr: int | None
     seriennummer: str | None
+    notizen: str | None
+    archiviert_am: datetime | None
 
 
 class ReparaturartKurz(BaseModel):
@@ -213,3 +208,60 @@ class MitarbeiterKurz(BaseModel):
     id: uuid.UUID
     name: str
     rolle: str | None
+
+
+# --- Kunden und Instrumente (2.1, 2.5) ----------------------------------------
+
+Text200 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Text150 = Annotated[str, StringConstraints(strip_whitespace=True, max_length=150)]
+
+
+class KundeNeu(BaseModel):
+    name: Text200
+    email: EmailStr | None = None
+    telefon: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
+
+
+class KundeAenderung(BaseModel):
+    """Nur mitgeschickte Felder werden geändert; null leert optionale Felder."""
+
+    name: Text200 | None = None
+    email: EmailStr | None = None
+    telefon: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
+
+
+class KundeEintrag(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kundennummer: str
+    name: str
+    email: str | None
+    telefon: str | None
+    erstellt_am: datetime
+    archiviert_am: datetime | None
+
+
+class InstrumentNeu(BaseModel):
+    kunde_id: uuid.UUID
+    instrumentenklasse_id: uuid.UUID
+    hersteller: Text150 | None = None
+    typenbezeichnung: Text150 | None = None
+    baujahr: int | None = Field(None, ge=1500, le=2100)
+    seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
+    notizen: str | None = None
+
+
+class InstrumentAenderung(BaseModel):
+    """Nur mitgeschickte Felder werden geändert. Der Eigentümer (Kunde) ist nicht änderbar."""
+
+    instrumentenklasse_id: uuid.UUID | None = None
+    hersteller: Text150 | None = None
+    typenbezeichnung: Text150 | None = None
+    baujahr: int | None = Field(None, ge=1500, le=2100)
+    seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
+    notizen: str | None = None
+
+
+class KundeDetail(KundeEintrag):
+    instrumente: list["InstrumentKurz"]
