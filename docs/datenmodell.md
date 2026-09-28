@@ -74,10 +74,25 @@ Strukturierte Kategorie statt Freitext — Pflicht für spätere Auswertbarkeit.
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | bezeichnung | VARCHAR, UNIQUE | z. B. "Violine", "Trompete", "Klarinette", "Klavier" |
-| oberkategorie | VARCHAR | z. B. "Streichinstrument", "Blechblas", "Holzblas", "Tasteninstrument" |
+| instrumentenfamilie_id | FK → instrumentenfamilie | Gruppierung der Klassen (siehe 2.4a). Ersetzt das frühere Freitextfeld `oberkategorie` |
 | archiviert_am | TIMESTAMP | NULL = aktiv. Archivierte Einträge fehlen in den Auswahllisten und sind für neue Aufträge, Instrumente und Vorgabewerte gesperrt; bestehende Datensätze behalten sie |
 
 **Pflege:** nur Admin (anlegen, bearbeiten, archivieren, reaktivieren). Eine doppelte Bezeichnung wird mit dem Hinweis abgelehnt, einen eventuell archivierten Eintrag zu reaktivieren.
+
+---
+
+### 2.4a `instrumentenfamilie`
+
+Feste Auswahlliste statt Freitext, damit Instrumentenklassen sich gruppieren und filtern lassen und keine Tippfehler-Varianten wie "Blechblas" und "Blechbläser" entstehen.
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| id | UUID / SERIAL | Primärschlüssel |
+| bezeichnung | VARCHAR, UNIQUE | z. B. "Streichinstrumente", "Zupfinstrumente", "Holzblasinstrumente", "Blechblasinstrumente", "Tasteninstrumente", "Schlagwerk", "Sonstige" |
+| reihenfolge | INT | Feste, vom Admin bestimmte Anzeigereihenfolge (Familien werden nicht alphabetisch sortiert) |
+| archiviert_am | TIMESTAMP | NULL = aktiv |
+
+**Regeln:** Pflege nur durch den Admin. Eine Familie mit aktiven Instrumentenklassen lässt sich nicht archivieren. Innerhalb einer Familie werden die Klassen alphabetisch sortiert. **Migration:** Die bisherigen `oberkategorie`-Werte werden zu Familien, Klassen ohne Wert kommen in "Sonstige".
 
 ---
 
@@ -112,6 +127,7 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | id | UUID / SERIAL | Primärschlüssel |
 | bezeichnung | VARCHAR, UNIQUE | z. B. "Saitenwechsel", "Ventil-Überholung", "Rissreparatur Decke" |
 | standard_komplexität | INT (1–5) | Vorbelegung, kann pro Auftrag überschrieben werden |
+| reparaturkategorie_id | FK → reparaturkategorie | Art der Arbeit (siehe 2.6b), Pflichtfeld |
 | archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `instrumentenklasse` (2.4) |
 
 **Pflege:** nur Admin, Regeln wie bei `instrumentenklasse`.
@@ -143,6 +159,21 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 - Archivieren und Reaktivieren setzen `geändert_von` und `geändert_am`
 
 **Regel bei Archivierung:** Neue Vorgabewerte dürfen nicht auf archivierte Reparaturarten oder Instrumentenklassen verweisen. Bestehende Vorgabewerte bleiben auch dann bearbeitbar (z. B. um den Preis anzupassen).
+
+---
+
+### 2.6b `reparaturkategorie`
+
+Gliedert die Reparaturarten nach der Art der Arbeit, unabhängig vom Instrument.
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| id | UUID / SERIAL | Primärschlüssel |
+| bezeichnung | VARCHAR, UNIQUE | z. B. "Saiten und Bespannung", "Mechanik und Ventile", "Korpus und Holz", "Oberfläche und Lack", "Elektronik", "Wartung und Einstellung", "Generalüberholung", "Unkategorisiert" |
+| reihenfolge | INT | Feste, vom Admin bestimmte Anzeigereihenfolge |
+| archiviert_am | TIMESTAMP | NULL = aktiv |
+
+**Regeln:** Pflege nur durch den Admin. Jede Reparaturart gehört zu genau einer Kategorie. Eine Kategorie mit aktiven Reparaturarten lässt sich nicht archivieren. Innerhalb einer Kategorie werden die Reparaturarten alphabetisch sortiert. **Migration:** Bestehende Reparaturarten kommen zunächst in "Unkategorisiert" und werden vom Admin zugeordnet (für die Demodaten schlägt die Umsetzung eine sinnvolle Zuordnung vor).
 
 ---
 
@@ -492,6 +523,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Wochenarbeitsstunden je Mitarbeiter festlegen | ❌ | ❌ | ✅ |
 | Instrumentenklassen pflegen | ❌ | ❌ | ✅ |
 | Reparaturarten + Standard-Komplexität pflegen | ❌ | ❌ | ✅ |
+| Instrumentenfamilien und Reparaturkategorien pflegen | ❌ | ❌ | ✅ |
 | Vorgabewerte (Dauer/Kosten) je Reparaturart pflegen | ❌ | ❌ | ✅ |
 | Neue Mitarbeiter-Accounts anlegen | ❌ | ❌ | ✅ |
 | Mitarbeiter deaktivieren | ❌ | ❌ | ✅ |
@@ -522,7 +554,7 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 - **Mitarbeiterverwaltung** (nur Admin): Accounts anlegen, Systemrolle zuweisen, deaktivieren (nie hart löschen — sonst verwaisen vergangene Aufträge), Wochenarbeitsstunden festlegen (2.12), Qualifikationen pflegen (2.13)
 - **Abwesenheitskalender** (Werkstattleiter + Admin): idealerweise als Kalenderansicht pro Mitarbeiter und für die gesamte Werkstatt, direkt verknüpft mit der `abwesenheit`-Tabelle (2.3, inkl. Typ "Schulung" und reduzierter Stunden) und damit unmittelbar wirksam für die Terminschätzung (Stufe 1) sowie die Kapazitätsplanung (Abschnitt 8)
 - **Gleitzeit-Anpassungen** (Werkstattleiter + Admin): einzelne Wochen-Abweichungen erfassen (2.14), operativ genutzt, ohne vollständige Zeiterfassung
-- **Stammdatenpflege** (nur Admin): Instrumentenklassen (2.4), Reparaturarten (2.6) inkl. Standardkomplexität, sowie Vorgabewerte für Dauer und Kosten je Reparaturart/Instrumentenklasse (2.6a)
+- **Stammdatenpflege** (nur Admin): Instrumentenfamilien (2.4a), Instrumentenklassen (2.4), Reparaturkategorien (2.6b), Reparaturarten (2.6) inkl. Standardkomplexität, sowie Vorgabewerte für Dauer und Kosten je Reparaturart/Instrumentenklasse (2.6a)
 - **Werkstattübersicht** (Werkstattleiter + Admin): alle laufenden Aufträge, Auslastung pro Mitarbeiter, überfällige/kritische Aufträge hervorgehoben
 - **Änderungsprotokoll** (nur Admin einsehbar): Anzeige des `system_ereignis_log`
 
@@ -674,7 +706,7 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - **Druckansicht für den Abgabebeleg:** eigene, aufs Drucken optimierte Seite mit Auftragsnummer, Zugriffstoken/QR-Code (siehe Abschnitt 6) und den wichtigsten Auftragsdaten
 - **Leere Zustände klar kommunizieren:** z. B. "Keine offenen Aufträge" statt einer leeren, irritierenden Liste
 - **Ladezustände sichtbar machen:** kurze Ladeanzeige statt eingefroren wirkender Seite bei längeren Abfragen
-- **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (siehe auch Abschnitt 10.4, Punkt 5)
+- **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (Regeln in 9.11, Fahrplan in 10.4, Punkt 5)
 - **Barrierefreiheit (Kontrast, Tastaturbedienbarkeit):** insbesondere für den internen Bereich sinnvoll, falls künftig auch weniger technikaffine oder ältere Mitarbeiter damit arbeiten
 
 ### 9.8 Auftragsabschluss (Pflicht-Zeiterfassung)
@@ -754,6 +786,28 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 - *Tabs für die Formulare:* Formulare wären versteckt und schlechter auffindbar als Buttons in einer Aktionsleiste
 - *Direktes Bearbeiten einzelner Felder per Klick:* passt nicht zu Aktionen mit Pflichtbegründung (z. B. Schätzungs-Korrektur)
 
+### 9.11 Listen: Suche, Filter, Sortierung
+
+Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammdaten, Mitarbeiter, Vorgabewerte), einheitlich umgesetzt und nicht pro Seite neu erfunden.
+
+1. **Suchfeld** über jeder Liste mit mehr als einer Handvoll Einträgen. Freitextsuche über die sinnvollen Felder der jeweiligen Liste (z. B. Kunden: Name, Kundennummer, externe Kundennummer, E-Mail, Telefon; Aufträge: Auftragsnummer, Kundenname, Instrument). Die Suche startet nach kurzer Eingabepause, nicht bei jedem einzelnen Tastendruck.
+2. **Filter** neben der Suche (Auswahlfelder), mit fachlich sinnvollen Standardwerten, z. B. "nur aktive"; "archivierte anzeigen" nur für berechtigte Rollen (siehe 7.2). Typische Filter: Status, Mitarbeiter, Instrumentenklasse, Priorität, Reparaturart.
+3. **Aktive Filter bleiben sichtbar** (z. B. als Chips mit Schließen-Symbol), dazu ein Knopf "Alle Filter zurücksetzen" und die **Trefferzahl** ("12 von 348").
+4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4).
+5. **Lange Listen** werden seitenweise angezeigt oder nachgeladen. Suche, Filter, Sortierung und Seitenwahl übernimmt das Backend, nicht der Browser, damit es auch bei vielen Tausend Einträgen schnell bleibt.
+6. **Zustand bleibt erhalten:** Suchbegriff, Filter, Sortierung und Seite stehen in der Adresse, sodass man nach dem Öffnen eines Eintrags und dem Zurückgehen wieder an derselben Stelle ist.
+7. **Leere Ergebnisse:** Ohne Treffer erscheint "Keine Treffer" mit dem Knopf zum Zurücksetzen. Eine wirklich leere Liste zeigt "Noch keine Einträge" mit Hinweis auf die Neu-anlegen-Aktion.
+8. **Gruppierung:** Wachsen Listen thematisch (z. B. Reparaturarten und Vorgabewerte), werden sie zusätzlich nach fachlichen Gruppen gegliedert (siehe 9.12).
+
+### 9.12 Gegliederte Stammdaten und Auswahllisten
+
+Ziel: Keine endlosen, ungeordneten Listen. Umgesetzt über Instrumentenfamilien (2.4a) und Reparaturkategorien (2.6b) sowie die automatische Rubrik "Häufig verwendet".
+
+1. **Verwaltungslisten gegliedert:** Instrumentenklassen erscheinen gruppiert nach Familie, Reparaturarten gruppiert nach Kategorie. Jede Gruppe ist einklappbar und zeigt Namen und Anzahl der Einträge. Suche und Filter nach Familie bzw. Kategorie gelten zusätzlich (siehe 9.11). Vorgabewerte lassen sich nach Reparaturart, Kategorie und Instrumentenfamilie filtern und sind nach Kategorie gruppiert.
+2. **Gruppierte Auswahl im Auftragsformular:** Nach der Wahl des Instruments zeigt die Reparaturart-Auswahl zuerst die Rubrik "Häufig für [Instrumentenklasse]", darunter alle übrigen Reparaturarten nach Kategorie gruppiert. Bei langen Listen ist die Auswahl durchsuchbar.
+3. **Rubrik "Häufig verwendet":** Sie entsteht automatisch aus den vorhandenen Aufträgen und braucht keine Pflege. Gezeigt werden bis zu fünf Reparaturarten, die für die Instrumentenklasse des gewählten Instruments am häufigsten in Aufträgen vorkommen (bei Gleichstand zählt der jüngste Auftrag). Archivierte Reparaturarten erscheinen dort nicht. Gibt es noch keine Aufträge für die Klasse, entfällt die Rubrik. Die Rangfolge wird beim Abruf berechnet, es wird nichts zusätzlich gespeichert.
+4. **Instrumentenauswahl** zeigt Klasse und Familie (z. B. "Violine, Streichinstrumente"), damit gleich benannte Instrumente unterscheidbar bleiben.
+
 ---
 
 ## 10. Fahrplan und offene Punkte
@@ -783,7 +837,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 2. **Abwesenheiten pflegen** (2.3): Urlaub, Krankheit, Schulung, Betriebsschließung. Ohne diese Eingabe ignoriert die Terminschätzung Abwesenheiten. Feiertage möglichst automatisch aus einer Feiertagsbibliothek des Bundeslands erzeugen statt manuell zu pflegen
 3. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
 4. **Login-Schutz:** Begrenzung der Fehlversuche
-5. **Auftragsliste für normale Mitarbeiter** auf eigene Aufträge einschränken, dazu Filter und Freitext-Suche (Status, Mitarbeiter, Instrumentenklasse, Priorität; Kundenname, Auftragsnummer, externe Kundennummer)
+5. **Auftragsliste für normale Mitarbeiter** auf eigene Aufträge einschränken, dazu Suche, Filter und Sortierung nach Regel 9.11, und zwar für alle Listen einheitlich, bei Aufträgen u. a. (Status, Mitarbeiter, Instrumentenklasse, Priorität; Kundenname, Auftragsnummer, externe Kundennummer)
 6. **Datenschutz:** Konzept für Löschwünsche von Kunden (Anonymisieren statt hart löschen, damit Statistik und Historie erhalten bleiben), Hosting-Region und Auftragsverarbeitungsvertrag mit dem Datenbankanbieter klären
 7. **Sicherung und Wiederherstellung** der Datenbank (Backups prüfen, Wiederherstellung einmal testen)
 8. **Hosting/Bereitstellung** mit HTTPS (Voraussetzung, bevor jemand außerhalb des eigenen Rechners damit arbeitet)
@@ -795,10 +849,13 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 11. Kapazitäts-Dashboard (Abschnitt 8 und 9.9)
 12. Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
 13. Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
+14. Gliederung der Stammdaten (Abschnitt 9.12), in drei Schritten: (a) Instrumentenfamilien und Reparaturkategorien im Datenmodell und Backend inkl. Migration, (b) gegliederte Verwaltungslisten, (c) gruppierte Auswahl mit "Häufig verwendet" im Auftragsformular
 
 ### 10.6 Optionen, geringe Priorität
 
 - Reparaturhistorie am Instrument als Leseansicht (siehe 2.5)
+- Geltungsbereich: Reparaturarten den Instrumenten zuordnen, für die sie gelten, damit im Auftragsformular nur passende Reparaturarten erscheinen (aus dem Clustering-Konzept vorerst zurückgestellt)
+- Vorgabewert-Matrix mit dreistufiger Vererbung Klasse, Familie, allgemein (ebenfalls zurückgestellt; die Familien aus 2.4a sind dafür die Voraussetzung, ein späterer Ausbau erfordert dann ein optionales `instrumentenfamilie_id` bei den Vorgabewerten)
 - Korrekturfunktion für falsch eingetragene Wochenstunden (siehe 2.12)
 - Abfrage-Assistent für historische Erfahrungswerte (Abschnitt 8a)
 - Stufe 2 der Schätzung (ML-Modell), erst nach einigen Monaten Echtbetrieb (Abschnitt 5)
