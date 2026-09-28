@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { abmelden, angemeldeterNutzer, nutzerAktualisieren } from './api.js'
+import { abmelden, angemeldeterNutzer, hatRolle, nutzerAktualisieren } from './api.js'
 import { RueckmeldungBereich } from './komponenten/Rueckmeldung.jsx'
 
 const ROLLEN = { mitarbeiter: 'Mitarbeiter', werkstattleiter: 'Werkstattleitung', admin: 'Admin' }
@@ -19,6 +19,14 @@ function Seitenleiste({ nutzer }) {
         <NavLink to="/neu" className="seitenleiste__link">Neuer Auftrag</NavLink>
         <NavLink to="/kunden" className="seitenleiste__link">Kunden</NavLink>
       </nav>
+      {hatRolle('admin') && (
+        <nav className="seitenleiste__nav seitenleiste__gruppe" aria-label="Verwaltung">
+          <span className="seitenleiste__titel">Verwaltung</span>
+          <NavLink to="/verwaltung/instrumentenklassen" className="seitenleiste__link">Instrumentenklassen</NavLink>
+          <NavLink to="/verwaltung/reparaturarten" className="seitenleiste__link">Reparaturarten</NavLink>
+          <NavLink to="/verwaltung/vorgabewerte" className="seitenleiste__link">Vorgabewerte</NavLink>
+        </nav>
+      )}
       <div className="seitenleiste__nutzer">
         <strong>{nutzer.name}</strong>
         {ROLLEN[nutzer.systemrolle] ?? nutzer.systemrolle}

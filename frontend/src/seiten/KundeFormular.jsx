@@ -2,26 +2,7 @@
 import { useState } from 'react'
 import { api } from '../api.js'
 import { Feld, FokusFormular } from '../komponenten/FokusFormular.jsx'
-
-const leerZuNull = (wert) => (typeof wert === 'string' && wert.trim() === '' ? null : wert)
-
-function useSpeichern(speichern, onGespeichert) {
-  const [sendet, setSendet] = useState(false)
-  const [fehler, setFehler] = useState(null)
-  const [felder, setFelder] = useState({})
-  async function ausfuehren() {
-    setSendet(true); setFehler(null); setFelder({})
-    try {
-      onGespeichert(await speichern())
-    } catch (err) {
-      setFehler(err.message); setFelder(err.felder ?? {})
-      setSendet(false)
-    }
-  }
-  // Fehler eines Feldes verschwindet, sobald es geändert wird
-  const feldGeaendert = (feld) => setFelder((f) => (f[feld] ? { ...f, [feld]: undefined } : f))
-  return { sendet, fehler, felder, ausfuehren, feldGeaendert }
-}
+import { leerZuNull, useSpeichern } from '../komponenten/speichern.js'
 
 // kunde = null → neuen Kunden anlegen
 export function KundeFormular({ formular, kunde = null, onGespeichert }) {

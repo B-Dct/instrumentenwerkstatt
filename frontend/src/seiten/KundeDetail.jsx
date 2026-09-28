@@ -148,7 +148,7 @@ export default function KundeDetail() {
                       <td>{i.baujahr ?? '–'}</td>
                       <td>{i.seriennummer ?? '–'}</td>
                       <td>{i.notizen ?? ''}</td>
-                      <td>
+                      <td className="zeilenaktionen">
                         {klickbar && leitung && (
                           <button type="button" className="btn btn--gefahr btn--klein"
                                   onClick={(e) => { e.stopPropagation(); archivStatus(() => api.instrumentArchivieren(i.id),

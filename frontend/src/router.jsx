@@ -7,6 +7,10 @@ import AuftragNeu from './seiten/AuftragNeu.jsx'
 import KundeDetail from './seiten/KundeDetail.jsx'
 import Kunden from './seiten/Kunden.jsx'
 import Login from './seiten/Login.jsx'
+import Instrumentenklassen from './seiten/verwaltung/Instrumentenklassen.jsx'
+import Reparaturarten from './seiten/verwaltung/Reparaturarten.jsx'
+import Vorgabewerte from './seiten/verwaltung/Vorgabewerte.jsx'
+import NurRolle from './komponenten/NurRolle.jsx'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -18,6 +22,10 @@ export const router = createBrowserRouter([
       { path: '/auftrag/:id', element: <AuftragDetail /> },
       { path: '/kunden', element: <Kunden /> },
       { path: '/kunden/:id', element: <KundeDetail /> },
+      // Verwaltung: nur Admin (7.2)
+      { path: '/verwaltung/instrumentenklassen', element: <NurRolle rolle="admin"><Instrumentenklassen /></NurRolle> },
+      { path: '/verwaltung/reparaturarten', element: <NurRolle rolle="admin"><Reparaturarten /></NurRolle> },
+      { path: '/verwaltung/vorgabewerte', element: <NurRolle rolle="admin"><Vorgabewerte /></NurRolle> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

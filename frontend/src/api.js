@@ -35,6 +35,8 @@ function feldmeldung(f) {
     case 'less_than_equal': return `Höchstens ${ctx.le}`
     case 'decimal_max_places': return `Höchstens ${ctx.decimal_places} Nachkommastellen`
     case 'value_error': return f.msg.includes('email') ? 'Keine gültige E-Mail-Adresse' : f.msg
+    case 'uuid_type': case 'uuid_parsing': return 'Bitte auswählen'
+    case 'decimal_type': case 'decimal_parsing': case 'int_type': case 'int_parsing': return 'Bitte eine Zahl eingeben'
     default: return f.msg
   }
 }
@@ -122,6 +124,22 @@ export const api = {
   instrumentArchivieren: (id) => anfrage(`/instrumente/${id}/archivieren`, { methode: 'POST' }),
   instrumentReaktivieren: (id) => anfrage(`/instrumente/${id}/reaktivieren`, { methode: 'POST' }),
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
+  // Verwaltung (nur Admin)
+  admin: {
+    klassen: (archivierte = false) => anfrage('/admin/instrumentenklassen?' + new URLSearchParams({ archivierte })),
+    klasseAnlegen: (daten) => anfrage('/admin/instrumentenklassen', { methode: 'POST', daten }),
+    klasseAendern: (id, daten) => anfrage(`/admin/instrumentenklassen/${id}`, { methode: 'PATCH', daten }),
+    klasseArchivieren: (id) => anfrage(`/admin/instrumentenklassen/${id}/archivieren`, { methode: 'POST' }),
+    klasseReaktivieren: (id) => anfrage(`/admin/instrumentenklassen/${id}/reaktivieren`, { methode: 'POST' }),
+    arten: (archivierte = false) => anfrage('/admin/reparaturarten?' + new URLSearchParams({ archivierte })),
+    artAnlegen: (daten) => anfrage('/admin/reparaturarten', { methode: 'POST', daten }),
+    artAendern: (id, daten) => anfrage(`/admin/reparaturarten/${id}`, { methode: 'PATCH', daten }),
+    artArchivieren: (id) => anfrage(`/admin/reparaturarten/${id}/archivieren`, { methode: 'POST' }),
+    artReaktivieren: (id) => anfrage(`/admin/reparaturarten/${id}/reaktivieren`, { methode: 'POST' }),
+    vorgabewerte: (filter = {}) => anfrage('/admin/vorgabewerte?' + new URLSearchParams(filter)),
+    vorgabewertAnlegen: (daten) => anfrage('/admin/vorgabewerte', { methode: 'POST', daten }),
+    vorgabewertAendern: (id, daten) => anfrage(`/admin/vorgabewerte/${id}`, { methode: 'PATCH', daten }),
+  },
   reparaturarten: () => anfrage('/reparaturarten'),
   auftragsstatus: () => anfrage('/auftragsstatus'),
   mitarbeiter: () => anfrage('/mitarbeiter'),

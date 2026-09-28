@@ -24,6 +24,8 @@ Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env
 | `/neu` | Auftrag anlegen (Kunde → Instrument → Reparaturart; Schätzung erfolgt automatisch) |
 | `/kunden` | Kundenliste mit Suche; „Neuer Kunde“ öffnet das Formular eingebettet |
 | `/kunden/:id` | Kundenseite: Eckdaten, Aktionen (bearbeiten, Instrument hinzufügen, archivieren), Instrumente |
+| `/verwaltung/instrumentenklassen`, `/verwaltung/reparaturarten` | Stammdaten pflegen und archivieren (nur Admin) |
+| `/verwaltung/vorgabewerte` | Vorgabewerte für Dauer/Kosten je Reparaturart (nur Admin) |
 | `/auftrag/:id` | Details, Statuswechsel (bei „Fertig“ mit Pflicht-Arbeitszeit), Schätzungs-Korrektur, Statusverlauf, Schätzungsprotokoll |
 
 ## Design-System
@@ -49,6 +51,9 @@ Neue Seiten verwenden die Bausteine aus `src/komponenten/`:
   mit `aria-expanded`, Fokus ins erste Feld, Fehler direkt am Feld (9.1)
 - `useRueckmeldung()` (`rueckmeldung.js`): Erfolgsbestätigung am Bildschirmrand (9.1)
 - `useHervorhebung()` (`hervorhebung.js`): geänderten Eintrag kurz hervorheben
+- `useSpeichern()` (`speichern.js`): Senden, Fehler je Feld; „gibt es bereits“ (409) am passenden Feld
+- `NurRolle` (`NurRolle.jsx`): Seite nur ab einer Mindestrolle
+- `seiten/verwaltung/StammdatenListe.jsx`: gemeinsame Listenseite für einfache Stammdaten
 
 Aktionen werden nur angezeigt, wenn die Rolle sie erlaubt (`hatRolle(...)` in `api.js`);
 das Backend prüft unabhängig davon.

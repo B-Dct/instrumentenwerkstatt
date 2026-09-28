@@ -59,6 +59,14 @@ code { font-size: var(--groesse-14); letter-spacing: 0.05em; }
   text-decoration: none;
   border-left: var(--markierungsbreite) solid transparent;
 }
+.seitenleiste__gruppe { margin-top: var(--abstand-5); }
+.seitenleiste__titel {
+  display: block;
+  padding: 0 var(--abstand-3) var(--abstand-1);
+  font-size: var(--groesse-12);
+  font-weight: var(--gewicht-halbfett);
+  color: var(--farbe-text-leise);
+}
 .seitenleiste__link:hover { background: var(--farbe-flaeche-leise); color: var(--farbe-text); }
 .seitenleiste__link.active {
   border-left-color: var(--farbe-primaer);
@@ -259,3 +267,11 @@ textarea { resize: vertical; }
 .unsichtbar { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) { .zeile--hervorgehoben td, .hervorgehoben { animation: none; } }
+
+.seitenbeschreibung { max-width: var(--formular-max); margin: calc(-1 * var(--abstand-3)) 0 var(--abstand-4); }
+.zeilenaktionen { text-align: right; white-space: nowrap; }
+/* Ruhige Liste (9.10): Zeilenaktionen erst bei Zeigen/Fokus – auf Touch-Geräten immer sichtbar */
+@media (hover: hover) {
+  .zeilenaktionen .btn--gefahr { visibility: hidden; }
+  tr:hover .zeilenaktionen .btn--gefahr, tr:focus-within .zeilenaktionen .btn--gefahr { visibility: visible; }
+}
