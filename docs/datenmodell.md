@@ -18,6 +18,7 @@ Jeder Statuswechsel eines Auftrags wird als eigener Datensatz mit Zeitstempel ge
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | kundennummer | VARCHAR, UNIQUE | Wird automatisch vergeben, Format `K-00001` (fortlaufend) |
+| externe_kundennummer | VARCHAR, UNIQUE (falls gesetzt) | Optional. Kundennummer aus dem Buchhaltungssystem der Werkstatt, damit sich Kunden in beiden Systemen eindeutig zuordnen lassen. Mehrere Kunden ohne externe Nummer sind zulässig. In Kundenliste und Suche auffindbar |
 | name | VARCHAR | |
 | email | VARCHAR | Optional, für Statusbenachrichtigungen; wird auf gültiges Format geprüft |
 | telefon | VARCHAR | Optional |
@@ -97,6 +98,8 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `kunde` (2.1) |
 
 **Regeln:** Der Besitzer (`kunde_id`) lässt sich nach dem Anlegen nicht ändern; bei einem Besitzerwechsel wird das alte Instrument archiviert und ein neues angelegt, damit die Historie sauber bleibt. Instrumente mit offenen Aufträgen lassen sich nicht archivieren. Berechtigungen und Protokollierung wie bei `kunde`.
+
+**Reparaturhistorie (Option, geringe Priorität):** Da jeder Auftrag über `instrument_id` einem Instrument zugeordnet ist, lässt sich die Reparaturhistorie eines Instruments ohne Schemaänderung darstellen. Vorgesehen ist eine reine Leseansicht am Instrument mit den zugehörigen Aufträgen (Auftragsnummer, Datum, Reparaturart, Status, Arbeitszeit).
 
 **Nutzen fürs spätere Modell (Stufe 2):** Hersteller/Baujahr können als zusätzliche Merkmale einfließen — ältere oder bestimmte Hersteller-Instrumente benötigen bei manchen Reparaturarten erfahrungsgemäß mehr Zeit (z. B. Ersatzteilbeschaffung bei alten oder seltenen Modellen).
 
@@ -664,7 +667,7 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - **Druckansicht für den Abgabebeleg:** eigene, aufs Drucken optimierte Seite mit Auftragsnummer, Zugriffstoken/QR-Code (siehe Abschnitt 6) und den wichtigsten Auftragsdaten
 - **Leere Zustände klar kommunizieren:** z. B. "Keine offenen Aufträge" statt einer leeren, irritierenden Liste
 - **Ladezustände sichtbar machen:** kurze Ladeanzeige statt eingefroren wirkender Seite bei längeren Abfragen
-- **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (siehe auch Abschnitt 10, Punkt 6a)
+- **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (siehe auch Abschnitt 10.4, Punkt 5)
 - **Barrierefreiheit (Kontrast, Tastaturbedienbarkeit):** insbesondere für den internen Bereich sinnvoll, falls künftig auch weniger technikaffine oder ältere Mitarbeiter damit arbeiten
 
 ### 9.8 Auftragsabschluss (Pflicht-Zeiterfassung)
@@ -743,16 +746,49 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 
 ---
 
-## 10. Nächste Schritte
+## 10. Fahrplan und offene Punkte
 
-1. Tabellen als PostgreSQL-Schema anlegen (kann ich dir als SQL-DDL ausformulieren)
-2. Design-System festlegen (Farben, Typografie, Statusfarben — Abschnitt 9.6), bevor die erste UI-Seite gebaut wird
-3. Backend-Endpunkte für Auftragserstellung, Statuswechsel, Mitarbeiterzuordnung
-4. Login/Authentifizierung + Berechtigungsprüfung nach `systemrolle` implementieren
-5. Stufe-1-Berechnungslogik implementieren
-6. Internes Dashboard (Mitarbeitersicht) gemäß Abschnitt 9.4
-6a. Filter (Status, Mitarbeiter, Instrumentenklasse, Priorität) und Freitext-Suche (Kundenname, Auftragsnummer) für die Auftragsliste — noch nicht dringend bei wenigen Test-Aufträgen, aber sobald der echte Auftragsbestand wächst, wird die Liste sonst unübersichtlich (siehe Abschnitt 9.7)
-7. Administrationsbereich (Werkstattleiter- und Admin-Ansicht gemäß Berechtigungsmatrix in Abschnitt 7, Werkstattleiter-Dashboard gemäß 9.5, Kapazitäts-Dashboard gemäß 8 und 9.9)
-8. Kunden-Dashboard (Auftragsnummer + Zugriffstoken gemäß Abschnitt 6)
-9. Abfrage-Assistent für historische Erfahrungswerte (Abschnitt 8a) — nach Login/Rollen
-10. Erst nach einigen Monaten Echtbetrieb: Stufe 2 evaluieren
+Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und kann angepasst werden.
+
+### 10.1 Erledigt
+
+- Datenbank-Schema, Login und Rollen (Argon2, Token, Live-Prüfung der Rolle)
+- Auftrags-Endpunkte inkl. Statusverlauf, Schätzungs-Log und manueller Korrektur
+- Stufe 1 der Schätzung: Arbeitsstunden, Kosten und Termin (Warteschlangen-Logik, Abschnitt 4)
+- Design-System (9.6), Frontend-Prototyp für Aufträge
+- Stammdaten im Backend: Kunden, Instrumente, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter-Verwaltung, Wochenarbeitsstunden
+- Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
+
+### 10.2 In Arbeit
+
+- Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (4b), Mitarbeiter und Wochenstunden (4c)
+
+### 10.3 Zu prüfen
+
+- Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9): Umsetzung bestätigen lassen
+
+### 10.4 Offen, vor dem Echtbetrieb wichtig
+
+1. **Auftragsdetailseite nach Regel 9.10 umbauen** (Aktionsleiste, Formulare nur auf Wunsch)
+2. **Abwesenheiten pflegen** (2.3): Urlaub, Krankheit, Schulung, Betriebsschließung. Ohne diese Eingabe ignoriert die Terminschätzung Abwesenheiten. Feiertage möglichst automatisch aus einer Feiertagsbibliothek des Bundeslands erzeugen statt manuell zu pflegen
+3. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
+4. **Login-Schutz:** Begrenzung der Fehlversuche
+5. **Auftragsliste für normale Mitarbeiter** auf eigene Aufträge einschränken, dazu Filter und Freitext-Suche (Status, Mitarbeiter, Instrumentenklasse, Priorität; Kundenname, Auftragsnummer, externe Kundennummer)
+6. **Datenschutz:** Konzept für Löschwünsche von Kunden (Anonymisieren statt hart löschen, damit Statistik und Historie erhalten bleiben), Hosting-Region und Auftragsverarbeitungsvertrag mit dem Datenbankanbieter klären
+7. **Sicherung und Wiederherstellung** der Datenbank (Backups prüfen, Wiederherstellung einmal testen)
+8. **Hosting/Bereitstellung** mit HTTPS (Voraussetzung, bevor jemand außerhalb des eigenen Rechners damit arbeitet)
+
+### 10.5 Offen, Funktionsausbau
+
+9. Internes Mitarbeiter-Dashboard nach 9.4 (Liste existiert, Dashboard-Charakter fehlt)
+10. Werkstattleiter-Dashboard (9.5): Kennzahlen offen/abgeschlossen/pausiert, Auslastung, überfällige und priorisierte Aufträge
+11. Kapazitäts-Dashboard (Abschnitt 8 und 9.9)
+12. Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
+13. Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
+
+### 10.6 Optionen, geringe Priorität
+
+- Reparaturhistorie am Instrument als Leseansicht (siehe 2.5)
+- Korrekturfunktion für falsch eingetragene Wochenstunden (siehe 2.12)
+- Abfrage-Assistent für historische Erfahrungswerte (Abschnitt 8a)
+- Stufe 2 der Schätzung (ML-Modell), erst nach einigen Monaten Echtbetrieb (Abschnitt 5)
