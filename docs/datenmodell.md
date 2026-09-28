@@ -44,6 +44,10 @@ Jeder Statuswechsel eines Auftrags wird als eigener Datensatz mit Zeitstempel ge
 | erstellt_am | TIMESTAMP | |
 | deaktiviert_am | TIMESTAMP | NULL solange aktiv |
 
+**Deaktivieren und Reaktivieren:** Nur Admin. Beim Deaktivieren wird `aktiv = false` und `deaktiviert_am` gesetzt, gelöscht wird nichts. Ein bereits ausgestelltes Login-Token funktioniert danach sofort nicht mehr, eine neue Anmeldung wird abgelehnt. Beim Reaktivieren wird `aktiv = true` gesetzt und `deaktiviert_am` geleert. Ein Mitarbeiter mit offenen zugewiesenen Aufträgen lässt sich nicht deaktivieren (erst neu zuweisen), erledigte Aufträge stören nicht.
+
+**Schutz gegen Aussperren:** Ein Admin kann sich weder selbst deaktivieren noch sich selbst die Admin-Rolle entziehen. Der letzte aktive Admin kann weder deaktiviert noch herabgestuft werden (technisch abgesichert durch Zeilensperre, falls sich zwei Admins gleichzeitig herabstufen). Rollenänderungen wirken sofort, auch bei bestehendem Login-Token.
+
 ---
 
 ### 2.3 `abwesenheit`
@@ -261,6 +265,15 @@ Vertraglich vereinbarte Wochenarbeitsstunden je Mitarbeiter — Grundlage der Ka
 
 **Pflege:** Ausschließlich über den Administrationsbereich durch die Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — ein neuer Eintrag mit neuem `gültig_ab`-Datum schließt automatisch den vorherigen Eintrag ab (`gültig_bis` = Tag davor), statt den alten Wert zu überschreiben.
 
+**Regeln:**
+- Je Mitarbeiter ist höchstens ein Eintrag gleichzeitig offen (`gültig_bis` = NULL), das erzwingt die Datenbank
+- Ein neuer Wert muss später beginnen als der bisher gültige. Rückdatieren vor den aktuellen Eintrag und eine zweite Änderung am selben Tag werden abgelehnt. Ein Tippfehler lässt sich deshalb derzeit nur mit einem neuen Eintrag ab einem späteren Datum korrigieren (eine eigene Korrekturfunktion steht als möglicher späterer Ausbau im Backlog)
+- Zulässige Werte: über 0 und höchstens 80 Wochenstunden, maximal 2 Nachkommastellen
+- Beim Abschließen des alten Eintrags ändert sich dort nur `gültig_bis`. `geändert_von`/`geändert_am` des alten Eintrags bleiben unverändert, wer abgeschlossen hat, steht im neuen Eintrag und im Änderungsprotokoll
+- Für deaktivierte Mitarbeiter können keine Wochenstunden festgelegt werden
+- Wo nichts hinterlegt ist, gilt ein Standard von 40 Wochenstunden. Die Admin-Liste kennzeichnet, ob ein Wert "hinterlegt" oder der "Standard" ist
+- Eine Änderung der Wochenstunden wirkt direkt auf künftige Terminschätzungen, bestehende Termine werden nicht automatisch neu berechnet (siehe 4.0a), bei Bedarf mit `termine_nachrechnen --alle`
+
 ---
 
 ### 2.13 `mitarbeiter_qualifikation`
@@ -476,6 +489,8 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Parameter der Stufe-1-Berechnungslogik anpassen (z. B. Komplexitätsfaktoren) | ❌ | ❌ | ✅ |
 | Abfrage-Assistent für historische Erfahrungswerte nutzen (Abschnitt 8a) | ❌ | ✅ | ✅ |
 
+**Schutzregeln (gelten unabhängig von der Rolle):** Kein Selbst-Deaktivieren und kein Selbst-Herabstufen, der letzte aktive Admin bleibt immer erhalten, und ein Mitarbeiter mit offenen zugewiesenen Aufträgen wird nicht deaktiviert (Details in 2.2).
+
 In einer kleinen Werkstatt ist es üblich, dass der Werkstattleiter zusätzlich als Admin eingerichtet wird — die Trennung kostet dich beim Bauen kaum Mehraufwand (es ist im Kern eine zusätzliche Prüfung "ist systemrolle = admin?"), gibt dir aber die Flexibilität, es später sauber zu trennen, falls z. B. ein externer IT-Dienstleister die technische Pflege übernimmt.
 
 ### 7.3 Neue Tabelle: `system_ereignis_log`
@@ -486,7 +501,7 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | ausgeführt_von_mitarbeiter_id | FK → mitarbeiter | |
-| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
+| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "mitarbeiter_aktiviert", "wochenstunden_festgelegt", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
 | betroffene_entität | VARCHAR | z. B. "mitarbeiter", "reparaturart", "kunde", "instrument", "instrumentenklasse" |
 | betroffene_id | UUID | ID des betroffenen Datensatzes |
 | details | JSONB | Was genau geändert wurde (alter/neuer Wert) |
