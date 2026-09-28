@@ -139,6 +139,8 @@ export const api = {
     vorgabewerte: (filter = {}) => anfrage('/admin/vorgabewerte?' + new URLSearchParams(filter)),
     vorgabewertAnlegen: (daten) => anfrage('/admin/vorgabewerte', { methode: 'POST', daten }),
     vorgabewertAendern: (id, daten) => anfrage(`/admin/vorgabewerte/${id}`, { methode: 'PATCH', daten }),
+    vorgabewertArchivieren: (id) => anfrage(`/admin/vorgabewerte/${id}/archivieren`, { methode: 'POST' }),
+    vorgabewertReaktivieren: (id) => anfrage(`/admin/vorgabewerte/${id}/reaktivieren`, { methode: 'POST' }),
   },
   reparaturarten: () => anfrage('/reparaturarten'),
   auftragsstatus: () => anfrage('/auftragsstatus'),

@@ -46,10 +46,11 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 |---|---|---|
 | POST | `/auth/login` | Anmelden (E-Mail als `username` + Passwort) → Token |
 | GET | `/auth/ich` | Wer bin ich? (prüft die Anmeldung) |
-| GET | `/admin/vorgabewerte` | Vorgabewerte auflisten (Filter: `reparaturart_id`, `instrumentenklasse_id`) |
+| GET | `/admin/vorgabewerte` | Vorgabewerte auflisten (Filter: `reparaturart_id`, `instrumentenklasse_id`, `archivierte`) |
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
+| POST | `/admin/vorgabewerte/{id}/archivieren`, `/…/reaktivieren` | Vorgabewert zurücknehmen/zurückholen (Schätzung ignoriert archivierte) |
 | GET | `/kunden?suche=…&archivierte=…`, `/kunden/{id}` | Kunden auflisten/suchen, Kunde mit Instrumenten |
 | POST, PATCH | `/kunden`, `/kunden/{id}` | Kunde anlegen/bearbeiten (alle Angemeldeten; Kundennummer wird vergeben) |
 | POST | `/kunden/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin; nicht bei offenen Aufträgen) |

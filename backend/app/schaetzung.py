@@ -103,6 +103,7 @@ def _vorgabe(
     """Spezifischen Vorgabewert der Instrumentenklasse bevorzugen, sonst den allgemeinen."""
     eintraege = db.scalars(
         select(ReparaturVorgabewert).where(
+            ReparaturVorgabewert.archiviert_am.is_(None),  # archivierte Vorgabewerte zählen nicht
             ReparaturVorgabewert.reparaturart_id == reparaturart_id,
             (ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
             | ReparaturVorgabewert.instrumentenklasse_id.is_(None),

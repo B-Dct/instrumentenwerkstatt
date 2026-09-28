@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -121,8 +122,70 @@ def test_bearbeiten_in_bestehende_kombination_abgelehnt(client, stammdaten):
     spezifisch = client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]))).json()
     antwort = client.patch(f"{URL}/{spezifisch['id']}", json={"instrumentenklasse_id": None})
     assert antwort.status_code == 409
+    # Danach ist die Sitzung sauber: der abgelehnte Wert wurde nicht übernommen
+    assert client.get(f"{URL}/{spezifisch['id']}").json()["instrumentenklasse_id"] == str(stammdaten["klasse"])
 
 
 def test_nicht_gefunden(client, admin):
     assert client.get(f"{URL}/{uuid.uuid4()}").status_code == 404
     assert client.patch(f"{URL}/{uuid.uuid4()}", json={"notiz": "x"}).status_code == 404
+
+
+# --- Archivieren / Reaktivieren (2.6a) --------------------------------------
+
+def test_archivieren_nimmt_wert_zurueck_ohne_zu_loeschen(client, stammdaten, db):
+    from app.models import ReparaturVorgabewert
+    from app.schaetzung import Quelle, schaetze_arbeitsstunden
+
+    client.post(URL, json=neu(stammdaten, vorgabe_stunden=0.5))  # allgemein
+    spezifisch = client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]),
+                                           vorgabe_stunden=9)).json()  # versehentlich angelegt
+    assert schaetze_arbeitsstunden(db, stammdaten["klasse"], stammdaten["reparaturart"]).quelle == Quelle.vorgabe_instrumentenklasse
+
+    antwort = client.post(f"{URL}/{spezifisch['id']}/archivieren")
+    assert antwort.status_code == 200 and antwort.json()["archiviert_am"] is not None
+    assert antwort.json()["geaendert_von_mitarbeiter_id"] == str(stammdaten["admin"])
+
+    # Schätzung ignoriert den archivierten Wert, der allgemeine greift wieder
+    s = schaetze_arbeitsstunden(db, stammdaten["klasse"], stammdaten["reparaturart"])
+    assert (s.quelle, s.wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
+    # Nicht gelöscht, nur ausgeblendet
+    assert db.get(ReparaturVorgabewert, uuid.UUID(spezifisch["id"])) is not None
+    assert spezifisch["id"] not in [e["id"] for e in client.get(URL).json()]
+    assert spezifisch["id"] in [e["id"] for e in client.get(URL, params={"archivierte": True}).json()]
+
+    aktionen = db.scalars(select(SystemEreignisLog.aktion).where(
+        SystemEreignisLog.betroffene_id == uuid.UUID(spezifisch["id"])).order_by(SystemEreignisLog.zeitpunkt)).all()
+    assert aktionen == ["vorgabewert_angelegt", "vorgabewert_archiviert"]
+
+
+def test_eindeutigkeit_nur_unter_aktiven(client, stammdaten):
+    erster = client.post(URL, json=neu(stammdaten)).json()
+    client.post(f"{URL}/{erster['id']}/archivieren")
+    # Gleiche Kombination neu anlegen: erlaubt, weil der alte archiviert ist
+    zweiter = client.post(URL, json=neu(stammdaten, vorgabe_kosten=40))
+    assert zweiter.status_code == 201
+    # Den alten reaktivieren: abgelehnt, solange der neue aktiv ist
+    antwort = client.post(f"{URL}/{erster['id']}/reaktivieren")
+    assert antwort.status_code == 409
+    assert "zuerst archivieren" in antwort.json()["detail"]
+    # Nach Archivieren des neuen klappt es
+    client.post(f"{URL}/{zweiter.json()['id']}/archivieren")
+    assert client.post(f"{URL}/{erster['id']}/reaktivieren").json()["archiviert_am"] is None
+
+
+def test_archivierten_wert_erst_reaktivieren_dann_bearbeiten(client, stammdaten):
+    eintrag = client.post(URL, json=neu(stammdaten)).json()
+    client.post(f"{URL}/{eintrag['id']}/archivieren")
+    assert client.patch(f"{URL}/{eintrag['id']}", json={"vorgabe_kosten": 99}).status_code == 409
+    assert client.post(f"{URL}/{eintrag['id']}/archivieren").status_code == 409  # schon archiviert
+    client.post(f"{URL}/{eintrag['id']}/reaktivieren")
+    assert client.patch(f"{URL}/{eintrag['id']}", json={"vorgabe_kosten": 99}).status_code == 200
+
+
+def test_archivieren_nur_admin(client, stammdaten, db):
+    from app.models import Systemrolle
+    eintrag = client.post(URL, json=neu(stammdaten)).json()
+    for rolle in (Systemrolle.mitarbeiter, Systemrolle.werkstattleiter):
+        header = angemeldet_als(konto_anlegen(db, rolle))
+        assert client.post(f"{URL}/{eintrag['id']}/archivieren", headers=header).status_code == 403

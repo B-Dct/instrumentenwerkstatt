@@ -24,7 +24,6 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    UniqueConstraint,
     func,
     text,
 )
@@ -165,15 +164,15 @@ class ReparaturVorgabewert(Base):
     """2.6a: Vorgabewerte für Dauer/Kosten je Reparaturart (optional je Instrumentenklasse).
 
     instrumentenklasse_id = NULL bedeutet: allgemeiner Wert für die Reparaturart.
-    Pro Kombination (auch "allgemein") gibt es höchstens einen Eintrag.
+    Pro Kombination (auch "allgemein") gibt es höchstens einen AKTIVEN Eintrag.
     """
 
     __tablename__ = "reparatur_vorgabewert"
     __table_args__ = (
-        UniqueConstraint(
-            "reparaturart_id", "instrumentenklasse_id",
-            name="uq_reparatur_vorgabewert_kombination",
-            postgresql_nulls_not_distinct=True,
+        # Jede Kombination (auch "allgemein" = NULL) höchstens einmal unter den AKTIVEN Einträgen
+        Index(
+            "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id",
+            unique=True, postgresql_nulls_not_distinct=True, postgresql_where=text("archiviert_am IS NULL"),
         ),
         CheckConstraint("vorgabe_stunden >= 0", name="stunden_nicht_negativ"),
         CheckConstraint("vorgabe_kosten >= 0", name="kosten_nicht_negativ"),
@@ -185,6 +184,8 @@ class ReparaturVorgabewert(Base):
     vorgabe_stunden: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     vorgabe_kosten: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # in Euro
     notiz: Mapped[str | None] = mapped_column(Text)
+    # NULL = aktiv; archivierte Vorgabewerte ignoriert die Schätzung
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
     geaendert_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), onupdate=func.clock_timestamp()

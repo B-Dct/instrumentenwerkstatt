@@ -49,6 +49,7 @@ class Vorgabewert(BaseModel):
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None
+    archiviert_am: datetime | None  # NULL = aktiv
     geaendert_von_mitarbeiter_id: uuid.UUID | None
     geaendert_am: datetime
 

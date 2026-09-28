@@ -1,6 +1,9 @@
 """Pflege der Reparatur-Vorgabewerte (Datenmodell 2.6a) – nur Admin (7.2).
 
-Bewusst ohne Löschen (Grundsatz "kein hartes Löschen"): falsche Werte werden korrigiert.
+Kein hartes Löschen: Ein Wert wird archiviert (archiviert_am) und von der Schätzung dann
+ignoriert, z. B. um einen versehentlich angelegten spezifischen Wert zurückzunehmen.
+Jede Kombination Reparaturart + Instrumentenklasse gibt es höchstens einmal unter den AKTIVEN
+Einträgen; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reaktiviert wurden.
 """
 
 import uuid
@@ -8,7 +11,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -68,7 +71,7 @@ def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrument
 
 
 @contextmanager
-def _doppelte_kombination_abfangen(db: Session) -> Iterator[None]:
+def _doppelte_kombination_abfangen(db: Session, reaktivieren: bool = False) -> Iterator[None]:
     """Wandelt Verstöße gegen "eine Kombination nur einmal" in eine verständliche 409 um."""
     try:
         with db.begin_nested():  # bei Fehler nur diesen Speicherversuch zurücknehmen
@@ -77,8 +80,10 @@ def _doppelte_kombination_abfangen(db: Session) -> Iterator[None]:
         if "uq_reparatur_vorgabewert_kombination" in str(e.orig):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
+                "Für diese Kombination aus Reparaturart und Instrumentenklasse ist bereits ein anderer "
+                "Vorgabewert aktiv – diesen zuerst archivieren." if reaktivieren else
                 "Für diese Kombination aus Reparaturart und Instrumentenklasse gibt es bereits "
-                "einen Vorgabewert – bitte den bestehenden bearbeiten.",
+                "einen aktiven Vorgabewert – bitte den bestehenden bearbeiten.",
             ) from e
         raise
 
@@ -98,11 +103,15 @@ def _werte(eintrag: ReparaturVorgabewert) -> dict:
 def vorgabewerte_auflisten(
     reparaturart_id: uuid.UUID | None = Query(None, description="Nur Werte dieser Reparaturart"),
     instrumentenklasse_id: uuid.UUID | None = Query(None, description="Nur Werte dieser Instrumentenklasse"),
+    archivierte: bool = Query(False, description="Auch archivierte Vorgabewerte anzeigen"),
     db: Session = Depends(get_db),
 ) -> list[Vorgabewert]:
     abfrage = _abfrage().order_by(
-        Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung.asc().nulls_first()
+        Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung.asc().nulls_first(),
+        ReparaturVorgabewert.archiviert_am.asc().nulls_first(),
     )
+    if not archivierte:
+        abfrage = abfrage.where(ReparaturVorgabewert.archiviert_am.is_(None))
     if reparaturart_id is not None:
         abfrage = abfrage.where(ReparaturVorgabewert.reparaturart_id == reparaturart_id)
     if instrumentenklasse_id is not None:
@@ -147,6 +156,8 @@ def vorgabewert_bearbeiten(
     eintrag = db.get(ReparaturVorgabewert, vorgabewert_id)
     if eintrag is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vorgabewert nicht gefunden")
+    if eintrag.archiviert_am is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Vorgabewert ist archiviert – zum Bearbeiten erst reaktivieren")
 
     aenderungen = daten.model_dump(exclude_unset=True)
     leer = sorted(f for f in _PFLICHTFELDER if f in aenderungen and aenderungen[f] is None)
@@ -160,10 +171,10 @@ def vorgabewert_bearbeiten(
         if aenderungen.get("instrumentenklasse_id") != eintrag.instrumentenklasse_id else None,
     )
     alt = _werte(eintrag)
-    for feld, wert in aenderungen.items():
-        setattr(eintrag, feld, wert)
-    eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
-    with _doppelte_kombination_abfangen(db):
+    with _doppelte_kombination_abfangen(db):  # Änderungen innerhalb: bei Fehler wieder verworfen
+        for feld, wert in aenderungen.items():
+            setattr(eintrag, feld, wert)
+        eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
         db.flush()
 
     db.add(SystemEreignisLog(
@@ -175,3 +186,50 @@ def vorgabewert_bearbeiten(
     ))
     db.commit()
     return _laden(db, eintrag.id)
+
+
+def _archiv_umschalten(db: Session, vorgabewert_id: uuid.UUID, mitarbeiter_id: uuid.UUID, archivieren: bool) -> Vorgabewert:
+    eintrag = db.get(ReparaturVorgabewert, vorgabewert_id, with_for_update=True)
+    if eintrag is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vorgabewert nicht gefunden")
+    if (eintrag.archiviert_am is not None) == archivieren:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"Vorgabewert ist {'bereits' if archivieren else 'nicht'} archiviert")
+    alt = eintrag.archiviert_am
+    zeitpunkt = db.scalar(select(func.clock_timestamp())) if archivieren else None
+    with _doppelte_kombination_abfangen(db, reaktivieren=not archivieren):
+        eintrag.archiviert_am = zeitpunkt
+        eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
+        db.flush()  # beim Reaktivieren prüft die Datenbank, ob die Kombination schon aktiv vergeben ist
+    db.add(SystemEreignisLog(
+        ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
+        aktion="vorgabewert_archiviert" if archivieren else "vorgabewert_reaktiviert",
+        betroffene_entitaet="reparatur_vorgabewert",
+        betroffene_id=eintrag.id,
+        details={"alt": {"archiviert_am": alt.isoformat() if alt else None},
+                 "neu": {"archiviert_am": eintrag.archiviert_am.isoformat() if eintrag.archiviert_am else None},
+                 **_werte(eintrag)},
+    ))
+    db.commit()
+    return _laden(db, eintrag.id)
+
+
+@router.post("/{vorgabewert_id}/archivieren", response_model=Vorgabewert)
+def vorgabewert_archivieren(
+    vorgabewert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
+) -> Vorgabewert:
+    """Nimmt einen Wert zurück: Die Schätzung ignoriert ihn, es greift wieder der allgemeine Wert
+    bzw. der historische Durchschnitt. Nichts wird gelöscht."""
+    return _archiv_umschalten(db, vorgabewert_id, mitarbeiter_id, archivieren=True)
+
+
+@router.post("/{vorgabewert_id}/reaktivieren", response_model=Vorgabewert)
+def vorgabewert_reaktivieren(
+    vorgabewert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
+) -> Vorgabewert:
+    """Nur möglich, wenn für dieselbe Kombination kein anderer Wert aktiv ist."""
+    return _archiv_umschalten(db, vorgabewert_id, mitarbeiter_id, archivieren=False)

@@ -40,13 +40,15 @@ def _laden(db: Session, modell: type[M], eintrag_id: uuid.UUID, name: str) -> M:
     return eintrag
 
 
-def _speichern(db: Session, name: str, neu=None) -> None:
-    """Speichert; ein neuer Datensatz wird innerhalb des Speicherpunkts hinzugefügt, damit er
-    bei einem Fehler wieder aus der Sitzung verschwindet."""
+def _speichern(db: Session, name: str, neu=None, aenderungen: tuple = ()) -> None:
+    """Speichert. Neuer Datensatz bzw. Feldänderungen ((objekt, feld, wert), …) werden innerhalb
+    des Speicherpunkts gesetzt, damit sie bei einem Fehler wieder aus der Sitzung verschwinden."""
     try:
         with db.begin_nested():  # bei Fehler nur diesen Speicherversuch zurücknehmen
             if neu is not None:
                 db.add(neu)
+            for objekt, feld, wert in aenderungen:
+                setattr(objekt, feld, wert)
             db.flush()
     except IntegrityError as e:
         if "unique" in str(e.orig).lower():
@@ -78,11 +80,9 @@ def _bearbeiten(db: Session, eintrag, daten, felder, entitaet, name, mitarbeiter
     if leer:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Darf nicht leer sein: {', '.join(leer)}")
     alt = werte(eintrag, felder)
-    for feld, wert in aenderungen.items():
-        setattr(eintrag, feld, wert)
-    neu = werte(eintrag, felder)
+    neu = {**alt, **werte(daten, list(aenderungen))}
     if neu != alt:
-        _speichern(db, name)
+        _speichern(db, name, aenderungen=tuple((eintrag, f, w) for f, w in aenderungen.items()))
         protokollieren(db, mitarbeiter_id, f"{entitaet}_geaendert", entitaet, eintrag.id, {"alt": alt, "neu": neu})
         db.commit()
     return eintrag

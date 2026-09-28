@@ -88,6 +88,9 @@ def test_doppelte_bezeichnung(client, admin, w):
     antwort = client.patch(f"/admin/instrumentenklassen/{w.violine.id}", headers=admin,
                            json={"bezeichnung": "TEST Kontrabass"})
     assert antwort.status_code == 409
+    # Folgeanfrage funktioniert, die abgelehnte Bezeichnung wurde nicht übernommen
+    klassen = client.get("/admin/instrumentenklassen", headers=admin).json()
+    assert next(k for k in klassen if k["id"] == str(w.violine.id))["bezeichnung"] == "TEST Violine"
 
 
 def test_archivierte_reparaturart_nicht_fuer_neue_auftraege(client, admin, w):
