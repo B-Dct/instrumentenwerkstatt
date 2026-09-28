@@ -6,11 +6,21 @@ import { leerZuNull, useSpeichern } from '../komponenten/speichern.js'
 
 // kunde = null → neuen Kunden anlegen
 export function KundeFormular({ formular, kunde = null, onGespeichert }) {
-  const [werte, setWerte] = useState({ name: kunde?.name ?? '', email: kunde?.email ?? '', telefon: kunde?.telefon ?? '' })
+  const [werte, setWerte] = useState({
+    name: kunde?.name ?? '',
+    externe_kundennummer: kunde?.externe_kundennummer ?? '',
+    email: kunde?.email ?? '',
+    telefon: kunde?.telefon ?? '',
+  })
   const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
-    const daten = { name: werte.name, email: leerZuNull(werte.email), telefon: leerZuNull(werte.telefon) }
+    const daten = {
+      name: werte.name,
+      externe_kundennummer: leerZuNull(werte.externe_kundennummer),
+      email: leerZuNull(werte.email),
+      telefon: leerZuNull(werte.telefon),
+    }
     return kunde ? api.kundeAendern(kunde.id, daten) : api.kundeAnlegen(daten)
-  }, onGespeichert)
+  }, onGespeichert, { konfliktFeld: 'externe_kundennummer' })
   const setze = (feld) => (e) => { feldGeaendert(feld); setWerte((w) => ({ ...w, [feld]: e.target.value })) }
 
   return (
@@ -19,6 +29,10 @@ export function KundeFormular({ formular, kunde = null, onGespeichert }) {
                    speichernText={kunde ? 'Speichern' : 'Kunde anlegen'}>
       <Feld label="Name" fehler={felder.name}>
         <input value={werte.name} onChange={setze('name')} required maxLength={200} autoComplete="off" />
+      </Feld>
+      <Feld label="Externe Kundennummer" fehler={felder.externe_kundennummer}
+            hinweis="Optional, Kundennummer aus dem Buchhaltungssystem">
+        <input value={werte.externe_kundennummer} onChange={setze('externe_kundennummer')} maxLength={50} autoComplete="off" />
       </Feld>
       <div className="spalten spalten--eng">
         <Feld label="E-Mail" fehler={felder.email} hinweis="Optional, für Statusbenachrichtigungen">

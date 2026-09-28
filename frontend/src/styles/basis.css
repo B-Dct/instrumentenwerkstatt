@@ -231,7 +231,7 @@ textarea { resize: vertical; }
 .feld .feld__fehler { color: var(--farbe-warnung); font-size: var(--groesse-12); }
 
 .filterleiste { display: flex; flex-wrap: wrap; align-items: center; gap: var(--abstand-4); margin: var(--abstand-5) 0 var(--abstand-3); }
-.filterleiste input[type='search'] { min-width: var(--spalte-min); }
+.filterleiste input[type='search'] { min-width: calc(var(--spalte-min) + var(--abstand-7)); }
 
 .tabelle--klickbar tbody tr { cursor: pointer; }
 .tabelle--klickbar tbody tr.zeile--nicht-klickbar { cursor: default; }

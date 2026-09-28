@@ -80,6 +80,7 @@ export default function KundeDetail() {
 
       <dl className={`eckdaten${hervorgehoben === KUNDE_BEARBEITEN ? ' hervorgehoben' : ''}`}>
         <dt>Kundennummer</dt><dd>{kunde.kundennummer}</dd>
+        <dt>Externe Kundennummer</dt><dd>{kunde.externe_kundennummer ?? '–'}</dd>
         <dt>E-Mail</dt><dd>{kunde.email ?? '–'}</dd>
         <dt>Telefon</dt><dd>{kunde.telefon ?? '–'}</dd>
         <dt>Kunde seit</dt><dd>{datum(kunde.erstellt_am)}</dd>

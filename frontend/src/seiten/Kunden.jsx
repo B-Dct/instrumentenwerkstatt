@@ -52,7 +52,7 @@ export default function Kunden() {
       <div className="filterleiste">
         <label className="feld feld--inline">
           <span className="unsichtbar">Suche</span>
-          <input type="search" placeholder="Suchen: Name, Nr., E-Mail, Telefon" value={suche}
+          <input type="search" placeholder="Suchen: Name, Nr., ext. Nr., E-Mail, Telefon" value={suche}
                  onChange={(e) => setSuche(e.target.value)} />
         </label>
         {leitung && (
@@ -69,12 +69,13 @@ export default function Kunden() {
       {kunden?.length > 0 && (
         <div className="tabelle-rahmen">
           <table className="tabelle tabelle--klickbar">
-            <thead><tr><th>Kundennr.</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead>
+            <thead><tr><th>Kundennr.</th><th>Ext. Nr.</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead>
             <tbody>
               {kunden.map((k) => (
                 <tr key={k.id} onClick={() => navigate(`/kunden/${k.id}`)}
                     className={[k.id === hervorgehoben && 'zeile--hervorgehoben', k.archiviert_am && 'zeile--archiviert'].filter(Boolean).join(' ') || undefined}>
                   <td>{k.kundennummer}</td>
+                  <td>{k.externe_kundennummer ?? '–'}</td>
                   <td><Link to={`/kunden/${k.id}`} onClick={(e) => e.stopPropagation()}>{k.name}</Link></td>
                   <td>{k.email ?? '–'}</td>
                   <td>{k.telefon ?? '–'}</td>

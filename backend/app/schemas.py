@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
 
 from app.models import Prioritaet, Systemrolle
 
@@ -217,8 +217,21 @@ Text200 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, 
 Text150 = Annotated[str, StringConstraints(strip_whitespace=True, max_length=150)]
 
 
+def _leer_zu_none(wert):
+    """Leere oder nur aus Leerzeichen bestehende Eingabe = kein Wert (NULL, nicht leerer Text)."""
+    return None if isinstance(wert, str) and not wert.strip() else wert
+
+
+# Kundennummer aus dem Buchhaltungssystem: optional, getrimmt, leer = kein Wert
+ExterneKundennummer = Annotated[
+    Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None,
+    BeforeValidator(_leer_zu_none),
+]
+
+
 class KundeNeu(BaseModel):
     name: Text200
+    externe_kundennummer: ExterneKundennummer = None
     email: EmailStr | None = None
     telefon: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
 
@@ -227,6 +240,7 @@ class KundeAenderung(BaseModel):
     """Nur mitgeschickte Felder werden geändert; null leert optionale Felder."""
 
     name: Text200 | None = None
+    externe_kundennummer: ExterneKundennummer = None
     email: EmailStr | None = None
     telefon: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
 
@@ -236,6 +250,7 @@ class KundeEintrag(BaseModel):
 
     id: uuid.UUID
     kundennummer: str
+    externe_kundennummer: str | None
     name: str
     email: str | None
     telefon: str | None

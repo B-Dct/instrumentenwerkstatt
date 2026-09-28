@@ -88,6 +88,8 @@ class Kunde(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     kundennummer: Mapped[str] = mapped_column(String(30), unique=True)
+    # Nummer aus dem Buchhaltungssystem; eindeutig, falls gesetzt (mehrere NULL sind erlaubt)
+    externe_kundennummer: Mapped[str | None] = mapped_column(String(50), unique=True)
     name: Mapped[str] = mapped_column(String(200))
     email: Mapped[str | None] = mapped_column(String(254))
     telefon: Mapped[str | None] = mapped_column(String(50))

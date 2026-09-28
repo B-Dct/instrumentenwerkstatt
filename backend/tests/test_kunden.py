@@ -173,3 +173,60 @@ def test_nicht_gefunden(client, w):
 def test_ohne_anmeldung(client):
     assert client.get("/kunden").status_code == 401
     assert client.post("/kunden", json={"name": "X"}).status_code == 401
+
+
+# --- Externe Kundennummer (2.1) -------------------------------------------------
+
+def test_mehrere_kunden_ohne_externe_nummer(client, w, db):
+    a = kunde_anlegen(client, name="Ohne Nummer A")
+    b = kunde_anlegen(client, name="Ohne Nummer B", externe_kundennummer="")
+    c = kunde_anlegen(client, name="Ohne Nummer C", externe_kundennummer="   ")
+    assert a["externe_kundennummer"] is None and b["externe_kundennummer"] is None and c["externe_kundennummer"] is None
+    # Wirklich NULL in der Datenbank, nicht leerer Text
+    for k in (a, b, c):
+        assert db.get(Kunde, uuid.UUID(k["id"])).externe_kundennummer is None
+
+
+def test_externe_nummer_wird_getrimmt_und_ist_eindeutig(client, w, leitung):
+    erster = kunde_anlegen(client, name="Erster", externe_kundennummer="  BH-4711 ")
+    assert erster["externe_kundennummer"] == "BH-4711"
+
+    antwort = client.post("/kunden", json={"name": "Zweiter", "externe_kundennummer": "BH-4711"})
+    assert antwort.status_code == 409
+    assert antwort.json()["detail"] == f"Diese externe Kundennummer ist bereits vergeben (Kunde {erster['kundennummer']})"
+
+    # Auch beim Bearbeiten, und auch wenn der andere Kunde archiviert ist
+    zweiter = kunde_anlegen(client, name="Zweiter")
+    client.post(f"/kunden/{erster['id']}/archivieren", headers=leitung)
+    antwort = client.patch(f"/kunden/{zweiter['id']}", json={"externe_kundennummer": "BH-4711"})
+    assert antwort.status_code == 409
+    assert antwort.json()["detail"].endswith(f"(Kunde {erster['kundennummer']}, archiviert)")
+    # Abgelehnter Wert wurde nicht übernommen, weitere Änderung klappt
+    assert client.get(f"/kunden/{zweiter['id']}").json()["externe_kundennummer"] is None
+    assert client.patch(f"/kunden/{zweiter['id']}", json={"externe_kundennummer": "BH-0815"}).status_code == 200
+
+
+def test_externe_nummer_bearbeiten_und_leeren(client, w, db):
+    k = kunde_anlegen(client, externe_kundennummer="BH-1")
+    k = client.patch(f"/kunden/{k['id']}", json={"externe_kundennummer": "BH-2"}).json()
+    assert k["externe_kundennummer"] == "BH-2"
+    # Eigene Nummer erneut speichern ist kein Konflikt
+    assert client.patch(f"/kunden/{k['id']}", json={"externe_kundennummer": "BH-2", "name": "Neu"}).status_code == 200
+    k = client.patch(f"/kunden/{k['id']}", json={"externe_kundennummer": " "}).json()
+    assert k["externe_kundennummer"] is None
+
+    eintraege = db.scalars(select(SystemEreignisLog).where(
+        SystemEreignisLog.betroffene_id == uuid.UUID(k["id"]), SystemEreignisLog.aktion == "kunde_geaendert"
+    ).order_by(SystemEreignisLog.zeitpunkt)).all()
+    assert [(e.details["alt"]["externe_kundennummer"], e.details["neu"]["externe_kundennummer"]) for e in eintraege] \
+        == [("BH-1", "BH-2"), ("BH-2", "BH-2"), ("BH-2", None)]
+
+
+def test_suche_findet_ueber_externe_nummer(client, w):
+    kunde_anlegen(client, name="Buchhaltungs-Kunde", externe_kundennummer="FIBU-99231")
+    assert [k["name"] for k in client.get("/kunden", params={"suche": "99231"}).json()] == ["Buchhaltungs-Kunde"]
+    assert [k["name"] for k in client.get("/kunden", params={"suche": "fibu-99"}).json()] == ["Buchhaltungs-Kunde"]
+
+
+def test_externe_nummer_zu_lang(client, w):
+    assert client.post("/kunden", json={"name": "X", "externe_kundennummer": "1" * 51}).status_code == 422

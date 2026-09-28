@@ -17,7 +17,7 @@ Nirgendwo sonst IntegrityError abfangen oder begin_nested verwenden – das prü
 ab (ebenfalls 409 mit Meldung statt 500); die Sitzung der Anfrage wird dann verworfen.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from fastapi import HTTPException, status
@@ -35,6 +35,7 @@ KONFLIKT_MELDUNGEN: dict[str, str] = {
         "Für diese Kombination aus Reparaturart und Instrumentenklasse gibt es bereits einen aktiven "
         "Vorgabewert – bitte den bestehenden bearbeiten",
     "uq_kunde_kundennummer": "Diese Kundennummer ist bereits vergeben",
+    "uq_kunde_externe_kundennummer": "Diese externe Kundennummer ist bereits einem anderen Kunden zugeordnet",
     "uq_mitarbeiter_email": "Diese E-Mail-Adresse ist bereits einem Mitarbeiter-Konto zugeordnet",
     "uq_auftragsstatus_schluessel": "Diesen Status-Schlüssel gibt es bereits",
     "uq_auftragsstatus_bezeichnung": "Einen Status mit dieser Bezeichnung gibt es bereits",
@@ -53,14 +54,25 @@ def regelname(fehler: IntegrityError) -> str | None:
     return getattr(diag, "constraint_name", None)
 
 
-def konflikt_meldung(fehler: IntegrityError, meldungen: dict[str, str] | None = None) -> str:
-    """Meldung zur verletzten Regel: erst die aufruferspezifische, dann die zentrale."""
+Meldung = str | Callable[[], str | None]
+
+
+def konflikt_meldung(fehler: IntegrityError, meldungen: dict[str, Meldung] | None = None) -> str:
+    """Meldung zur verletzten Regel: erst die aufruferspezifische, dann die zentrale.
+
+    Eine aufruferspezifische Meldung darf eine Funktion sein. Sie wird erst im Konfliktfall
+    aufgerufen (nach dem Zurücknehmen, die Sitzung ist wieder nutzbar) und kann so z. B. den
+    Datensatz nennen, der den Wert schon hat. Liefert sie None, gilt die zentrale Meldung.
+    """
     name = regelname(fehler)
-    return (meldungen or {}).get(name) or KONFLIKT_MELDUNGEN.get(name) or ALLGEMEINE_MELDUNG
+    eigene = (meldungen or {}).get(name)
+    if callable(eigene):
+        eigene = eigene()
+    return eigene or KONFLIKT_MELDUNGEN.get(name) or ALLGEMEINE_MELDUNG
 
 
 @contextmanager
-def sicher_speichern(db: Session, meldungen: dict[str, str] | None = None) -> Iterator[None]:
+def sicher_speichern(db: Session, meldungen: dict[str, Meldung] | None = None) -> Iterator[None]:
     """Führt die Änderungen im Block in einem Speicherpunkt aus und speichert (flush).
 
     Bei Verletzung einer Datenbankregel: nur diese Änderungen zurücknehmen (die Sitzung bleibt

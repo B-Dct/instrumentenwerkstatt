@@ -34,8 +34,21 @@ from app.schemas import (
 router = APIRouter(tags=["Kunden und Instrumente"], dependencies=[Depends(aktueller_mitarbeiter)])
 nur_leitung = Depends(rolle_mindestens(Systemrolle.werkstattleiter))
 
-KUNDE_FELDER = ["name", "email", "telefon"]
+KUNDE_FELDER = ["name", "externe_kundennummer", "email", "telefon"]
 INSTRUMENT_FELDER = ["instrumentenklasse_id", "hersteller", "typenbezeichnung", "baujahr", "seriennummer", "notizen"]
+
+
+def _externe_nummer_vergeben(db: Session, nummer: str | None, eigene_id: uuid.UUID | None = None):
+    """Meldung für den Konfliktfall, die den Kunden nennt, der die Nummer schon hat."""
+    def meldung() -> str | None:
+        if nummer is None:
+            return None
+        anderer = db.scalar(select(Kunde).where(Kunde.externe_kundennummer == nummer, Kunde.id != eigene_id))
+        if anderer is None:
+            return None
+        archiviert = ", archiviert" if anderer.archiviert_am else ""
+        return f"Diese externe Kundennummer ist bereits vergeben (Kunde {anderer.kundennummer}{archiviert})"
+    return {"uq_kunde_externe_kundennummer": meldung}
 
 
 def _neue_kundennummer(db: Session) -> str:
@@ -72,7 +85,7 @@ def _kunde_detail(db: Session, kunde: Kunde) -> KundeDetail:
 
 @router.get("/kunden", response_model=list[KundeEintrag])
 def kunden_auflisten(
-    suche: str | None = Query(None, description="Teil von Name, Kundennummer, E-Mail oder Telefon"),
+    suche: str | None = Query(None, description="Teil von Name, Kundennummer, externer Kundennummer, E-Mail oder Telefon"),
     archivierte: bool = Query(False, description="Auch archivierte Kunden anzeigen"),
     db: Session = Depends(get_db),
 ) -> list[Kunde]:
@@ -83,6 +96,7 @@ def kunden_auflisten(
         muster = f"%{suche.strip()}%"
         abfrage = abfrage.where(
             Kunde.name.ilike(muster) | Kunde.kundennummer.ilike(muster)
+            | Kunde.externe_kundennummer.ilike(muster)
             | Kunde.email.ilike(muster) | Kunde.telefon.ilike(muster)
         )
     return list(db.scalars(abfrage))
@@ -98,7 +112,7 @@ def kunde_anlegen(
     daten: KundeNeu, db: Session = Depends(get_db), mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> KundeDetail:
     kunde = Kunde(kundennummer=_neue_kundennummer(db), **daten.model_dump())
-    with sicher_speichern(db):
+    with sicher_speichern(db, _externe_nummer_vergeben(db, kunde.externe_kundennummer)):
         db.add(kunde)
     protokollieren(db, mitarbeiter_id, "kunde_angelegt", "kunde", kunde.id, {"neu": werte(kunde, KUNDE_FELDER)})
     db.commit()
@@ -117,7 +131,8 @@ def kunde_bearbeiten(
     alt = werte(kunde, KUNDE_FELDER)
     neu = {**alt, **werte(daten, list(aenderungen))}
     if neu != alt:
-        with sicher_speichern(db):
+        meldungen = _externe_nummer_vergeben(db, aenderungen.get("externe_kundennummer"), kunde.id)
+        with sicher_speichern(db, meldungen):
             for feld, wert in aenderungen.items():
                 setattr(kunde, feld, wert)
         protokollieren(db, mitarbeiter_id, "kunde_geaendert", "kunde", kunde.id, {"alt": alt, "neu": neu})
