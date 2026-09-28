@@ -18,7 +18,7 @@ Jeder Statuswechsel eines Auftrags wird als eigener Datensatz mit Zeitstempel ge
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | kundennummer | VARCHAR, UNIQUE | Wird automatisch vergeben, Format `K-00001` (fortlaufend) |
-| externe_kundennummer | VARCHAR, UNIQUE (falls gesetzt) | Optional. Kundennummer aus dem Buchhaltungssystem der Werkstatt, damit sich Kunden in beiden Systemen eindeutig zuordnen lassen. Mehrere Kunden ohne externe Nummer sind zulässig. In Kundenliste und Suche auffindbar |
+| externe_kundennummer | VARCHAR(50), UNIQUE (falls gesetzt) | Optional. Kundennummer aus dem Buchhaltungssystem der Werkstatt, damit sich Kunden in beiden Systemen eindeutig zuordnen lassen. Führende und abschließende Leerzeichen werden entfernt, eine leere Eingabe gilt als "kein Wert" (mehrere Kunden ohne Nummer sind zulässig). Die Eindeutigkeit gilt auch gegenüber archivierten Kunden und ohne Beachtung der Groß-/Kleinschreibung ("fibu-1" und "FIBU-1" sind dieselbe Nummer). Bei einem Konflikt nennt die Meldung den betroffenen Kunden, z. B. "Diese externe Kundennummer ist bereits vergeben (Kunde K-00001)", bei archivierten Kunden mit dem Zusatz "archiviert". Auffindbar in Kundenliste (Spalte "Ext. Nr.") und Suche |
 | name | VARCHAR | |
 | email | VARCHAR | Optional, für Statusbenachrichtigungen; wird auf gültiges Format geprüft |
 | telefon | VARCHAR | Optional |
@@ -824,11 +824,12 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
 - Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (Teil 4b)
 - Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
+- Externe Kundennummer am Kunden (siehe 2.1)
+- Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
 
 ### 10.2 In Arbeit
 
-- Externe Kundennummer am Kunden (siehe 2.1)
 - Frontend Verwaltung: Mitarbeiter und Wochenstunden (Teil 4c)
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
