@@ -16,10 +16,32 @@ export function abmelden() {
 }
 
 export class ApiFehler extends Error {
-  constructor(status, meldung) {
+  constructor(status, meldung, felder = {}) {
     super(meldung)
     this.status = status
+    this.felder = felder // Feldname → Fehlermeldung (für Inline-Validierung, 9.1)
   }
+}
+
+// Übersetzt die englischen Standardmeldungen der Eingabeprüfung ins Deutsche
+function feldmeldung(f) {
+  const ctx = f.ctx ?? {}
+  switch (f.type) {
+    case 'missing': return 'Pflichtfeld'
+    case 'string_too_short': return 'Pflichtfeld'
+    case 'string_too_long': return `Höchstens ${ctx.max_length} Zeichen`
+    case 'greater_than': return `Muss größer als ${ctx.gt} sein`
+    case 'greater_than_equal': return `Mindestens ${ctx.ge}`
+    case 'less_than_equal': return `Höchstens ${ctx.le}`
+    case 'decimal_max_places': return `Höchstens ${ctx.decimal_places} Nachkommastellen`
+    case 'value_error': return f.msg.includes('email') ? 'Keine gültige E-Mail-Adresse' : f.msg
+    default: return f.msg
+  }
+}
+
+function fehlerJeFeld(detail) {
+  if (!Array.isArray(detail)) return {}
+  return Object.fromEntries(detail.filter((f) => f.loc?.length > 1).map((f) => [f.loc[f.loc.length - 1], feldmeldung(f)]))
 }
 
 // FastAPI liefert Fehler als Text oder (bei Eingabefehlern) als Liste
@@ -56,10 +78,23 @@ async function anfrage(pfad, { methode = 'GET', daten, formular } = {}) {
       abmelden()
       window.location.assign('/login')
     }
-    throw new ApiFehler(antwort.status, fehlertext(inhalt?.detail))
+    const felder = fehlerJeFeld(inhalt?.detail)
+    const meldung = Object.keys(felder).length ? 'Bitte die markierten Felder prüfen' : fehlertext(inhalt?.detail)
+    throw new ApiFehler(antwort.status, meldung, felder)
   }
   return inhalt
 }
+
+// Rolle/Name frisch vom Backend holen (z. B. nach Rollenänderung durch den Admin)
+export async function nutzerAktualisieren() {
+  const nutzer = await anfrage('/auth/ich')
+  localStorage.setItem(NUTZER_KEY, JSON.stringify(nutzer))
+  return nutzer
+}
+
+// Rollen sind kumulativ: admin ⊇ werkstattleiter ⊇ mitarbeiter (7.1)
+const RANG = { mitarbeiter: 1, werkstattleiter: 2, admin: 3 }
+export const hatRolle = (mindestens) => RANG[angemeldeterNutzer()?.systemrolle] >= RANG[mindestens]
 
 export async function anmelden(email, passwort) {
   const antwort = await anfrage('/auth/login', { methode: 'POST', formular: { username: email, password: passwort } })
@@ -75,8 +110,18 @@ export const api = {
   auftragAendern: (id, daten) => anfrage(`/auftraege/${id}`, { methode: 'PATCH', daten }),
   statusWechseln: (id, daten) => anfrage(`/auftraege/${id}/status`, { methode: 'POST', daten }),
   schaetzungKorrigieren: (id, daten) => anfrage(`/auftraege/${id}/schaetzung-korrektur`, { methode: 'POST', daten }),
-  kunden: () => anfrage('/kunden'),
+  kunden: (filter = {}) => anfrage('/kunden?' + new URLSearchParams(filter)),
+  kunde: (id) => anfrage(`/kunden/${id}`),
+  kundeAnlegen: (daten) => anfrage('/kunden', { methode: 'POST', daten }),
+  kundeAendern: (id, daten) => anfrage(`/kunden/${id}`, { methode: 'PATCH', daten }),
+  kundeArchivieren: (id) => anfrage(`/kunden/${id}/archivieren`, { methode: 'POST' }),
+  kundeReaktivieren: (id) => anfrage(`/kunden/${id}/reaktivieren`, { methode: 'POST' }),
   instrumente: (kundeId) => anfrage('/instrumente?' + new URLSearchParams({ kunde_id: kundeId })),
+  instrumentAnlegen: (daten) => anfrage('/instrumente', { methode: 'POST', daten }),
+  instrumentAendern: (id, daten) => anfrage(`/instrumente/${id}`, { methode: 'PATCH', daten }),
+  instrumentArchivieren: (id) => anfrage(`/instrumente/${id}/archivieren`, { methode: 'POST' }),
+  instrumentReaktivieren: (id) => anfrage(`/instrumente/${id}/reaktivieren`, { methode: 'POST' }),
+  instrumentenklassen: () => anfrage('/instrumentenklassen'),
   reparaturarten: () => anfrage('/reparaturarten'),
   auftragsstatus: () => anfrage('/auftragsstatus'),
   mitarbeiter: () => anfrage('/mitarbeiter'),

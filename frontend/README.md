@@ -22,6 +22,8 @@ Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env
 | `/login` | Anmeldung (Token wird im `localStorage` des Browsers gespeichert) |
 | `/` | Auftragsliste (Sortierung vom Backend: Priorität hoch zuerst, dann älteste) |
 | `/neu` | Auftrag anlegen (Kunde → Instrument → Reparaturart; Schätzung erfolgt automatisch) |
+| `/kunden` | Kundenliste mit Suche; „Neuer Kunde“ öffnet das Formular eingebettet |
+| `/kunden/:id` | Kundenseite: Eckdaten, Aktionen (bearbeiten, Instrument hinzufügen, archivieren), Instrumente |
 | `/auftrag/:id` | Details, Statuswechsel (bei „Fertig“ mit Pflicht-Arbeitszeit), Schätzungs-Korrektur, Statusverlauf, Schätzungsprotokoll |
 
 ## Design-System
@@ -36,9 +38,25 @@ Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env
   Es gibt keine Anfrage an Google-Server (Datenschutz).
 - Layout: feste linke Seitenleiste; der Werkstattname oben links führt zur Startseite (9.2).
 
+## Fokussierte Oberflächen (Datenmodell 9.10)
+
+Neue Seiten verwenden die Bausteine aus `src/komponenten/`:
+
+- `useFokusFormular()` (`fokusFormular.js`): höchstens ein Formular offen, eingebettete Rückfrage
+  „Änderungen verwerfen?“ bei Wechsel, Abbrechen, Escape und Wegnavigieren (Router-Blocker),
+  Browser-Rückfrage beim Schließen des Tabs
+- `AktionsButton`, `FormularBereich`, `FokusFormular`, `Feld` (`FokusFormular.jsx`): Aktionsleiste
+  mit `aria-expanded`, Fokus ins erste Feld, Fehler direkt am Feld (9.1)
+- `useRueckmeldung()` (`rueckmeldung.js`): Erfolgsbestätigung am Bildschirmrand (9.1)
+- `useHervorhebung()` (`hervorhebung.js`): geänderten Eintrag kurz hervorheben
+
+Aktionen werden nur angezeigt, wenn die Rolle sie erlaubt (`hatRolle(...)` in `api.js`);
+das Backend prüft unabhängig davon.
+
 ## Aufbau
 
 - `src/api.js`: alle Backend-Aufrufe, Token-Verwaltung und Anzeige-Helfer (Datum, Euro)
+- `src/router.jsx`: Seitenadressen; `src/Layout.jsx`: Seitenleiste und Rahmen für angemeldete Nutzer
 - `src/seiten/`: eine Datei pro Seite
 - `src/komponenten/`: wiederverwendbare Bausteine (Statusanzeige, Markierungen)
 - `src/styles/`: `tokens.css` (Design-Tokens) und `basis.css` (Grundstile, Bausteine)

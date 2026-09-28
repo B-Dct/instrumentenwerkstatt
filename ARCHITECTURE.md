@@ -110,6 +110,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 28.09.2026 | Frontend: Kunden und Instrumente nach 9.10 (Verwaltung Schritt 4a); Bausteine für fokussierte Formulare; Daten-Router |
 | 28.09.2026 | Mitarbeiter-Verwaltung und Wochenstunden mit Verlauf (Verwaltung Schritt 3, nur Admin) |
 | 28.09.2026 | Instrumentenklassen/Reparaturarten pflegen und archivieren (Verwaltung Schritt 2, nur Admin); `aktiv` → `archiviert_am` |
 | 27.09.2026 | Kunden/Instrumente anlegen, bearbeiten, archivieren (Verwaltung Schritt 1); Kundennummern `K-00001` |

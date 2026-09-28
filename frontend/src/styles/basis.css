@@ -114,7 +114,7 @@ code { font-size: var(--groesse-14); letter-spacing: 0.05em; }
 .feld { display: flex; flex-direction: column; gap: var(--abstand-1); margin-bottom: var(--abstand-4); }
 .feld > span { font-weight: var(--gewicht-halbfett); font-size: var(--groesse-14); }
 .feld small { color: var(--farbe-text-leise); font-size: var(--groesse-12); }
-.feld--inline { flex-direction: row; align-items: center; gap: var(--abstand-2); }
+.feld--inline { display: inline-flex; flex-direction: row; align-items: center; gap: var(--abstand-2); }
 input, select, textarea {
   font: inherit;
   color: var(--farbe-text);
@@ -191,3 +191,71 @@ textarea { resize: vertical; }
 .login h1 { font-size: var(--groesse-36); margin-bottom: var(--abstand-1); }
 .login .leise { margin: 0 0 var(--abstand-6); }
 .login .btn { width: 100%; }
+
+/* --- Fokussierte Oberflächen (9.10) ------------------------------------------- */
+.aktionsleiste { display: flex; flex-wrap: wrap; gap: var(--abstand-2); margin-bottom: var(--abstand-4); }
+.aktionsleiste__rechts { margin-left: auto; }
+.btn--sekundaer.btn--aktiv { background: var(--farbe-flaeche-leise); box-shadow: inset 0 calc(-1 * var(--markierungsbreite)) 0 var(--farbe-primaer); }
+.btn--primaer.btn--aktiv { background: var(--farbe-primaer-dunkel); box-shadow: inset 0 calc(-1 * var(--markierungsbreite)) 0 var(--farbe-text); }
+
+.fokus-formular {
+  max-width: var(--formular-max);
+  margin: 0 0 var(--abstand-5);
+  padding: var(--abstand-5);
+  border: var(--randbreite) solid var(--farbe-rand);
+  border-left: var(--markierungsbreite) solid var(--farbe-primaer);
+  border-radius: var(--radius);
+}
+.fokus-formular h2 { margin-top: 0; }
+.fokus-formular__aktionen { display: flex; flex-wrap: wrap; gap: var(--abstand-2); margin-top: var(--abstand-4); }
+
+.rueckfrage {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--abstand-2);
+  max-width: var(--formular-max);
+  margin: 0 0 var(--abstand-3);
+  padding: var(--abstand-3) var(--abstand-4);
+  border: var(--randbreite) solid var(--farbe-warnung);
+  border-radius: var(--radius);
+}
+.rueckfrage p { margin: 0 var(--abstand-2) 0 0; flex: 1 1 auto; font-weight: var(--gewicht-halbfett); }
+
+.feld--fehler input, .feld--fehler select, .feld--fehler textarea { border-color: var(--farbe-warnung); }
+.feld .feld__fehler { color: var(--farbe-warnung); font-size: var(--groesse-12); }
+
+.filterleiste { display: flex; flex-wrap: wrap; align-items: center; gap: var(--abstand-4); margin: var(--abstand-5) 0 var(--abstand-3); }
+.filterleiste input[type='search'] { min-width: var(--spalte-min); }
+
+.tabelle--klickbar tbody tr { cursor: pointer; }
+.tabelle--klickbar tbody tr.zeile--nicht-klickbar { cursor: default; }
+.zeile--ausgewaehlt td { background: var(--farbe-flaeche-leise); }
+.zeile--archiviert td { color: var(--farbe-text-leise); }
+.link-button { font: inherit; color: var(--farbe-primaer); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: var(--fokusbreite); }
+
+.marke {
+  display: inline-block;
+  font-size: var(--groesse-12);
+  color: var(--farbe-text-leise);
+  border: var(--randbreite) solid var(--farbe-rand);
+  border-radius: var(--radius);
+  padding: 0 var(--abstand-2);
+  margin-right: var(--abstand-2);
+}
+
+/* Geänderten Eintrag kurz hervorheben (9.10, Regel 5) */
+@keyframes hervorheben { from { background: color-mix(in srgb, var(--farbe-erfolg) 20%, transparent); } to { background: transparent; } }
+.zeile--hervorgehoben td, .hervorgehoben { animation: hervorheben 2.5s ease-out; }
+
+/* Erfolgsbestätigung am Bildschirmrand (9.1) */
+.rueckmeldung { position: fixed; right: var(--abstand-5); bottom: var(--abstand-5); z-index: 10; }
+.rueckmeldung__text {
+  margin: 0;
+  padding: var(--abstand-3) var(--abstand-4);
+  background: var(--farbe-erfolg);
+  color: var(--farbe-hintergrund);
+  border-radius: var(--radius);
+  font-weight: var(--gewicht-halbfett);
+}
+
+.unsichtbar { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) { .zeile--hervorgehoben td, .hervorgehoben { animation: none; } }
