@@ -136,7 +136,11 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 
 **Pflege:** Über den Administrationsbereich, Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — passt zur bestehenden Stammdatenpflege von Instrumentenklassen und Reparaturarten.
 
-**Archivieren und Reaktivieren:** Nur Admin. Damit lässt sich ein versehentlich angelegter spezifischer Wert (z. B. für eine einzelne Instrumentenklasse) wieder zurücknehmen, sodass der allgemeine Wert nicht dauerhaft überschattet bleibt. Die Eindeutigkeit der Kombination aus Reparaturart und Instrumentenklasse gilt nur für aktive Einträge.
+**Archivieren und Reaktivieren:** Nur Admin. Damit lässt sich ein versehentlich angelegter spezifischer Wert (z. B. für eine einzelne Instrumentenklasse) wieder zurücknehmen, sodass der allgemeine Wert nicht dauerhaft überschattet bleibt. Die Eindeutigkeit der Kombination aus Reparaturart und Instrumentenklasse gilt nur für aktive Einträge (per Datenbank-Index abgesichert).
+
+- Ein archivierter Vorgabewert lässt sich erst nach dem Reaktivieren bearbeiten
+- Reaktivieren wird abgelehnt, solange für dieselbe Kombination ein anderer Wert aktiv ist ("erst den aktiven Wert archivieren")
+- Archivieren und Reaktivieren setzen `geändert_von` und `geändert_am`
 
 **Regel bei Archivierung:** Neue Vorgabewerte dürfen nicht auf archivierte Reparaturarten oder Instrumentenklassen verweisen. Bestehende Vorgabewerte bleiben auch dann bearbeitbar (z. B. um den Preis anzupassen).
 
@@ -507,7 +511,7 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | ausgeführt_von_mitarbeiter_id | FK → mitarbeiter | |
-| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "mitarbeiter_aktiviert", "wochenstunden_festgelegt", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
+| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "mitarbeiter_aktiviert", "wochenstunden_festgelegt", "vorgabewert_archiviert", "vorgabewert_reaktiviert", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
 | betroffene_entität | VARCHAR | z. B. "mitarbeiter", "reparaturart", "kunde", "instrument", "instrumentenklasse" |
 | betroffene_id | UUID | ID des betroffenen Datensatzes |
 | details | JSONB | Was genau geändert wurde (alter/neuer Wert) |
@@ -765,11 +769,11 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Stammdaten im Backend: Kunden, Instrumente, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter-Verwaltung, Wochenarbeitsstunden
 - Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
 - Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (Teil 4b)
+- Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
 
 ### 10.2 In Arbeit
 
-- Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
 - Externe Kundennummer am Kunden (siehe 2.1)
 - Frontend Verwaltung: Mitarbeiter und Wochenstunden (Teil 4c)
 
