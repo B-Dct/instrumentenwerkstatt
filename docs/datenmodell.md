@@ -798,6 +798,9 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 6. **Zustand bleibt erhalten:** Suchbegriff, Filter, Sortierung und Seite stehen in der Adresse, sodass man nach dem Öffnen eines Eintrags und dem Zurückgehen wieder an derselben Stelle ist.
 7. **Leere Ergebnisse:** Ohne Treffer erscheint "Keine Treffer" mit dem Knopf zum Zurücksetzen. Eine wirklich leere Liste zeigt "Noch keine Einträge" mit Hinweis auf die Neu-anlegen-Aktion.
 8. **Gruppierung:** Wachsen Listen thematisch (z. B. Reparaturarten und Vorgabewerte), werden sie zusätzlich nach fachlichen Gruppen gegliedert (siehe 9.12).
+9. **Technische Umsetzung:** Ein gemeinsamer Baustein für Suche, Sortierung, Seiten und Trefferzahlen (Backend und Frontend), den jede Liste verwendet, statt die Regeln einzeln nachzubauen. Zeichen wie `%` und `_` werden in der Suche wörtlich behandelt, nicht als Platzhalter. Standard sind 25 Einträge pro Seite, höchstens 100.
+
+**Beispiel Mitarbeiterliste** (erste Umsetzung des Bausteins): Suche über Name, E-Mail und fachliche Rolle; sortierbar nach Name, E-Mail, fachlicher Rolle, Systemrolle, Status und Anlagedatum; Filter nach Status (Standard "aktiv") und Systemrolle.
 
 ### 9.12 Gegliederte Stammdaten und Auswahllisten
 
@@ -830,7 +833,10 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- Frontend Verwaltung: Mitarbeiter und Wochenstunden (Teil 4c)
+- Frontend Verwaltung: Mitarbeiterliste und -seite mit Rollen-/Status-Aktionen (Teil 4c-1, im Browser noch zu prüfen)
+- Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), bisher eingesetzt in der Mitarbeiterliste
+- Wochenstunden festlegen und Verlauf auf der Mitarbeiterseite (Teil 4c-2)
+- Bestehende Listen (Aufträge, Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte) auf den gemeinsamen Listen-Baustein umstellen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
