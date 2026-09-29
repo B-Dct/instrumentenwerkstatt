@@ -794,7 +794,7 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 1. **Suchfeld** über jeder Liste mit mehr als einer Handvoll Einträgen. Freitextsuche über die sinnvollen Felder der jeweiligen Liste (z. B. Kunden: Name, Kundennummer, externe Kundennummer, E-Mail, Telefon; Aufträge: Auftragsnummer, Kundenname, Instrument). Die Suche startet nach kurzer Eingabepause, nicht bei jedem einzelnen Tastendruck.
 2. **Filter** neben der Suche (Auswahlfelder), mit fachlich sinnvollen Standardwerten, z. B. "nur aktive"; "archivierte anzeigen" nur für berechtigte Rollen (siehe 7.2). Typische Filter: Status, Mitarbeiter, Instrumentenklasse, Priorität, Reparaturart.
 3. **Aktive Filter bleiben sichtbar** (z. B. als Chips mit Schließen-Symbol), dazu ein Knopf "Alle Filter zurücksetzen" und die **Trefferzahl**: "x von y Einträgen", sobald Suche oder ein Filter etwas ausblendet (auch ein Standardfilter wie "nur aktive"), sonst schlicht "y Einträge".
-4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4).
+4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4). Zu einer Sortierung können feste Nachrang-Spalten gehören, die bei Gleichstand entscheiden und dabei immer aufsteigend (in der Regel alphabetisch) ordnen, unabhängig von der Richtung der Hauptsortierung.
 5. **Lange Listen** werden seitenweise angezeigt oder nachgeladen. Suche, Filter, Sortierung und Seitenwahl übernimmt das Backend, nicht der Browser, damit es auch bei vielen Tausend Einträgen schnell bleibt.
 6. **Zustand bleibt erhalten:** Suchbegriff, Filter, Sortierung und Seite stehen in der Adresse, sodass man nach dem Öffnen eines Eintrags und dem Zurückgehen wieder an derselben Stelle ist.
 7. **Leere Ergebnisse:** Ohne Treffer erscheint "Keine Treffer" mit dem Knopf zum Zurücksetzen. Eine wirklich leere Liste zeigt "Noch keine Einträge" mit Hinweis auf die Neu-anlegen-Aktion.
@@ -804,6 +804,12 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 **Beispiel Mitarbeiterliste** (erste Umsetzung des Bausteins): Suche über Name, E-Mail und fachliche Rolle; sortierbar nach Name, E-Mail, fachlicher Rolle, Systemrolle, Status und Anlagedatum; Filter nach Status (Standard "aktiv") und Systemrolle.
 
 **Beispiel Kundenliste:** Suche über Name, Kundennummer, externe Kundennummer, E-Mail und Telefon; Standardsortierung Name aufsteigend, zusätzlich sortierbar nach Kundennummer, externer Kundennummer, E-Mail, Telefon und Anlagedatum; Filter "Status" (aktiv/archiviert/alle, Standard aktiv).
+
+**Beispiel Instrumentenklassen:** Suche über Bezeichnung und Oberkategorie; Standardsortierung Oberkategorie, darin Bezeichnung als Nachrang; zusätzlich sortierbar nach Bezeichnung; Filter "Status" wie oben. Wird durch die Instrumentenfamilien aus 9.12 abgelöst (Gruppierung statt reiner Sortierung).
+
+**Beispiel Reparaturarten:** Suche über die Bezeichnung; Standardsortierung Bezeichnung; zusätzlich sortierbar nach Standard-Komplexität mit Bezeichnung als Nachrang; Filter "Status" wie oben. Ein Filter nach Oberkategorie/Reparaturkategorie kommt erst mit 9.12.
+
+**Auswahlfelder in Formularen sind keine Listenansicht:** Braucht ein Formular alle Einträge zur Auswahl, auch archivierte (z. B. Reparaturart und Instrumentenklasse im Vorgabewert-Formular), lädt es alle Seiten nacheinander statt nur die erste — anders als eine Listenansicht, die bewusst nur einen Ausschnitt zeigt (siehe die Grenze von rund 100 bei der Kundenauswahl, oben).
 
 **Durchsetzung im Backend, nicht nur in der Oberfläche:** Ein Filterwert, der laut Berechtigungsmatrix (7.2) einer Rolle nicht zusteht (z. B. "archiviert" oder "alle" für einen normalen Mitarbeiter), wird vom Backend abgelehnt (403), unabhängig davon, ob die Oberfläche die Option anzeigt. Das Verstecken einer Option in der Oberfläche ist Komfort, niemals die eigentliche Absicherung.
 
@@ -841,7 +847,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden erledigt; Instrumentenklassen, Reparaturarten, Vorgabewerte und Aufträge noch offen
+- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden, Instrumentenklassen, Reparaturarten erledigt; Vorgabewerte und Aufträge noch offen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
