@@ -435,7 +435,11 @@ geschätzte_kosten =
 
 ### 4.2 Manuelle Korrektur der Schätzung
 
-Sowohl die automatisch berechneten Stunden als auch Kosten lassen sich manuell überschreiben — z. B. wenn ein Mitarbeiter beim Öffnen des Instruments feststellt, dass der Zustand deutlich schlechter ist als der Standardfall und mehr Aufwand nötig sein wird. Details zur technischen Umsetzung (Protokollierung, wer korrigieren darf) siehe `schätzungs_log` (2.10) und Berechtigungsmatrix (7.2). Wirkt sich eine Korrektur voraussichtlich auch auf den Fertigstellungstermin aus, sollte das dem Werkstattleiter auffallen (z. B. durch eine Markierung im Dashboard) — eine automatische Neuberechnung des Termins aus korrigierten Stunden ist möglich, aber kein Muss für den Start.
+Stunden, Kosten und Termin lassen sich manuell überschreiben — z. B. wenn ein Mitarbeiter beim Öffnen des Instruments feststellt, dass der Zustand deutlich schlechter ist als der Standardfall und mehr Aufwand nötig sein wird, oder wenn ein bestelltes Sonderersatzteil einen bereits feststehenden, späteren Liefertermin hat, der sich nicht aus mehr Arbeitsstunden ergibt. Details zur technischen Umsetzung (Protokollierung, wer korrigieren darf) siehe `schätzungs_log` (2.10) und Berechtigungsmatrix (7.2).
+
+**Unterschied bei den Berechtigungen:** Stunden und Kosten darf zusätzlich zu Werkstattleitung und Admin auch der zugewiesene Mitarbeiter korrigieren (siehe 7.2) — er beurteilt den Zustand des Instruments direkt vor Ort. Der Termin selbst ist sensibler, weil er die Zusage an den Kunden ist; seine manuelle Korrektur bleibt Werkstattleitung und Admin vorbehalten. Möchte ein Mitarbeiter auf einen abweichenden Termin hinweisen, meldet er das wie bisher an die Werkstattleitung, die dann korrigiert.
+
+**Verhältnis zur automatischen Neuberechnung:** Wie bei den Stunden (4.0a) gilt auch für eine manuelle Terminkorrektur: Die nächste automatische Neuberechnung (bei Umzuweisung oder Prioritätsänderung, siehe Abschnitt 4) überschreibt sie wieder, es sei denn, die Werkstattleitung korrigiert danach erneut. Das ist eine bewusste Vereinfachung für den Start, kein eigenständiger "gesperrter" Zustand.
 
 ---
 
@@ -854,7 +858,8 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
-1. **Auftragsdetailseite nach Regel 9.10 umbauen** (Aktionsleiste, Formulare nur auf Wunsch)
+1. **Auftragsdetailseite nach Regel 9.10 umbauen** (Aktionsleiste, Formulare nur auf Wunsch) — erledigt, siehe 10.1
+1a. **Manuelle Terminkorrektur nachrüsten** (Abschnitt 4.2): Die Berechtigung dafür steht schon länger in der Matrix (7.2), der Endpunkt fehlt noch. `schätzungs_log` (2.10) ist dafür bereits vorbereitet. Nur Werkstattleitung und Admin, mit Pflichtbegründung, analog zur bestehenden Stunden-/Kosten-Korrektur. Gehört in die gerade umgebaute Aktionsleiste der Auftragsdetailseite (z. B. als Teil von "Schätzung korrigieren" oder als eigener Punkt).
 2. **Abwesenheiten pflegen** (2.3): Urlaub, Krankheit, Schulung, Betriebsschließung. Ohne diese Eingabe ignoriert die Terminschätzung Abwesenheiten. Feiertage möglichst automatisch aus einer Feiertagsbibliothek des Bundeslands erzeugen statt manuell zu pflegen
 3. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
 4. **Login-Schutz:** Begrenzung der Fehlversuche
