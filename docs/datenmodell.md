@@ -803,12 +803,16 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 
 **Beispiel Mitarbeiterliste** (erste Umsetzung des Bausteins): Suche über Name, E-Mail und fachliche Rolle; sortierbar nach Name, E-Mail, fachlicher Rolle, Systemrolle, Status und Anlagedatum; Filter nach Status (Standard "aktiv") und Systemrolle.
 
+**Beispiel Kundenliste:** Suche über Name, Kundennummer, externe Kundennummer, E-Mail und Telefon; Standardsortierung Name aufsteigend, zusätzlich sortierbar nach Kundennummer, externer Kundennummer, E-Mail, Telefon und Anlagedatum; Filter "Status" (aktiv/archiviert/alle, Standard aktiv).
+
+**Durchsetzung im Backend, nicht nur in der Oberfläche:** Ein Filterwert, der laut Berechtigungsmatrix (7.2) einer Rolle nicht zusteht (z. B. "archiviert" oder "alle" für einen normalen Mitarbeiter), wird vom Backend abgelehnt (403), unabhängig davon, ob die Oberfläche die Option anzeigt. Das Verstecken einer Option in der Oberfläche ist Komfort, niemals die eigentliche Absicherung.
+
 ### 9.12 Gegliederte Stammdaten und Auswahllisten
 
 Ziel: Keine endlosen, ungeordneten Listen. Umgesetzt über Instrumentenfamilien (2.4a) und Reparaturkategorien (2.6b) sowie die automatische Rubrik "Häufig verwendet".
 
 1. **Verwaltungslisten gegliedert:** Instrumentenklassen erscheinen gruppiert nach Familie, Reparaturarten gruppiert nach Kategorie. Jede Gruppe ist einklappbar und zeigt Namen und Anzahl der Einträge. Suche und Filter nach Familie bzw. Kategorie gelten zusätzlich (siehe 9.11). Vorgabewerte lassen sich nach Reparaturart, Kategorie und Instrumentenfamilie filtern und sind nach Kategorie gruppiert.
-2. **Gruppierte Auswahl im Auftragsformular:** Nach der Wahl des Instruments zeigt die Reparaturart-Auswahl zuerst die Rubrik "Häufig für [Instrumentenklasse]", darunter alle übrigen Reparaturarten nach Kategorie gruppiert. Bei langen Listen ist die Auswahl durchsuchbar.
+2. **Gruppierte Auswahl im Auftragsformular:** Nach der Wahl des Instruments zeigt die Reparaturart-Auswahl zuerst die Rubrik "Häufig für [Instrumentenklasse]", darunter alle übrigen Reparaturarten nach Kategorie gruppiert. Bei langen Listen ist die Auswahl durchsuchbar. Dieselbe durchsuchbare Auswahl braucht die Kundenauswahl im Auftragsformular, sobald mehr als rund 100 aktive Kunden bestehen (bisher werden alle geladen, siehe 9.11).
 3. **Rubrik "Häufig verwendet":** Sie entsteht automatisch aus den vorhandenen Aufträgen und braucht keine Pflege. Gezeigt werden bis zu fünf Reparaturarten, die für die Instrumentenklasse des gewählten Instruments am häufigsten in Aufträgen vorkommen (bei Gleichstand zählt der jüngste Auftrag). Archivierte Reparaturarten erscheinen dort nicht. Gibt es noch keine Aufträge für die Klasse, entfällt die Rubrik. Die Rangfolge wird beim Abruf berechnet, es wird nichts zusätzlich gespeichert.
 4. **Instrumentenauswahl** zeigt Klasse und Familie (z. B. "Violine, Streichinstrumente"), damit gleich benannte Instrumente unterscheidbar bleiben.
 
@@ -837,7 +841,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- Bestehende Listen (Aufträge, Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte) auf den gemeinsamen Listen-Baustein umstellen
+- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden erledigt; Instrumentenklassen, Reparaturarten, Vorgabewerte und Aufträge noch offen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
