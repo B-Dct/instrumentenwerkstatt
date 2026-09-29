@@ -64,9 +64,9 @@ def test_kunde_name_nicht_leeren(client, w):
 
 def test_kundensuche(client, w):
     kunde_anlegen(client, name="Zacharias Zupf", email="zz@example.com")
-    treffer = client.get("/kunden", params={"suche": "zupf"}).json()
+    treffer = client.get("/kunden", params={"suche": "zupf"}).json()["eintraege"]
     assert [k["name"] for k in treffer] == ["Zacharias Zupf"]
-    assert [k["name"] for k in client.get("/kunden", params={"suche": "zz@"}).json()] == ["Zacharias Zupf"]
+    assert [k["name"] for k in client.get("/kunden", params={"suche": "zz@"}).json()["eintraege"]] == ["Zacharias Zupf"]
 
 
 def test_mitarbeiter_darf_nicht_archivieren(client, w):
@@ -84,9 +84,10 @@ def test_archivieren_loescht_nicht(client, w, leitung, db):
     assert db.get(Kunde, uuid.UUID(k["id"])) is not None
     assert client.get(f"/kunden/{k['id']}").status_code == 200
     # … erscheint aber nicht mehr in der Standardliste
-    ids = [x["id"] for x in client.get("/kunden").json()]
+    ids = [x["id"] for x in client.get("/kunden", params={"suche": "Clara Klang"}).json()["eintraege"]]
     assert k["id"] not in ids
-    assert k["id"] in [x["id"] for x in client.get("/kunden", params={"archivierte": True}).json()]
+    archiviert = client.get("/kunden", headers=leitung, params={"status": "archiviert", "suche": "Clara Klang"}).json()
+    assert k["id"] in [x["id"] for x in archiviert["eintraege"]]
 
     # Zurückholen geht
     assert client.post(f"/kunden/{k['id']}/reaktivieren", headers=leitung).json()["archiviert_am"] is None
@@ -224,8 +225,8 @@ def test_externe_nummer_bearbeiten_und_leeren(client, w, db):
 
 def test_suche_findet_ueber_externe_nummer(client, w):
     kunde_anlegen(client, name="Buchhaltungs-Kunde", externe_kundennummer="FIBU-99231")
-    assert [k["name"] for k in client.get("/kunden", params={"suche": "99231"}).json()] == ["Buchhaltungs-Kunde"]
-    assert [k["name"] for k in client.get("/kunden", params={"suche": "fibu-99"}).json()] == ["Buchhaltungs-Kunde"]
+    assert [k["name"] for k in client.get("/kunden", params={"suche": "99231"}).json()["eintraege"]] == ["Buchhaltungs-Kunde"]
+    assert [k["name"] for k in client.get("/kunden", params={"suche": "fibu-99"}).json()["eintraege"]] == ["Buchhaltungs-Kunde"]
 
 
 def test_externe_nummer_zu_lang(client, w):
@@ -249,3 +250,56 @@ def test_eigene_nummer_in_anderer_schreibweise_speichern(client, w):
     antwort = client.patch(f"/kunden/{k['id']}", json={"externe_kundennummer": "fibu-7"})
     assert antwort.status_code == 200
     assert antwort.json()["externe_kundennummer"] == "fibu-7"  # Schreibweise wird wie eingegeben gespeichert
+
+
+
+# --- Kundenliste nach 9.11 -------------------------------------------------------
+
+@pytest.fixture
+def kundenkreis(client, w, leitung):
+    """Eigene Test-Kunden mit eindeutiger Kennung, damit echte Daten nicht stören."""
+    kennung = f"KL{uuid.uuid4().hex[:6]}"
+    kunden = {n: kunde_anlegen(client, name=f"{kennung} {n}", externe_kundennummer=f"{kennung}-{i}")
+              for i, n in enumerate(["Berta", "Anton", "Carla 50%_Rabatt"])}
+    archiviert = kunde_anlegen(client, name=f"{kennung} Dieter")
+    client.post(f"/kunden/{archiviert['id']}/archivieren", headers=leitung)
+    return kennung, kunden
+
+
+def _namen(antwort):
+    return [k["name"].split(" ", 1)[1] for k in antwort.json()["eintraege"]]
+
+
+def test_kundenliste_standard_aktiv_nach_name_mit_trefferzahl(client, kundenkreis):
+    kennung, _ = kundenkreis
+    antwort = client.get("/kunden", params={"suche": kennung})
+    assert _namen(antwort) == ["Anton", "Berta", "Carla 50%_Rabatt"]
+    daten = antwort.json()
+    assert daten["treffer"] == 3 and daten["gesamt"] > daten["treffer"]  # Suche + "nur aktive" blenden aus
+
+
+def test_kundenliste_status_filter_nur_fuer_leitung(client, kundenkreis, leitung):
+    kennung, _ = kundenkreis
+    for status in ("archiviert", "alle"):
+        assert client.get("/kunden", params={"suche": kennung, "status": status}).status_code == 403  # Mitarbeiter
+    assert _namen(client.get("/kunden", headers=leitung, params={"suche": kennung, "status": "archiviert"})) == ["Dieter"]
+    assert len(_namen(client.get("/kunden", headers=leitung, params={"suche": kennung, "status": "alle"}))) == 4
+
+
+def test_kundenliste_sortierung_und_seiten(client, kundenkreis):
+    kennung, _ = kundenkreis
+    params = {"suche": kennung, "sortierung": "externe_kundennummer", "richtung": "ab", "seitengroesse": 2}
+    seite1, seite2 = (client.get("/kunden", params={**params, "seite": n}).json() for n in (1, 2))
+    namen = [k["name"].split(" ", 1)[1] for k in seite1["eintraege"] + seite2["eintraege"]]
+    assert namen == ["Carla 50%_Rabatt", "Anton", "Berta"]  # -2, -1, -0 absteigend
+    assert (seite1["treffer"], seite1["seitengroesse"]) == (3, 2)
+
+
+def test_kundenliste_platzhalter_woertlich(client, kundenkreis):
+    kennung, _ = kundenkreis
+    assert _namen(client.get("/kunden", params={"suche": "50%_Rabatt"})) == ["Carla 50%_Rabatt"]
+    assert _namen(client.get("/kunden", params={"suche": f"{kennung} %"})) == []
+
+
+def test_kundenliste_ungueltige_sortierung(client, w):
+    assert client.get("/kunden", params={"sortierung": "archiviert_am"}).status_code == 422

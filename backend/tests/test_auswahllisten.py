@@ -24,7 +24,7 @@ def test_kunden_und_instrumente_je_kunde(client, w):
     violine = w.instrument(w.violine)
     w.instrument(w.kontrabass)
 
-    kunden = client.get("/kunden").json()
+    kunden = client.get("/kunden", params={"suche": w.kunde.name}).json()["eintraege"]
     assert str(w.kunde.id) in [k["id"] for k in kunden]
 
     instrumente = client.get("/instrumente", params={"kunde_id": str(w.kunde.id)}).json()

@@ -11,16 +11,18 @@ bleiben aber für bestehende Aufträge und die Historie vollständig erhalten.
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, rolle_mindestens
+from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, hat_mindestens, rolle_mindestens
 from app.db import get_db
 from app.ereignisse import protokollieren, werte
+from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.speichern import sicher_speichern
-from app.models import Auftrag, Auftragsstatus, Instrument, Instrumentenklasse, Kunde, Systemrolle
+from app.models import Auftrag, Auftragsstatus, Instrument, Instrumentenklasse, Kunde, Mitarbeiter, Systemrolle
 from app.schemas import (
     InstrumentAenderung,
     InstrumentKurz,
@@ -85,23 +87,38 @@ def _kunde_detail(db: Session, kunde: Kunde) -> KundeDetail:
     )
 
 
-@router.get("/kunden", response_model=list[KundeEintrag])
+KUNDEN_SORTIERUNG = {
+    "name": Kunde.name,
+    "kundennummer": Kunde.kundennummer,
+    "externe_kundennummer": Kunde.externe_kundennummer,
+    "email": Kunde.email,
+    "telefon": Kunde.telefon,
+    "erstellt_am": Kunde.erstellt_am,
+}
+
+
+@router.get("/kunden", response_model=Seite[KundeEintrag])
 def kunden_auflisten(
-    suche: str | None = Query(None, description="Teil von Name, Kundennummer, externer Kundennummer, E-Mail oder Telefon"),
-    archivierte: bool = Query(False, description="Auch archivierte Kunden anzeigen"),
+    liste: ListenParameter = Depends(listen_parameter(KUNDEN_SORTIERUNG, standard="name")),
+    status_: Literal["aktiv", "archiviert", "alle"] = Query(
+        "aktiv", alias="status", description="archiviert/alle nur für Werkstattleitung und Admin (7.2)"),
     db: Session = Depends(get_db),
-) -> list[Kunde]:
-    abfrage = select(Kunde).order_by(Kunde.name, Kunde.kundennummer)
-    if not archivierte:
-        abfrage = abfrage.where(Kunde.archiviert_am.is_(None))
-    if suche:
-        muster = f"%{suche.strip()}%"
-        abfrage = abfrage.where(
-            Kunde.name.ilike(muster) | Kunde.kundennummer.ilike(muster)
-            | Kunde.externe_kundennummer.ilike(muster)
-            | Kunde.email.ilike(muster) | Kunde.telefon.ilike(muster)
-        )
-    return list(db.scalars(abfrage))
+    mitarbeiter: Mitarbeiter = Depends(aktueller_mitarbeiter),
+) -> Seite[KundeEintrag]:
+    """Liste nach 9.11: Suche über Name, Kundennummer, externe Kundennummer, E-Mail, Telefon."""
+    if status_ != "aktiv" and not hat_mindestens(mitarbeiter, Systemrolle.werkstattleiter):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Archivierte Kunden sehen nur Werkstattleitung und Admin")
+    basis = select(Kunde)
+    gefiltert = basis
+    if (muster := liste.suchmuster()) is not None:
+        gefiltert = gefiltert.where(enthaelt(muster, Kunde.name, Kunde.kundennummer, Kunde.externe_kundennummer,
+                                             Kunde.email, Kunde.telefon))
+    if status_ == "aktiv":
+        gefiltert = gefiltert.where(Kunde.archiviert_am.is_(None))
+    elif status_ == "archiviert":
+        gefiltert = gefiltert.where(Kunde.archiviert_am.is_not(None))
+    return seite_abfragen(db, basis, gefiltert, liste, KUNDEN_SORTIERUNG,
+                          umwandeln=lambda zeile: KundeEintrag.model_validate(zeile[0]), eindeutig=Kunde.id)
 
 
 @router.get("/kunden/{kunde_id}", response_model=KundeDetail)

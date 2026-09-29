@@ -18,7 +18,8 @@ export default function AuftragNeu() {
   const [sendet, setSendet] = useState(false)
 
   useEffect(() => {
-    Promise.all([api.kunden(), api.reparaturarten(), api.mitarbeiter()])
+    // Aktive Kunden für die Auswahl (höchstens 100; eine durchsuchbare Auswahl folgt mit dem Umbau des Formulars)
+    Promise.all([api.kunden({ seitengroesse: 100 }).then((seite) => seite.eintraege), api.reparaturarten(), api.mitarbeiter()])
       .then(([kunden, reparaturarten, mitarbeiter]) => setListen({ kunden, reparaturarten, mitarbeiter }))
       .catch((e) => setFehler(e.message))
   }, [])

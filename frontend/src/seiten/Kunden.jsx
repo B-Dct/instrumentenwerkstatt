@@ -1,39 +1,40 @@
-// Kundenliste (2.1): Liste im Vordergrund, "Neuer Kunde" öffnet das Formular eingebettet (9.10).
-// Klick auf eine Zeile führt zur Kundenseite (dort: bearbeiten, Instrumente, archivieren).
-import { useEffect, useState } from 'react'
+// Kundenliste (2.1) nach 9.11 (Suche, Filter, Sortierung, Seiten über den Listen-Baustein) und 9.10
+// ("Neuer Kunde" öffnet das Formular eingebettet). Klick auf eine Zeile führt zur Kundenseite.
 import { Link, useNavigate } from 'react-router'
-import { api, hatRolle } from '../api.js'
+import { api, datum, hatRolle } from '../api.js'
 import { AktionsButton, FormularBereich } from '../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../komponenten/fokusFormular.js'
-import { useRueckmeldung } from '../komponenten/rueckmeldung.js'
 import { useHervorhebung } from '../komponenten/hervorhebung.js'
+import { ListeLeer, Listenkopf, Seitenwahl, SortierKopf } from '../komponenten/Liste.jsx'
+import { useListe } from '../komponenten/liste.js'
+import { useRueckmeldung } from '../komponenten/rueckmeldung.js'
 import { KundeFormular } from './KundeFormular.jsx'
+
+// "archiviert"/"alle" nur für Werkstattleitung und Admin (7.2) – normale Mitarbeiter sehen keinen Filter
+const FILTER_LEITUNG = [
+  { name: 'status', label: 'Status', standard: 'aktiv', optionen: [
+    { wert: 'aktiv', text: 'aktiv' }, { wert: 'archiviert', text: 'archiviert' }, { wert: 'alle', text: 'alle' },
+  ] },
+]
+const KEINE_FILTER = []
 
 export default function Kunden() {
   const navigate = useNavigate()
   const formular = useFokusFormular()
   const rueckmeldung = useRueckmeldung()
   const [hervorgehoben, hervorheben] = useHervorhebung()
-  const [suche, setSuche] = useState('')
-  const [archivierte, setArchivierte] = useState(false)
-  const [kunden, setKunden] = useState(null)
-  const [fehler, setFehler] = useState(null)
-  const [neuLaden, setNeuLaden] = useState(0)
-  const leitung = hatRolle('werkstattleiter')
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const filter = { ...(suche.trim() ? { suche: suche.trim() } : {}), ...(archivierte ? { archivierte: true } : {}) }
-      api.kunden(filter).then(setKunden).catch((e) => setFehler(e.message))
-    }, 250)
-    return () => clearTimeout(timer)
-  }, [suche, archivierte, neuLaden])
+  const liste = useListe({
+    laden: api.kunden,
+    filter: hatRolle('werkstattleiter') ? FILTER_LEITUNG : KEINE_FILTER,
+    sortierung: 'name',
+  })
+  const { daten, fehler } = liste
 
   function angelegt(kunde) {
     formular.gespeichert()
     rueckmeldung(`Kunde ${kunde.name} (${kunde.kundennummer}) angelegt`)
     hervorheben(kunde.id)
-    setNeuLaden((n) => n + 1)
+    liste.neuLaden()
   }
 
   return (
@@ -49,29 +50,26 @@ export default function Kunden() {
         <KundeFormular key={formular.offen} formular={formular} onGespeichert={angelegt} />
       </FormularBereich>
 
-      <div className="filterleiste">
-        <label className="feld feld--inline">
-          <span className="unsichtbar">Suche</span>
-          <input type="search" placeholder="Suchen: Name, Nr., ext. Nr., E-Mail, Telefon" value={suche}
-                 onChange={(e) => setSuche(e.target.value)} />
-        </label>
-        {leitung && (
-          <label className="feld--inline leise">
-            <input type="checkbox" checked={archivierte} onChange={(e) => setArchivierte(e.target.checked)} />
-            archivierte anzeigen
-          </label>
-        )}
-      </div>
+      <Listenkopf liste={liste} suchhinweis="Suchen: Name, Nr., ext. Nr., E-Mail, Telefon" />
 
       {fehler && <p className="meldung meldung--fehler">{fehler}</p>}
-      {kunden === null && !fehler && <p className="leise">Lädt …</p>}
-      {kunden?.length === 0 && <p className="leise">{suche ? 'Keine Kunden gefunden.' : 'Noch keine Kunden angelegt.'}</p>}
-      {kunden?.length > 0 && (
+      {!daten && !fehler && <p className="leise">Lädt …</p>}
+      <ListeLeer liste={liste} leerText="Noch keine Kunden angelegt – über „Neuer Kunde“ anlegen." />
+      {daten?.eintraege.length > 0 && (
         <div className="tabelle-rahmen">
           <table className="tabelle tabelle--klickbar">
-            <thead><tr><th>Kundennr.</th><th>Ext. Nr.</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <SortierKopf liste={liste} spalte="kundennummer">Kundennr.</SortierKopf>
+                <SortierKopf liste={liste} spalte="externe_kundennummer">Ext. Nr.</SortierKopf>
+                <SortierKopf liste={liste} spalte="name">Name</SortierKopf>
+                <SortierKopf liste={liste} spalte="email">E-Mail</SortierKopf>
+                <SortierKopf liste={liste} spalte="telefon">Telefon</SortierKopf>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
-              {kunden.map((k) => (
+              {daten.eintraege.map((k) => (
                 <tr key={k.id} onClick={() => navigate(`/kunden/${k.id}`)}
                     className={[k.id === hervorgehoben && 'zeile--hervorgehoben', k.archiviert_am && 'zeile--archiviert'].filter(Boolean).join(' ') || undefined}>
                   <td>{k.kundennummer}</td>
@@ -79,13 +77,14 @@ export default function Kunden() {
                   <td><Link to={`/kunden/${k.id}`} onClick={(e) => e.stopPropagation()}>{k.name}</Link></td>
                   <td>{k.email ?? '–'}</td>
                   <td>{k.telefon ?? '–'}</td>
-                  <td>{k.archiviert_am && <span className="marke">archiviert</span>}</td>
+                  <td>{k.archiviert_am && <span className="marke">archiviert seit {datum(k.archiviert_am)}</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <Seitenwahl liste={liste} />
     </>
   )
 }
