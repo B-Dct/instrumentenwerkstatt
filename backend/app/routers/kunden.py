@@ -43,7 +43,9 @@ def _externe_nummer_vergeben(db: Session, nummer: str | None, eigene_id: uuid.UU
     def meldung() -> str | None:
         if nummer is None:
             return None
-        anderer = db.scalar(select(Kunde).where(Kunde.externe_kundennummer == nummer, Kunde.id != eigene_id))
+        # Wie der Datenbank-Index: ohne Beachtung der Groß-/Kleinschreibung
+        anderer = db.scalar(select(Kunde).where(
+            func.lower(Kunde.externe_kundennummer) == nummer.lower(), Kunde.id != eigene_id))
         if anderer is None:
             return None
         archiviert = ", archiviert" if anderer.archiviert_am else ""

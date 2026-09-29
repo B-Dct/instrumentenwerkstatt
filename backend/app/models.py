@@ -85,11 +85,16 @@ class Abwesenheitstyp(str, enum.Enum):
 
 class Kunde(Base):
     __tablename__ = "kunde"
+    __table_args__ = (
+        # Externe Nummer eindeutig ohne Beachtung der Groß-/Kleinschreibung ("fibu-1" = "FIBU-1"),
+        # nur falls gesetzt (NULL bleibt mehrfach erlaubt), auch gegenüber archivierten Kunden
+        Index("uq_kunde_externe_kundennummer", func.lower(text("externe_kundennummer")), unique=True),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     kundennummer: Mapped[str] = mapped_column(String(30), unique=True)
-    # Nummer aus dem Buchhaltungssystem; eindeutig, falls gesetzt (mehrere NULL sind erlaubt)
-    externe_kundennummer: Mapped[str | None] = mapped_column(String(50), unique=True)
+    # Nummer aus dem Buchhaltungssystem; Eindeutigkeit siehe Index oben
+    externe_kundennummer: Mapped[str | None] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(200))
     email: Mapped[str | None] = mapped_column(String(254))
     telefon: Mapped[str | None] = mapped_column(String(50))

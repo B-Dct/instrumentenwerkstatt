@@ -111,6 +111,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 28.09.2026 | Externe Kundennummer eindeutig ohne Beachtung der Groß-/Kleinschreibung (Index auf lower(...); Migration bricht bei Altkonflikten ab) |
 | 28.09.2026 | Externe Kundennummer am Kunden (optional, eindeutig falls gesetzt, in Suche); Konfliktmeldungen können den betroffenen Datensatz nennen |
 | 28.09.2026 | Zentraler Speicher-Baustein `app/speichern.py` für Datenbankkonflikte + Sicherheitsnetz + Mustertests |
 | 28.09.2026 | Vorgabewerte archivierbar (Eindeutigkeit nur unter aktiven, Schätzung ignoriert archivierte) |

@@ -230,3 +230,22 @@ def test_suche_findet_ueber_externe_nummer(client, w):
 
 def test_externe_nummer_zu_lang(client, w):
     assert client.post("/kunden", json={"name": "X", "externe_kundennummer": "1" * 51}).status_code == 422
+
+
+@pytest.mark.parametrize("anlegen", [True, False], ids=["anlegen", "bearbeiten"])
+def test_externe_nummer_ohne_gross_kleinschreibung_eindeutig(client, w, anlegen):
+    vorhanden = kunde_anlegen(client, name="Groß", externe_kundennummer="FIBU-1")
+    if anlegen:
+        antwort = client.post("/kunden", json={"name": "Klein", "externe_kundennummer": "fibu-1"})
+    else:
+        anderer = kunde_anlegen(client, name="Klein")
+        antwort = client.patch(f"/kunden/{anderer['id']}", json={"externe_kundennummer": "Fibu-1"})
+    assert antwort.status_code == 409
+    assert antwort.json()["detail"] == f"Diese externe Kundennummer ist bereits vergeben (Kunde {vorhanden['kundennummer']})"
+
+
+def test_eigene_nummer_in_anderer_schreibweise_speichern(client, w):
+    k = kunde_anlegen(client, externe_kundennummer="FIBU-7")
+    antwort = client.patch(f"/kunden/{k['id']}", json={"externe_kundennummer": "fibu-7"})
+    assert antwort.status_code == 200
+    assert antwort.json()["externe_kundennummer"] == "fibu-7"  # Schreibweise wird wie eingegeben gespeichert
