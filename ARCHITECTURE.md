@@ -29,6 +29,7 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
 - **Unterbrechungen automatisch aus dem Status:** Status mit gesetztem `auftragsstatus.unterbrechungsgrund` (derzeit „Wartet auf Ersatzteil“) öffnen beim Wechsel hinein einen `unterbrechung`-Eintrag und schließen ihn beim Wechsel heraus. Höchstens eine offene Unterbrechung je Auftrag (Datenbank-Index). Grundlage, um Wartezeiten später aus der Bearbeitungsdauer herauszurechnen
 - **Archivieren statt Löschen:** Stammdaten bekommen `archiviert_am` (NULL = aktiv); archivierte Einträge fehlen in Standardlisten und sind für neue Aufträge gesperrt, bleiben aber erhalten und lassen sich reaktivieren. Kunden/Instrumente mit offenen Aufträgen können nicht archiviert werden
+- **Listen (9.11) zentral:** Suche, Filter, Sortierung und Seiten übernimmt das Backend über `app/listen.py` (`listen_parameter`, `seite_abfragen`, Antwort `Seite[...]` mit `treffer`/`gesamt`); das Frontend nutzt `komponenten/liste.js` + `Liste.jsx` (Zustand in der Adresse, Suche mit Eingabepause, Filter-Chips, Trefferzahl, sortierbare Spaltenköpfe, Seitenwahl). Erste Liste: Mitarbeiter; die übrigen Listen folgen
 - **Änderungsprotokoll:** Anlegen, Ändern, Archivieren und Reaktivieren von Stammdaten wird im `system_ereignis_log` festgehalten (Helfer `app/ereignisse.py`)
 - **Speichern mit Datenbankregeln (zentral):** Änderungen, die eine Eindeutigkeitsregel verletzen könnten, laufen immer über `app/speichern.py` (`with sicher_speichern(db): …`). Der Baustein setzt die Änderungen in einem Speicherpunkt, nimmt bei Verletzung genau diese zurück und liefert 409 mit deutscher Meldung aus `KONFLIKT_MELDUNGEN`. Ein Sicherheitsnetz in `main.py` macht aus übersehenen Fällen ebenfalls 409 statt 500. Tests erzwingen: jede Eindeutigkeitsregel hat eine Meldung, niemand fängt `IntegrityError` selbst ab, nach einem Konflikt bleibt nichts in der Sitzung hängen
 - **Plausibilitätsregeln in der Datenbank** (z. B. Komplexität 1–5, Enddatum ≥ Startdatum, Gleitzeit-Woche beginnt montags)
@@ -111,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 29.09.2026 | Listen-Baustein (9.11) im Backend und Frontend; Mitarbeiterliste und Mitarbeiterseite (Verwaltung Schritt 4c-1) |
 | 28.09.2026 | Externe Kundennummer eindeutig ohne Beachtung der Groß-/Kleinschreibung (Index auf lower(...); Migration bricht bei Altkonflikten ab) |
 | 28.09.2026 | Externe Kundennummer am Kunden (optional, eindeutig falls gesetzt, in Suche); Konfliktmeldungen können den betroffenen Datensatz nennen |
 | 28.09.2026 | Zentraler Speicher-Baustein `app/speichern.py` für Datenbankkonflikte + Sicherheitsnetz + Mustertests |

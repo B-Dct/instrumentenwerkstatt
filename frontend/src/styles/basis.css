@@ -275,3 +275,24 @@ textarea { resize: vertical; }
   .zeilenaktionen .btn--gefahr { visibility: hidden; }
   tr:hover .zeilenaktionen .btn--gefahr, tr:focus-within .zeilenaktionen .btn--gefahr { visibility: visible; }
 }
+
+/* --- Listen nach 9.11 ----------------------------------------------------------- */
+.listenkopf { margin: var(--abstand-4) 0 var(--abstand-3); }
+.listenkopf .filterleiste { margin: 0 0 var(--abstand-2); }
+.filterchips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--abstand-2); min-height: calc(var(--abstand-5) + var(--abstand-1)); }
+.trefferzahl { font-size: var(--groesse-12); color: var(--farbe-text-leise); margin-right: var(--abstand-2); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--abstand-1);
+  padding: 0 var(--abstand-1) 0 var(--abstand-2);
+  font-size: var(--groesse-12);
+  border: var(--randbreite) solid var(--farbe-rand);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche-leise);
+}
+.chip button { font: inherit; border: 0; background: none; cursor: pointer; color: var(--farbe-text-leise); padding: 0 var(--abstand-1); }
+.chip button:hover { color: var(--farbe-text); }
+.sortierknopf { font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; gap: var(--abstand-1); align-items: center; }
+.sortierzeichen { font-size: var(--groesse-12); color: var(--farbe-text-leise); }
+th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierzeichen { color: var(--farbe-primaer); }
+.seitenwahl { display: flex; align-items: center; gap: var(--abstand-3); margin-top: var(--abstand-4); font-size: var(--groesse-14); }
+.klein { font-size: var(--groesse-12); }

@@ -14,6 +14,7 @@ dafür gibt es `app.termine_nachrechnen --alle`.
 
 import uuid
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
 from app.ereignisse import protokollieren
+from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.models import Auftrag, Auftragsstatus, Mitarbeiter, MitarbeiterArbeitszeit, Systemrolle
 from app.schemas import (
     AktuelleWochenstunden,
@@ -90,15 +92,34 @@ def letzter_aktiver_admin_pruefen(db: Session, betroffen: Mitarbeiter) -> None:
 
 # --- Endpunkte ---------------------------------------------------------------------
 
-@router.get("", response_model=list[MitarbeiterVerwaltung])
+SORTIERUNG = {
+    "name": Mitarbeiter.name,
+    "email": Mitarbeiter.email,
+    "rolle": Mitarbeiter.rolle,
+    "systemrolle": Mitarbeiter.systemrolle,
+    "status": Mitarbeiter.aktiv,
+    "erstellt_am": Mitarbeiter.erstellt_am,
+}
+
+
+@router.get("", response_model=Seite[MitarbeiterVerwaltung])
 def mitarbeiter_auflisten(
-    nur_aktive: bool = Query(False, description="Deaktivierte ausblenden"),
+    liste: ListenParameter = Depends(listen_parameter(SORTIERUNG, standard="name")),
+    systemrolle: Systemrolle | None = Query(None, description="Nur diese Systemrolle"),
+    status_: Literal["aktiv", "deaktiviert", "alle"] = Query("aktiv", alias="status"),
     db: Session = Depends(get_db),
-) -> list[MitarbeiterVerwaltung]:
-    abfrage = select(Mitarbeiter).order_by(Mitarbeiter.aktiv.desc(), Mitarbeiter.name)
-    if nur_aktive:
-        abfrage = abfrage.where(Mitarbeiter.aktiv)
-    return [_antwort(db, m) for m in db.scalars(abfrage)]
+) -> Seite[MitarbeiterVerwaltung]:
+    """Liste nach 9.11: Suche (Name, E-Mail, fachliche Rolle), Filter, Sortierung, seitenweise."""
+    basis = select(Mitarbeiter)
+    gefiltert = basis
+    if (muster := liste.suchmuster()) is not None:
+        gefiltert = gefiltert.where(enthaelt(muster, Mitarbeiter.name, Mitarbeiter.email, Mitarbeiter.rolle))
+    if systemrolle is not None:
+        gefiltert = gefiltert.where(Mitarbeiter.systemrolle == systemrolle)
+    if status_ != "alle":
+        gefiltert = gefiltert.where(Mitarbeiter.aktiv.is_(status_ == "aktiv"))
+    return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG,
+                          umwandeln=lambda zeile: _antwort(db, zeile[0]), eindeutig=Mitarbeiter.id)
 
 
 @router.get("/{mitarbeiter_id}", response_model=MitarbeiterVerwaltung)

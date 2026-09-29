@@ -50,7 +50,8 @@ def test_nicht_admin_abgelehnt(client, db, rolle, methode, pfad, daten):
 
 def test_liste_mit_rolle_status_und_wochenstunden(client, db, admin):
     m = konto_anlegen(db, name="Liste Testperson")
-    eintrag = next(x for x in client.get(URL).json() if x["id"] == str(m.id))
+    eintrag = next(x for x in client.get(URL, params={"suche": "Liste Testperson"}).json()["eintraege"]
+                   if x["id"] == str(m.id))
     assert eintrag["systemrolle"] == "mitarbeiter" and eintrag["aktiv"] is True
     assert eintrag["wochenstunden"] == {"wochenstunden": 40.0, "quelle": "standard", "gueltig_ab": None}
     assert eintrag["offene_auftraege"] == 0
@@ -205,3 +206,74 @@ def test_wochenstunden_wirken_auf_terminschaetzung(client, db, admin):
 def test_nicht_gefunden(client, admin):
     assert client.get(f"{URL}/{uuid.uuid4()}").status_code == 404
     assert client.post(f"{URL}/{uuid.uuid4()}/deaktivieren").status_code == 404
+
+
+
+# --- Liste nach 9.11: Suche, Filter, Sortierung, Seiten --------------------------
+
+@pytest.fixture
+def personal(db):
+    """Eigene Test-Mitarbeiter mit eindeutigem Namensteil, damit echte Daten nicht stören."""
+    kennung = f"LT{uuid.uuid4().hex[:6]}"
+    leute = {
+        "anna": konto_anlegen(db, name=f"{kennung} Anna"),
+        "bert": konto_anlegen(db, Systemrolle.werkstattleiter, name=f"{kennung} Bert"),
+        "cleo": konto_anlegen(db, name=f"{kennung} Cleo 100%_sicher"),
+        "dora": konto_anlegen(db, name=f"{kennung} Dora"),
+    }
+    leute["anna"].rolle = "Geigenbauerin"  # fachliche Rolle
+    leute["bert"].rolle = "Blechblas-Techniker"
+    leute["dora"].aktiv = False
+    from datetime import UTC, datetime
+    leute["dora"].deaktiviert_am = datetime.now(UTC)
+    db.flush()
+    return kennung, leute
+
+
+def namen(antwort):
+    return [e["name"].split(" ", 1)[1] for e in antwort.json()["eintraege"]]
+
+
+def test_liste_standard_nur_aktive_nach_name(client, admin, personal):
+    kennung, _ = personal
+    antwort = client.get(URL, params={"suche": kennung})
+    daten = antwort.json()
+    assert namen(antwort) == ["Anna", "Bert", "Cleo 100%_sicher"]
+    assert (daten["treffer"], daten["seite"], daten["sortierung"], daten["richtung"]) == (3, 1, "name", "auf")
+    assert daten["gesamt"] >= 5  # alle Mitarbeiter ohne Suche/Filter (inkl. Admin, Deaktivierte)
+
+
+def test_liste_filter_status_und_rolle(client, admin, personal):
+    kennung, _ = personal
+    assert namen(client.get(URL, params={"suche": kennung, "status": "deaktiviert"})) == ["Dora"]
+    assert len(namen(client.get(URL, params={"suche": kennung, "status": "alle"}))) == 4
+    assert namen(client.get(URL, params={"suche": kennung, "systemrolle": "werkstattleiter"})) == ["Bert"]
+
+
+def test_liste_suche_in_fachrolle_und_email(client, admin, personal):
+    kennung, leute = personal
+    assert namen(client.get(URL, params={"suche": "blechblas", "status": "alle"}))[-1:] == ["Bert"]
+    antwort = client.get(URL, params={"suche": leute["anna"].email.upper()})
+    assert namen(antwort) == ["Anna"]
+
+
+def test_liste_suche_platzhalter_werden_woertlich_genommen(client, admin, personal):
+    kennung, _ = personal
+    assert namen(client.get(URL, params={"suche": f"{kennung} Cleo 100%_"})) == ["Cleo 100%_sicher"]
+    assert namen(client.get(URL, params={"suche": f"{kennung}%"})) == []  # "%" ist kein Platzhalter
+
+
+def test_liste_sortierung_und_seiten(client, admin, personal):
+    kennung, _ = personal
+    params = {"suche": kennung, "status": "alle", "sortierung": "name", "richtung": "ab", "seitengroesse": 3}
+    seite1 = client.get(URL, params=params).json()
+    seite2 = client.get(URL, params={**params, "seite": 2}).json()
+    alle = [e["name"].split(" ", 1)[1] for e in seite1["eintraege"] + seite2["eintraege"]]
+    assert alle == ["Dora", "Cleo 100%_sicher", "Bert", "Anna"]
+    assert (seite1["treffer"], len(seite1["eintraege"]), len(seite2["eintraege"])) == (4, 3, 1)
+    assert namen(client.get(URL, params={"suche": kennung, "sortierung": "systemrolle", "richtung": "ab"}))[0] == "Bert"
+
+
+@pytest.mark.parametrize("params", [{"sortierung": "passwort_hash"}, {"seite": 0}, {"seitengroesse": 101}, {"status": "weg"}])
+def test_liste_ungueltige_parameter(client, admin, params):
+    assert client.get(URL, params=params).status_code == 422

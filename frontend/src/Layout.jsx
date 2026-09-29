@@ -25,6 +25,7 @@ function Seitenleiste({ nutzer }) {
           <NavLink to="/verwaltung/instrumentenklassen" className="seitenleiste__link">Instrumentenklassen</NavLink>
           <NavLink to="/verwaltung/reparaturarten" className="seitenleiste__link">Reparaturarten</NavLink>
           <NavLink to="/verwaltung/vorgabewerte" className="seitenleiste__link">Vorgabewerte</NavLink>
+          <NavLink to="/verwaltung/mitarbeiter" className="seitenleiste__link">Mitarbeiter</NavLink>
         </nav>
       )}
       <div className="seitenleiste__nutzer">
