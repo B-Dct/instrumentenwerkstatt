@@ -7,6 +7,7 @@ Einträgen; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reakti
 """
 
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, func, select
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
+from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.speichern import sicher_speichern
 from app.models import Instrumentenklasse, Reparaturart, ReparaturVorgabewert, SystemEreignisLog
 from app.schemas import Vorgabewert, VorgabewertAenderung, VorgabewertNeu
@@ -87,24 +89,45 @@ def _werte(eintrag: ReparaturVorgabewert) -> dict:
     }
 
 
-@router.get("", response_model=list[Vorgabewert])
+# "Gilt für": allgemeine Werte (ohne Klasse) vor den speziellen
+_GILT_FUER = func.coalesce(Instrumentenklasse.bezeichnung, "")
+# Bei gleicher Kombination (nur mit "alle"/"archiviert" möglich): der aktive vor den archivierten
+_AKTIVE_ZUERST = ReparaturVorgabewert.archiviert_am.is_not(None)
+
+SORTIERUNG = {
+    "reparaturart": (Reparaturart.bezeichnung, _GILT_FUER, _AKTIVE_ZUERST),
+    "gilt_fuer": (_GILT_FUER, Reparaturart.bezeichnung, _AKTIVE_ZUERST),
+    "vorgabe_stunden": (ReparaturVorgabewert.vorgabe_stunden, Reparaturart.bezeichnung, _GILT_FUER),
+    "vorgabe_kosten": (ReparaturVorgabewert.vorgabe_kosten, Reparaturart.bezeichnung, _GILT_FUER),
+    "geaendert_am": ReparaturVorgabewert.geaendert_am,
+}
+
+
+@router.get("", response_model=Seite[Vorgabewert])
 def vorgabewerte_auflisten(
+    liste: ListenParameter = Depends(listen_parameter(SORTIERUNG, standard="reparaturart")),
     reparaturart_id: uuid.UUID | None = Query(None, description="Nur Werte dieser Reparaturart"),
     instrumentenklasse_id: uuid.UUID | None = Query(None, description="Nur Werte dieser Instrumentenklasse"),
-    archivierte: bool = Query(False, description="Auch archivierte Vorgabewerte anzeigen"),
+    status_: Literal["aktiv", "archiviert", "alle"] = Query("aktiv", alias="status"),
     db: Session = Depends(get_db),
-) -> list[Vorgabewert]:
-    abfrage = _abfrage().order_by(
-        Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung.asc().nulls_first(),
-        ReparaturVorgabewert.archiviert_am.asc().nulls_first(),
-    )
-    if not archivierte:
-        abfrage = abfrage.where(ReparaturVorgabewert.archiviert_am.is_(None))
+) -> Seite[Vorgabewert]:
+    """Liste nach 9.11: Suche (Reparaturart, Instrumentenklasse, Notiz), Filter, Sortierung, seitenweise.
+    Standard: nach Reparaturart, darin der allgemeine Wert vor den speziellen."""
+    basis = _abfrage()
+    gefiltert = basis
+    if (muster := liste.suchmuster()) is not None:
+        gefiltert = gefiltert.where(enthaelt(muster, Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung,
+                                             ReparaturVorgabewert.notiz))
+    if status_ == "aktiv":
+        gefiltert = gefiltert.where(ReparaturVorgabewert.archiviert_am.is_(None))
+    elif status_ == "archiviert":
+        gefiltert = gefiltert.where(ReparaturVorgabewert.archiviert_am.is_not(None))
     if reparaturart_id is not None:
-        abfrage = abfrage.where(ReparaturVorgabewert.reparaturart_id == reparaturart_id)
+        gefiltert = gefiltert.where(ReparaturVorgabewert.reparaturart_id == reparaturart_id)
     if instrumentenklasse_id is not None:
-        abfrage = abfrage.where(ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
-    return [_als_antwort(z) for z in db.execute(abfrage).all()]
+        gefiltert = gefiltert.where(ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
+    return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG, umwandeln=_als_antwort,
+                          eindeutig=ReparaturVorgabewert.id)
 
 
 @router.get("/{vorgabewert_id}", response_model=Vorgabewert)

@@ -70,7 +70,7 @@ def w(db, admin):
 
 
 def _vorgabe_ids(client, w):
-    werte = client.get("/admin/vorgabewerte", params={"reparaturart_id": str(w.saitenwechsel.id)}).json()
+    werte = client.get("/admin/vorgabewerte", params={"reparaturart_id": str(w.saitenwechsel.id)}).json()["eintraege"]
     return {v["instrumentenklasse_id"]: v["id"] for v in werte}
 
 

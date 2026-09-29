@@ -1,15 +1,34 @@
-// Vorgabewerte für Dauer und Kosten (2.6a) – nur Admin (7.2), nach 9.10 aufgebaut.
+// Vorgabewerte für Dauer und Kosten (2.6a) – nur Admin (7.2), nach 9.10 aufgebaut, Liste nach 9.11.
 // Ein Wert gilt allgemein für eine Reparaturart oder speziell für eine Instrumentenklasse.
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { alleEintraege, api, datum, euro, zahl } from '../../api.js'
 import { AktionsButton, Feld, FokusFormular, FormularBereich } from '../../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
+import { ListeLeer, Listenkopf, Seitenwahl, SortierKopf } from '../../komponenten/Liste.jsx'
+import { useListe } from '../../komponenten/liste.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
 import { leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
 
 const NEU = 'neu'
 const ALLGEMEIN = ''
+
+const STATUS_FILTER = { name: 'status', label: 'Status', standard: 'aktiv', optionen: [
+  { wert: 'aktiv', text: 'aktiv' }, { wert: 'archiviert', text: 'archiviert' }, { wert: 'alle', text: 'alle' },
+] }
+
+// Filter nach Reparaturart und Instrumentenklasse – Optionen kommen aus den Stammdaten (auch archivierte)
+function filterAus(arten, klassen) {
+  const optionen = (liste) => [
+    { wert: '', text: 'alle' },
+    ...liste.map((e) => ({ wert: e.id, text: e.archiviert_am ? `${e.bezeichnung} (archiviert)` : e.bezeichnung })),
+  ]
+  return [
+    { name: 'reparaturart_id', label: 'Reparaturart', standard: '', optionen: optionen(arten) },
+    { name: 'instrumentenklasse_id', label: 'Instrumentenklasse', standard: '', optionen: optionen(klassen) },
+    STATUS_FILTER,
+  ]
+}
 
 // Aktive Einträge zur Auswahl; ein bereits verknüpfter archivierter Eintrag bleibt sichtbar
 function auswahl(liste, aktuelleId) {
@@ -74,36 +93,31 @@ export default function Vorgabewerte() {
   const formular = useFokusFormular()
   const rueckmeldung = useRueckmeldung()
   const [hervorgehoben, hervorheben] = useHervorhebung()
-  const [filterArt, setFilterArt] = useState('')
-  const [archivierte, setArchivierte] = useState(false)
   const [aktionsfehler, setAktionsfehler] = useState(null)
-  const [eintraege, setEintraege] = useState(null)
   const [arten, setArten] = useState([])
   const [klassen, setKlassen] = useState([])
-  const [fehler, setFehler] = useState(null)
+  const [stammdatenFehler, setStammdatenFehler] = useState(null)
+  const filter = useMemo(() => filterAus(arten, klassen), [arten, klassen])
+  const liste = useListe({ laden: api.admin.vorgabewerte, filter, sortierung: 'reparaturart' })
+  const eintraege = liste.daten?.eintraege
+  const fehler = liste.fehler ?? stammdatenFehler
 
-  const neuLaden = useCallback(
-    () => api.admin.vorgabewerte({ ...(filterArt ? { reparaturart_id: filterArt } : {}), archivierte })
-      .then(setEintraege).catch((e) => setFehler(e.message)),
-    [filterArt, archivierte],
-  )
-  useEffect(() => { neuLaden() }, [neuLaden])
   useEffect(() => {
     Promise.all([
       alleEintraege(api.admin.arten, { status: 'alle' }),
       alleEintraege(api.admin.klassen, { status: 'alle' }),
     ])
       .then(([a, k]) => { setArten(a); setKlassen(k) })
-      .catch((e) => setFehler(e.message))
+      .catch((e) => setStammdatenFehler(e.message))
   }, [])
 
-  const istArchiviert = (liste, id) => liste.find((e) => e.id === id)?.archiviert_am != null
+  const istArchiviert = (stammdaten, id) => stammdaten.find((e) => e.id === id)?.archiviert_am != null
 
-  async function gespeichert(eintrag, neu) {
+  function gespeichert(eintrag, neu) {
     formular.gespeichert()
     const fuer = eintrag.instrumentenklasse_bezeichnung ?? 'allgemein'
     rueckmeldung(`Vorgabewert ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}`)
-    await neuLaden()
+    liste.neuLaden()
     hervorheben(eintrag.id)
   }
 
@@ -120,7 +134,7 @@ export default function Vorgabewerte() {
       rueckmeldung(archiv
         ? `Vorgabewert ${name} archiviert – die Schätzung ignoriert ihn, er kann reaktiviert werden`
         : `Vorgabewert ${name} reaktiviert`)
-      await neuLaden()
+      liste.neuLaden()
       hervorheben(eintrag.id)
     } catch (err) {
       setAktionsfehler(err.message)
@@ -153,28 +167,24 @@ export default function Vorgabewerte() {
         )}
       </FormularBereich>
 
-      <div className="filterleiste">
-        <label className="feld feld--inline">
-          <span>Reparaturart</span>
-          <select value={filterArt} onChange={(e) => { setEintraege(null); setFilterArt(e.target.value) }}>
-            <option value="">alle</option>
-            {arten.map((a) => <option key={a.id} value={a.id}>{a.bezeichnung}{a.archiviert_am ? ' (archiviert)' : ''}</option>)}
-          </select>
-        </label>
-        <label className="feld--inline leise">
-          <input type="checkbox" checked={archivierte} onChange={(e) => { setEintraege(null); setArchivierte(e.target.checked) }} />
-          archivierte anzeigen
-        </label>
-      </div>
+      <Listenkopf liste={liste} suchhinweis="Suchen: Reparaturart, Instrumentenklasse, Notiz" />
 
       {fehler && <p className="meldung meldung--fehler">{fehler}</p>}
-      {eintraege === null && !fehler && <p className="leise">Lädt …</p>}
-      {eintraege?.length === 0 && <p className="leise">Keine Vorgabewerte vorhanden.</p>}
+      {!liste.daten && !fehler && <p className="leise">Lädt …</p>}
+      <ListeLeer liste={liste} leerText="Noch keine Vorgabewerte angelegt – über „Neuer Vorgabewert“ anlegen." />
       {eintraege?.length > 0 && (
         <div className="tabelle-rahmen">
           <table className="tabelle tabelle--klickbar">
             <thead>
-              <tr><th>Reparaturart</th><th>Gilt für</th><th className="zahl">Std.</th><th className="zahl">Kosten</th><th>Notiz</th><th>Geändert</th><th></th></tr>
+              <tr>
+                <SortierKopf liste={liste} spalte="reparaturart">Reparaturart</SortierKopf>
+                <SortierKopf liste={liste} spalte="gilt_fuer">Gilt für</SortierKopf>
+                <SortierKopf liste={liste} spalte="vorgabe_stunden" zahl>Std.</SortierKopf>
+                <SortierKopf liste={liste} spalte="vorgabe_kosten" zahl>Kosten</SortierKopf>
+                <th>Notiz</th>
+                <SortierKopf liste={liste} spalte="geaendert_am">Geändert</SortierKopf>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               {eintraege.map((e) => {
@@ -214,6 +224,7 @@ export default function Vorgabewerte() {
           </table>
         </div>
       )}
+      <Seitenwahl liste={liste} />
     </>
   )
 }

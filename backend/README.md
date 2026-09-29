@@ -46,7 +46,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 |---|---|---|
 | POST | `/auth/login` | Anmelden (E-Mail als `username` + Passwort) → Token |
 | GET | `/auth/ich` | Wer bin ich? (prüft die Anmeldung) |
-| GET | `/admin/vorgabewerte` | Vorgabewerte auflisten (Filter: `reparaturart_id`, `instrumentenklasse_id`, `archivierte`) |
+| GET | `/admin/vorgabewerte` | Vorgabewerte-Liste nach 9.11 (`suche`, Filter `reparaturart_id`, `instrumentenklasse_id`, `status`; `sortierung`, `seite`) |
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
