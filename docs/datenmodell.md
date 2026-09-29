@@ -762,13 +762,16 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 **Regeln:**
 
 1. **Ruhige Standardansicht:** Kopf, Eckdaten und Aktionsleiste. Keine Formularfelder sichtbar, solange keine Aktion gewählt ist.
-2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin).
+2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin). Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle (z. B. "Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern"), statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
 3. **Eingebettet, kein Popup:** Das Formular öffnet sich direkt unter der Aktionsleiste (konform mit 9.1). Der aktive Button ist markiert.
 4. **Nur ein Formular gleichzeitig:** Wählt der Nutzer eine andere Aktion, während im offenen Formular ungespeicherte Änderungen stehen, erscheint die Rückfrage "Änderungen verwerfen?" als eingebetteter Hinweis, nicht als Popup.
 5. **Nach dem Speichern schließt sich das Formular automatisch.** Die Erfolgsbestätigung folgt 9.1, der geänderte Wert wird kurz hervorgehoben. "Abbrechen" schließt ohne Speichern.
-6. **Lese-Bereiche sind zugeklappt:** Statusverlauf, Schätzprotokoll u. ä. zeigen eine einzeilige Zusammenfassung (Anzahl Einträge, letzter Eintrag) und klappen per Klick auf.
-7. **Tastatur und Barrierefreiheit:** Aktions- und Aufklapp-Buttons sind echte Buttons mit `aria-expanded`. Beim Öffnen springt der Fokus ins erste Feld, Escape schließt (mit Rückfrage bei Änderungen).
-8. **Gilt seitenübergreifend:** In der Verwaltung steht die Liste im Vordergrund. "Neu anlegen" oder ein Klick auf eine Zeile öffnet das Formular, es gibt keine dauerhaft offene Formular-plus-Liste-Kombination.
+6. **Lese-Bereiche sind zugeklappt:** Statusverlauf, Unterbrechungen, Schätzprotokoll u. ä. zeigen eine einzeilige Zusammenfassung (Anzahl Einträge, letzter Eintrag) und klappen per Klick auf; aufgeklappt stehen die neuesten Einträge oben. Ein Bereich ohne Einträge (z. B. Unterbrechungen bei einem Auftrag ohne Unterbrechung) wird nicht angezeigt.
+7. **Eingabeprüfung im Browser ergänzt die Prüfung im Backend, ersetzt sie nicht:** Fehler wie fehlende Pflichtfelder erscheinen sofort am Feld, bevor gesendet wird; das Backend prüft unabhängig davon immer noch mit.
+8. **Tastatur und Barrierefreiheit:** Aktions- und Aufklapp-Buttons sind echte Buttons mit `aria-expanded`. Beim Öffnen springt der Fokus ins erste Feld, Escape schließt (mit Rückfrage bei Änderungen).
+9. **Gilt seitenübergreifend:** In der Verwaltung steht die Liste im Vordergrund. "Neu anlegen" oder ein Klick auf eine Zeile öffnet das Formular, es gibt keine dauerhaft offene Formular-plus-Liste-Kombination.
+
+**Präzisierung aus der Umsetzung (Auftragsdetailseite):** Ist ein Auftrag einem inzwischen deaktivierten Mitarbeiter zugewiesen, bleibt dieser in der Auswahl "Zugewiesen an" mit dem Zusatz "(deaktiviert)" sichtbar, damit die Zuweisung nicht unbemerkt verloren geht.
 
 **Präzisierungen aus der Umsetzung (Kunden und Instrumente):**
 
