@@ -84,3 +84,27 @@ def test_anzeigen_gibt_ids_und_beispiele_aus(db, capsys):
     ausgabe = capsys.readouterr().out
     assert "Marie Schneider" in ausgabe and "kunde_id" in ausgabe
     assert ausgabe.count('"reparaturart_id"') == 4
+
+
+
+def test_entfernen_mit_wochenstunden_am_demo_mitarbeiter(db):
+    """Fehlerfall aus dem Echtbetrieb: Wochenstunden am Demo-Mitarbeiter verhinderten das Entfernen."""
+    from datetime import date
+    from app.models import MitarbeiterArbeitszeit
+    demo_daten.anlegen(db)
+    demo = db.scalar(select(Mitarbeiter).where(Mitarbeiter.email == demo_daten.DEMO_MITARBEITER_EMAIL))
+    db.add(MitarbeiterArbeitszeit(mitarbeiter_id=demo.id, wochenstunden=Decimal("40"), gueltig_ab=date(2026, 9, 29)))
+    db.flush()
+    assert demo_daten.entfernen(db) is True
+    assert _anzahl(db, Mitarbeiter, Mitarbeiter.email == demo_daten.DEMO_MITARBEITER_EMAIL) == 0
+    assert _anzahl(db, MitarbeiterArbeitszeit, MitarbeiterArbeitszeit.mitarbeiter_id == demo.id) == 0
+
+
+def test_demo_mitarbeiter_bleibt_wenn_echt_verwendet(db, capsys):
+    demo_daten.anlegen(db)
+    demo = db.scalar(select(Mitarbeiter).where(Mitarbeiter.email == demo_daten.DEMO_MITARBEITER_EMAIL))
+    w = Werkstatt(db)
+    w.auftrag(status=w.in_bearbeitung, zugewiesen=demo)  # echter (Nicht-Demo-)Auftrag
+    assert demo_daten.entfernen(db) is False
+    assert db.get(Mitarbeiter, demo.id) is not None
+    assert "auftrag.zugewiesener_mitarbeiter_id" in capsys.readouterr().out

@@ -24,12 +24,14 @@ import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.auth import passwort_hashen
-from app.db import SessionLocal
+from app.db import Base, SessionLocal
 from app.models import (
+    Abwesenheit,
+    ArbeitszeitAnpassung,
     Arbeitszeiterfassung,
     Auftrag,
     Auftragsstatus,
@@ -38,10 +40,11 @@ from app.models import (
     Instrumentenklasse,
     Kunde,
     Mitarbeiter,
+    MitarbeiterArbeitszeit,
+    MitarbeiterQualifikation,
     Reparaturart,
     ReparaturVorgabewert,
     SchaetzungsLog,
-    SystemEreignisLog,
     Unterbrechung,
 )
 
@@ -230,9 +233,11 @@ def _historie_anlegen(db: Session, violine: Instrumentenklasse, saitenwechsel: R
                                     dauer_minuten=minuten, erfasst_am=angelegt + timedelta(days=3)))
 
 
-def entfernen(db: Session) -> None:
+def entfernen(db: Session) -> bool:
     """Entfernt Demo-Kunden mit allen Instrumenten und Aufträgen (auch selbst angelegte
-    Testaufträge für Demo-Kunden) sowie den Demo-Mitarbeiter. Stammdaten bleiben."""
+    Testaufträge für Demo-Kunden) sowie den Demo-Mitarbeiter samt seinen persönlichen Daten
+    (Wochenstunden, Abwesenheiten, Gleitzeit, Qualifikationen). Stammdaten bleiben.
+    Wird der Demo-Mitarbeiter noch anderswo verwendet, bleibt er erhalten (Rückgabe False)."""
     kunden_ids = select(Kunde.id).where(Kunde.kundennummer.startswith(DEMO_PRAEFIX))
     auftrag_ids = select(Auftrag.id).where(Auftrag.kunde_id.in_(kunden_ids))
     for tabelle in (AuftragStatusverlauf, SchaetzungsLog, Arbeitszeiterfassung, Unterbrechung):
@@ -242,13 +247,32 @@ def entfernen(db: Session) -> None:
     db.execute(delete(Kunde).where(Kunde.kundennummer.startswith(DEMO_PRAEFIX)))
 
     bearbeiter = db.scalar(select(Mitarbeiter).where(Mitarbeiter.email == DEMO_MITARBEITER_EMAIL))
+    demo_mitarbeiter_entfernt = False
     if bearbeiter is not None:
-        noch_verwendet = db.scalar(select(Arbeitszeiterfassung.id).where(Arbeitszeiterfassung.mitarbeiter_id == bearbeiter.id).limit(1)) \
-            or db.scalar(select(Auftrag.id).where(Auftrag.zugewiesener_mitarbeiter_id == bearbeiter.id).limit(1)) \
-            or db.scalar(select(SystemEreignisLog.id).where(SystemEreignisLog.ausgefuehrt_von_mitarbeiter_id == bearbeiter.id).limit(1))
-        if noch_verwendet is None:
+        # Persönliche Daten des Demo-Mitarbeiters gehören zu ihm und gehen mit
+        for tabelle in (MitarbeiterArbeitszeit, Abwesenheit, ArbeitszeitAnpassung, MitarbeiterQualifikation):
+            db.execute(delete(tabelle).where(tabelle.mitarbeiter_id == bearbeiter.id))
+        verwendet = _verweise_auf(db, bearbeiter.id)
+        if not verwendet:
             db.delete(bearbeiter)
+            demo_mitarbeiter_entfernt = True
+        else:
+            print(f"Hinweis: Demo-Mitarbeiter bleibt erhalten, er wird noch verwendet in: {', '.join(verwendet)}")
     db.commit()
+    return demo_mitarbeiter_entfernt
+
+
+def _verweise_auf(db: Session, mitarbeiter_id) -> list[str]:
+    """Alle Stellen (Tabelle.Spalte), die noch auf den Mitarbeiter verweisen – automatisch aus dem
+    Datenmodell ermittelt, damit neue Tabellen nicht vergessen werden."""
+    fundstellen = []
+    for tabelle in Base.metadata.sorted_tables:
+        for fk in tabelle.foreign_keys:
+            if fk.column.table.name == "mitarbeiter":
+                spalte = fk.parent
+                if db.scalar(select(func.count()).select_from(tabelle).where(spalte == mitarbeiter_id)):
+                    fundstellen.append(f"{tabelle.name}.{spalte.name}")
+    return fundstellen
 
 
 def anzeigen(db: Session) -> None:
@@ -313,8 +337,9 @@ def main() -> int:
         elif aktion == "anzeigen":
             anzeigen(db)
         else:
-            entfernen(db)
-            print("Demo-Kunden, ihre Instrumente und Aufträge sowie der Demo-Mitarbeiter wurden entfernt.")
+            mitarbeiter_weg = entfernen(db)
+            print("Demo-Kunden, ihre Instrumente und Aufträge wurden entfernt"
+                  + (", ebenso der Demo-Mitarbeiter." if mitarbeiter_weg else "."))
             print("Stammdaten (Instrumentenklassen, Reparaturarten, Vorgabewerte) sind erhalten geblieben.")
     return 0
 
