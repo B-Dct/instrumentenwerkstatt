@@ -794,7 +794,7 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 1. **Suchfeld** über jeder Liste mit mehr als einer Handvoll Einträgen. Freitextsuche über die sinnvollen Felder der jeweiligen Liste (z. B. Kunden: Name, Kundennummer, externe Kundennummer, E-Mail, Telefon; Aufträge: Auftragsnummer, Kundenname, Instrument). Die Suche startet nach kurzer Eingabepause, nicht bei jedem einzelnen Tastendruck.
 2. **Filter** neben der Suche (Auswahlfelder), mit fachlich sinnvollen Standardwerten, z. B. "nur aktive"; "archivierte anzeigen" nur für berechtigte Rollen (siehe 7.2). Typische Filter: Status, Mitarbeiter, Instrumentenklasse, Priorität, Reparaturart.
 3. **Aktive Filter bleiben sichtbar** (z. B. als Chips mit Schließen-Symbol), dazu ein Knopf "Alle Filter zurücksetzen" und die **Trefferzahl**: "x von y Einträgen", sobald Suche oder ein Filter etwas ausblendet (auch ein Standardfilter wie "nur aktive"), sonst schlicht "y Einträge".
-4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4). Zu einer Sortierung können feste Nachrang-Spalten gehören, die bei Gleichstand entscheiden und dabei immer aufsteigend (in der Regel alphabetisch) ordnen, unabhängig von der Richtung der Hauptsortierung.
+4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4). Zu einer Sortierung können feste Nachrang-Spalten gehören, die bei Gleichstand entscheiden und dabei immer aufsteigend (in der Regel alphabetisch) ordnen, unabhängig von der Richtung der Hauptsortierung. Wählt der Nutzer per Klick eine andere Spalte, startet deren Sortierung aufsteigend; ohne diese Wahl gilt für die Liste als Ganzes die fachlich festgelegte Standardrichtung (bei Aufträgen absteigend). Einträge ohne Wert in der gewählten Spalte (z. B. ein Auftrag ohne Termin) stehen immer am Ende, unabhängig von der Richtung.
 5. **Lange Listen** werden seitenweise angezeigt oder nachgeladen. Suche, Filter, Sortierung und Seitenwahl übernimmt das Backend, nicht der Browser, damit es auch bei vielen Tausend Einträgen schnell bleibt.
 6. **Zustand bleibt erhalten:** Suchbegriff, Filter, Sortierung und Seite stehen in der Adresse, sodass man nach dem Öffnen eines Eintrags und dem Zurückgehen wieder an derselben Stelle ist.
 7. **Leere Ergebnisse:** Ohne Treffer erscheint "Keine Treffer" mit dem Knopf zum Zurücksetzen. Eine wirklich leere Liste zeigt "Noch keine Einträge" mit Hinweis auf die Neu-anlegen-Aktion.
@@ -808,6 +808,8 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 **Beispiel Instrumentenklassen:** Suche über Bezeichnung und Oberkategorie; Standardsortierung Oberkategorie, darin Bezeichnung als Nachrang; zusätzlich sortierbar nach Bezeichnung; Filter "Status" wie oben. Wird durch die Instrumentenfamilien aus 9.12 abgelöst (Gruppierung statt reiner Sortierung).
 
 **Beispiel Reparaturarten:** Suche über die Bezeichnung; Standardsortierung Bezeichnung; zusätzlich sortierbar nach Standard-Komplexität mit Bezeichnung als Nachrang; Filter "Status" wie oben. Ein Filter nach Oberkategorie/Reparaturkategorie kommt erst mit 9.12.
+
+**Beispiel Aufträge** (größte und letzte umgestellte Liste): Suche über Auftragsnummer, Kundenname, externe Kundennummer sowie am Instrument über Klasse, Hersteller, Typ und Seriennummer; Standardsortierung Priorität (absteigend) mit Eingang als Nachrang (aufsteigend), siehe 9.4; sortierbar nach allen Spalten inkl. "Fertig bis" (Aufträge ohne Termin am Ende); Standardfilter "nur offene"; weitere Filter Status (auch einzeln), Mitarbeiter (auch "nicht zugewiesen"), Instrumentenklasse, Priorität, Termin "überfällig". Die Auswahllisten für den Mitarbeiter- und Instrumentenklassen-Filter zeigen nur aktive Einträge; Aufträge zu deaktivierten Mitarbeitern oder archivierten Klassen bleiben über Suche oder den Status-Wert "alle" auffindbar. Ein Archiv-Filter entfällt, da Aufträge nicht archiviert werden.
 
 **Beispiel Vorgabewerte:** Suche über Reparaturart, Instrumentenklasse und Notiz; Standardsortierung nach Reparaturart, darin "allgemein vor speziell" und "aktiv vor archiviert" als Nachrang; zusätzlich sortierbar nach "Gilt für", Stunden, Kosten und Änderungsdatum; Filter nach Reparaturart, Instrumentenklasse und Status. Ein Filter "nur allgemeine Werte" sowie Filter nach Kategorie/Familie (letztere erst mit 9.12) stehen noch aus.
 
@@ -840,16 +842,12 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
 - Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (Teil 4b)
 - Mitarbeiter-Verwaltung im Frontend: Liste, Rollen-/Status-Aktionen, Wochenstunden mit Verlauf (Teil 4c)
-- Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), bisher eingesetzt in der Mitarbeiterliste
+- Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), inzwischen in allen sechs Listen im Einsatz: Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter, Aufträge
 - Wiederverwendbarer Aufklappbereich für zugeklappte Lese-Bereiche (Verlauf, Schätzungen)
 - Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
 - Externe Kundennummer am Kunden (siehe 2.1)
 - Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
-
-### 10.2 In Arbeit
-
-- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte erledigt; Aufträge (letzte und größte Liste) noch offen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
