@@ -809,6 +809,8 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 
 **Beispiel Reparaturarten:** Suche über die Bezeichnung; Standardsortierung Bezeichnung; zusätzlich sortierbar nach Standard-Komplexität mit Bezeichnung als Nachrang; Filter "Status" wie oben. Ein Filter nach Oberkategorie/Reparaturkategorie kommt erst mit 9.12.
 
+**Beispiel Vorgabewerte:** Suche über Reparaturart, Instrumentenklasse und Notiz; Standardsortierung nach Reparaturart, darin "allgemein vor speziell" und "aktiv vor archiviert" als Nachrang; zusätzlich sortierbar nach "Gilt für", Stunden, Kosten und Änderungsdatum; Filter nach Reparaturart, Instrumentenklasse und Status. Ein Filter "nur allgemeine Werte" sowie Filter nach Kategorie/Familie (letztere erst mit 9.12) stehen noch aus.
+
 **Auswahlfelder in Formularen sind keine Listenansicht:** Braucht ein Formular alle Einträge zur Auswahl, auch archivierte (z. B. Reparaturart und Instrumentenklasse im Vorgabewert-Formular), lädt es alle Seiten nacheinander statt nur die erste — anders als eine Listenansicht, die bewusst nur einen Ausschnitt zeigt (siehe die Grenze von rund 100 bei der Kundenauswahl, oben).
 
 **Durchsetzung im Backend, nicht nur in der Oberfläche:** Ein Filterwert, der laut Berechtigungsmatrix (7.2) einer Rolle nicht zusteht (z. B. "archiviert" oder "alle" für einen normalen Mitarbeiter), wird vom Backend abgelehnt (403), unabhängig davon, ob die Oberfläche die Option anzeigt. Das Verstecken einer Option in der Oberfläche ist Komfort, niemals die eigentliche Absicherung.
@@ -847,7 +849,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden, Instrumentenklassen, Reparaturarten erledigt; Vorgabewerte und Aufträge noch offen
+- Bestehende Listen auf den gemeinsamen Listen-Baustein umstellen: Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte erledigt; Aufträge (letzte und größte Liste) noch offen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
