@@ -10,13 +10,16 @@ Berechtigungen (7.2): Alle Endpunkte erfordern Anmeldung. Anlegen, Liste und Det
 für alle Mitarbeiter; Statuswechsel und Korrektur nur für den zugewiesenen Mitarbeiter
 oder Werkstattleiter/Admin (darf_auftrag_bearbeiten).
 
-TODO: Liste/Details für Systemrolle "mitarbeiter" ggf. auf eigene Aufträge einschränken
+TODO (Fahrplan 10.4): Liste/Details für Systemrolle "mitarbeiter" auf eigene Aufträge einschränken
 (Berechtigungsmatrix 7.2: "Alle Aufträge werkstattweit einsehen" nur Werkstattleiter/Admin).
+Dann gehört die Einschränkung in die Basisabfrage der Liste (auch "gesamt" zählt nur eigene),
+und ein Mitarbeiter-Filter auf Kollegen wird abgelehnt (403).
 """
 
 import secrets
 import uuid
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, func, select, text
@@ -24,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten, rolle_mindestens
 from app.db import get_db
+from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.models import (
     Arbeitszeiterfassung,
     Auftrag,
@@ -190,28 +194,71 @@ def _auftrag_laden(db: Session, auftrag_id: uuid.UUID) -> Auftrag:
     return auftrag
 
 
-@router.get("", response_model=list[AuftragKurz])
+# Bei Gleichstand entscheidet der Eingang (älteste zuerst), wie bei der Standardsortierung (9.4)
+SORTIERUNG = {
+    "prioritaet": (Auftrag.prioritaet, Auftrag.erstellt_am),
+    "auftragsnummer": Auftrag.auftragsnummer,
+    "status": (Auftragsstatus.reihenfolge, Auftrag.erstellt_am),
+    "kunde": (Kunde.name, Auftrag.erstellt_am),
+    "instrument": (Instrumentenklasse.bezeichnung, Auftrag.erstellt_am),
+    "reparaturart": (Reparaturart.bezeichnung, Auftrag.erstellt_am),
+    "mitarbeiter": (Mitarbeiter.name, Auftrag.erstellt_am),
+    "geschaetzte_arbeitsstunden": (Auftrag.geschaetzte_arbeitsstunden, Auftrag.erstellt_am),
+    "geschaetzte_kosten": (Auftrag.geschaetzte_kosten, Auftrag.erstellt_am),
+    "fertigstellung": (Auftrag.geschaetztes_fertigstellungsdatum, Auftrag.erstellt_am),
+    "erstellt_am": Auftrag.erstellt_am,
+}
+
+
+def _ist_ueberfaellig():
+    """Gleiche Regel wie ist_ueberfaellig in _kurz_felder: Termin vorbei und nicht abgeschlossen."""
+    return (Auftrag.geschaetztes_fertigstellungsdatum < date.today()) & Auftragsstatus.ist_abgeschlossen.is_(False)
+
+
+@router.get("", response_model=Seite[AuftragKurz])
 def auftraege_auflisten(
-    status_id: uuid.UUID | None = Query(None, description="Nur Aufträge in diesem Status"),
-    nur_offene: bool = Query(False, description="Nur nicht abgeschlossene Aufträge"),
-    zugewiesener_mitarbeiter_id: uuid.UUID | None = Query(None),
-    kunde_id: uuid.UUID | None = Query(None),
+    liste: ListenParameter = Depends(listen_parameter(SORTIERUNG, standard="prioritaet", richtung="ab")),
+    status_: str = Query("offen", alias="status",
+                         description="offen (Standard), abgeschlossen, alle oder der Schlüssel eines Status"),
+    mitarbeiter: Literal["keiner"] | uuid.UUID | None = Query(
+        None, description="ID des zugewiesenen Mitarbeiters oder 'keiner' für nicht zugewiesene"),
+    instrumentenklasse_id: uuid.UUID | None = Query(None),
     prioritaet: Prioritaet | None = Query(None),
+    termin: Literal["alle", "ueberfaellig"] = Query("alle", description="ueberfaellig = Termin vorbei, nicht abgeschlossen"),
+    kunde_id: uuid.UUID | None = Query(None),
     db: Session = Depends(get_db),
-) -> list[AuftragKurz]:
-    """Standard-Sortierung (Datenmodell 9.4): Priorität hoch zuerst, dann älteste zuerst."""
-    abfrage = _listen_abfrage().order_by(Auftrag.prioritaet.desc(), Auftrag.erstellt_am, Auftrag.id)
-    if status_id is not None:
-        abfrage = abfrage.where(Auftrag.status_aktuell_id == status_id)
-    if nur_offene:
-        abfrage = abfrage.where(Auftragsstatus.ist_abgeschlossen.is_(False))
-    if zugewiesener_mitarbeiter_id is not None:
-        abfrage = abfrage.where(Auftrag.zugewiesener_mitarbeiter_id == zugewiesener_mitarbeiter_id)
-    if kunde_id is not None:
-        abfrage = abfrage.where(Auftrag.kunde_id == kunde_id)
+) -> Seite[AuftragKurz]:
+    """Liste nach 9.11. Suche: Auftragsnummer, Kunde (Name, externe Nr.), Instrument (Klasse,
+    Hersteller, Typ, Seriennummer). Standard (9.4): Priorität hoch zuerst, dann älteste zuerst."""
+    basis = _listen_abfrage()
+    gefiltert = basis
+    if (muster := liste.suchmuster()) is not None:
+        gefiltert = gefiltert.where(enthaelt(
+            muster, Auftrag.auftragsnummer, Kunde.name, Kunde.externe_kundennummer, Instrumentenklasse.bezeichnung,
+            Instrument.hersteller, Instrument.typenbezeichnung, Instrument.seriennummer,
+        ))
+    if status_ == "offen":
+        gefiltert = gefiltert.where(Auftragsstatus.ist_abgeschlossen.is_(False))
+    elif status_ == "abgeschlossen":
+        gefiltert = gefiltert.where(Auftragsstatus.ist_abgeschlossen.is_(True))
+    elif status_ != "alle":
+        if db.scalar(select(Auftragsstatus.id).where(Auftragsstatus.schluessel == status_)) is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unbekannter Status '{status_}'")
+        gefiltert = gefiltert.where(Auftragsstatus.schluessel == status_)
+    if mitarbeiter == "keiner":
+        gefiltert = gefiltert.where(Auftrag.zugewiesener_mitarbeiter_id.is_(None))
+    elif mitarbeiter is not None:
+        gefiltert = gefiltert.where(Auftrag.zugewiesener_mitarbeiter_id == mitarbeiter)
+    if instrumentenklasse_id is not None:
+        gefiltert = gefiltert.where(Instrument.instrumentenklasse_id == instrumentenklasse_id)
     if prioritaet is not None:
-        abfrage = abfrage.where(Auftrag.prioritaet == prioritaet)
-    return [AuftragKurz(**_kurz_felder(z)) for z in db.execute(abfrage).all()]
+        gefiltert = gefiltert.where(Auftrag.prioritaet == prioritaet)
+    if termin == "ueberfaellig":
+        gefiltert = gefiltert.where(_ist_ueberfaellig())
+    if kunde_id is not None:
+        gefiltert = gefiltert.where(Auftrag.kunde_id == kunde_id)
+    return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG,
+                          umwandeln=lambda zeile: AuftragKurz(**_kurz_felder(zeile)), eindeutig=Auftrag.id)
 
 
 @router.get("/{auftrag_id}", response_model=AuftragDetail)

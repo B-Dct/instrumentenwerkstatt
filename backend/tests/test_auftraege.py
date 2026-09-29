@@ -2,13 +2,13 @@
 
 import re
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
-from app.models import Arbeitszeiterfassung, Auftrag, Kunde, SchaetzungsLog
+from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, SchaetzungsLog
 from app.routers.auftraege import _neue_auftragsnummer  # Original (Tests nutzen Ersatz)
 from tests.beispieldaten import Werkstatt
 from tests.conftest import OHNE_ANMELDUNG, angemeldet_als
@@ -106,19 +106,75 @@ def test_auftragsnummer_format():
 
 # --- Auflisten / Abrufen -----------------------------------------------------
 
+def _ids(antwort):
+    assert antwort.status_code == 200, antwort.text
+    return [a["id"] for a in antwort.json()["eintraege"]]
+
+
 def test_liste_sortiert_prioritaet_vor_eingang_und_filtert(client, w):
     ids = [client.post(URL, json=neuer_auftrag(w, prioritaet=p)).json()["id"]
            for p in ["normal", "hoch", "normal"]]
-    w.auftrag(minuten=(60,))  # abgeschlossener Auftrag – fällt bei nur_offene heraus
+    fertig = w.auftrag(minuten=(60,))  # abgeschlossener Auftrag – fällt beim Standard "offen" heraus
+    kunde = {"kunde_id": str(w.kunde.id)}
 
-    alle = client.get(URL, params={"kunde_id": str(w.kunde.id)}).json()
-    assert len(alle) == 4
+    # Standard: nur offene, Priorität hoch zuerst, dann ältester Eingang zuerst (9.4)
+    antwort = client.get(URL, params=kunde)
+    assert _ids(antwort) == [ids[1], ids[0], ids[2]]
+    assert antwort.json()["gesamt"] > antwort.json()["treffer"]  # der abgeschlossene ist ausgeblendet
 
-    offen = client.get(URL, params={"kunde_id": str(w.kunde.id), "nur_offene": True}).json()
-    assert [a["id"] for a in offen] == [ids[1], ids[0], ids[2]]
+    assert len(_ids(client.get(URL, params={**kunde, "status": "alle"}))) == 4
+    assert _ids(client.get(URL, params={**kunde, "status": "abgeschlossen"})) == [str(fertig.id)]
+    assert _ids(client.get(URL, params={**kunde, "prioritaet": "hoch"})) == [ids[1]]
+    # Umgekehrt: normal vor hoch, der Eingang als Nachrang bleibt aufsteigend
+    assert _ids(client.get(URL, params={**kunde, "richtung": "auf"})) == [ids[0], ids[2], ids[1]]
 
-    hoch = client.get(URL, params={"prioritaet": "hoch", "kunde_id": str(w.kunde.id)}).json()
-    assert [a["id"] for a in hoch] == [ids[1]]
+
+def test_liste_filter_status_mitarbeiter_klasse_ueberfaellig(client, w, db):
+    kunde = {"kunde_id": str(w.kunde.id)}
+    zugewiesen = client.post(URL, json=neuer_auftrag(w)).json()["id"]
+    frei = client.post(URL, json=neuer_auftrag(w, zugewiesener_mitarbeiter_id=None, klasse=w.violine)).json()["id"]
+
+    assert _ids(client.get(URL, params={**kunde, "mitarbeiter": str(w.mitarbeiter.id)})) == [zugewiesen]
+    assert _ids(client.get(URL, params={**kunde, "mitarbeiter": "keiner"})) == [frei]
+    assert _ids(client.get(URL, params={**kunde, "instrumentenklasse_id": str(w.violine.id)})) == [frei]
+    assert _ids(client.get(URL, params={**kunde, "status": "angenommen"})) == [zugewiesen, frei]
+    assert _ids(client.get(URL, params={**kunde, "status": "in_bearbeitung"})) == []
+
+    assert _ids(client.get(URL, params={**kunde, "termin": "ueberfaellig"})) == []
+    db.get(Auftrag, uuid.UUID(frei)).geschaetztes_fertigstellungsdatum = date.today() - timedelta(days=1)
+    db.flush()
+    assert _ids(client.get(URL, params={**kunde, "termin": "ueberfaellig"})) == [frei]
+
+
+def test_liste_suche_nummer_kunde_instrument(client, w, db):
+    kennung = f"AS{uuid.uuid4().hex[:6]}"
+    w.kunde.name = f"{kennung} Musikschule"
+    w.kunde.externe_kundennummer = f"{kennung}-EXT"
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    instrument = db.get(Instrument, uuid.UUID(a["instrument_id"]))
+    instrument.hersteller, instrument.seriennummer = "Höfner 100%_echt", f"SN{kennung}"
+    db.flush()
+
+    for suche in (a["auftragsnummer"], f"{kennung} musik", f"{kennung}-ext", "TEST Kontrabass", "höfner", f"sn{kennung}"):
+        assert a["id"] in _ids(client.get(URL, params={"suche": suche})), suche
+    assert _ids(client.get(URL, params={"suche": "100%_echt"})) == [a["id"]]
+    assert _ids(client.get(URL, params={"suche": "Höfner %"})) == []
+
+
+def test_liste_sortierung_und_seiten(client, w):
+    kunde = {"kunde_id": str(w.kunde.id)}
+    ids = [client.post(URL, json=neuer_auftrag(w, klasse=k)).json()["id"] for k in (w.violine, w.kontrabass, w.violine)]
+    params = {**kunde, "sortierung": "instrument", "richtung": "auf", "seitengroesse": 2}
+    seite1, seite2 = (client.get(URL, params={**params, "seite": n}) for n in (1, 2))
+    assert _ids(seite1) + _ids(seite2) == [ids[1], ids[0], ids[2]]  # Kontrabass, dann Violinen nach Eingang
+    assert seite1.json()["treffer"] == 3
+
+
+@pytest.mark.parametrize("params", [
+    {"sortierung": "zugriffstoken"}, {"status": "gibt_es_nicht"}, {"mitarbeiter": "jemand"}, {"termin": "bald"},
+])
+def test_liste_ungueltige_parameter(client, w, params):
+    assert client.get(URL, params=params).status_code == 422
 
 
 def test_nicht_gefunden(client, w):

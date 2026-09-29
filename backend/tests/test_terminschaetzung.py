@@ -242,7 +242,7 @@ def test_ueberfaellig_nur_offen_und_termin_vorbei(client, w, leitung, db):
     auftrag = db.get(Auftrag, uuid.UUID(a["id"]))
     auftrag.geschaetztes_fertigstellungsdatum = date.today() - timedelta(days=1)
     db.flush()
-    liste = client.get("/auftraege", params={"kunde_id": str(w.kunde.id)}).json()
+    liste = client.get("/auftraege", params={"kunde_id": str(w.kunde.id)}).json()["eintraege"]
     assert [x["ist_ueberfaellig"] for x in liste] == [True]
 
     client.post(f"/auftraege/{a['id']}/status", json={"status_id": str(w.fertig), "arbeitszeit_minuten": 60})
