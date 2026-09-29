@@ -301,7 +301,7 @@ Vertraglich vereinbarte Wochenarbeitsstunden je Mitarbeiter — Grundlage der Ka
 | wochenstunden | DECIMAL | z. B. 35,0 |
 | gültig_ab | DATE | |
 | gültig_bis | DATE | NULL = aktuell gültig |
-| geändert_von_mitarbeiter_id | FK → mitarbeiter | Wer die Änderung vorgenommen hat (Admin) |
+| geändert_von_mitarbeiter_id | FK → mitarbeiter | Wer die Änderung vorgenommen hat (Admin). Der Name bleibt im Protokoll und in Verläufen sichtbar, auch wenn dieser Mitarbeiter später deaktiviert wird |
 | geändert_am | TIMESTAMP | |
 
 **Pflege:** Ausschließlich über den Administrationsbereich durch die Systemrolle `admin` (siehe Berechtigungsmatrix, Abschnitt 7.2) — ein neuer Eintrag mit neuem `gültig_ab`-Datum schließt automatisch den vorherigen Eintrag ab (`gültig_bis` = Tag davor), statt den alten Wert zu überschreiben.
@@ -313,6 +313,7 @@ Vertraglich vereinbarte Wochenarbeitsstunden je Mitarbeiter — Grundlage der Ka
 - Beim Abschließen des alten Eintrags ändert sich dort nur `gültig_bis`. `geändert_von`/`geändert_am` des alten Eintrags bleiben unverändert, wer abgeschlossen hat, steht im neuen Eintrag und im Änderungsprotokoll
 - Für deaktivierte Mitarbeiter können keine Wochenstunden festgelegt werden
 - Wo nichts hinterlegt ist, gilt ein Standard von 40 Wochenstunden. Die Admin-Liste kennzeichnet, ob ein Wert "hinterlegt" oder der "Standard" ist
+- Im Verlauf gilt als "aktuell" der Eintrag, dessen Zeitraum den heutigen Tag einschließt, auch wenn sein `gültig_bis` durch einen späteren Eintrag bereits feststeht. Ein Eintrag mit `gültig_ab` in der Zukunft gilt als "geplant"
 - Eine Änderung der Wochenstunden wirkt direkt auf künftige Terminschätzungen, bestehende Termine werden nicht automatisch neu berechnet (siehe 4.0a), bei Bedarf mit `termine_nachrechnen --alle`
 
 ---
@@ -792,7 +793,7 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 
 1. **Suchfeld** über jeder Liste mit mehr als einer Handvoll Einträgen. Freitextsuche über die sinnvollen Felder der jeweiligen Liste (z. B. Kunden: Name, Kundennummer, externe Kundennummer, E-Mail, Telefon; Aufträge: Auftragsnummer, Kundenname, Instrument). Die Suche startet nach kurzer Eingabepause, nicht bei jedem einzelnen Tastendruck.
 2. **Filter** neben der Suche (Auswahlfelder), mit fachlich sinnvollen Standardwerten, z. B. "nur aktive"; "archivierte anzeigen" nur für berechtigte Rollen (siehe 7.2). Typische Filter: Status, Mitarbeiter, Instrumentenklasse, Priorität, Reparaturart.
-3. **Aktive Filter bleiben sichtbar** (z. B. als Chips mit Schließen-Symbol), dazu ein Knopf "Alle Filter zurücksetzen" und die **Trefferzahl** ("12 von 348").
+3. **Aktive Filter bleiben sichtbar** (z. B. als Chips mit Schließen-Symbol), dazu ein Knopf "Alle Filter zurücksetzen" und die **Trefferzahl**: "x von y Einträgen", sobald Suche oder ein Filter etwas ausblendet (auch ein Standardfilter wie "nur aktive"), sonst schlicht "y Einträge".
 4. **Sortierung** per Klick auf den Spaltenkopf, mit fachlich sinnvoller Standardsortierung (Aufträge: Priorität, dann Eingang, siehe 9.4).
 5. **Lange Listen** werden seitenweise angezeigt oder nachgeladen. Suche, Filter, Sortierung und Seitenwahl übernimmt das Backend, nicht der Browser, damit es auch bei vielen Tausend Einträgen schnell bleibt.
 6. **Zustand bleibt erhalten:** Suchbegriff, Filter, Sortierung und Seite stehen in der Adresse, sodass man nach dem Öffnen eines Eintrags und dem Zurückgehen wieder an derselben Stelle ist.
@@ -826,6 +827,9 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Stammdaten im Backend: Kunden, Instrumente, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter-Verwaltung, Wochenarbeitsstunden
 - Frontend Kunden und Instrumente nach Regel 9.10 (Teil 4a)
 - Frontend Verwaltung: Instrumentenklassen, Reparaturarten, Vorgabewerte (Teil 4b)
+- Mitarbeiter-Verwaltung im Frontend: Liste, Rollen-/Status-Aktionen, Wochenstunden mit Verlauf (Teil 4c)
+- Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), bisher eingesetzt in der Mitarbeiterliste
+- Wiederverwendbarer Aufklappbereich für zugeklappte Lese-Bereiche (Verlauf, Schätzungen)
 - Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
 - Externe Kundennummer am Kunden (siehe 2.1)
 - Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
@@ -833,9 +837,6 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- Frontend Verwaltung: Mitarbeiterliste und -seite mit Rollen-/Status-Aktionen (Teil 4c-1, im Browser noch zu prüfen)
-- Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), bisher eingesetzt in der Mitarbeiterliste
-- Wochenstunden festlegen und Verlauf auf der Mitarbeiterseite (Teil 4c-2)
 - Bestehende Listen (Aufträge, Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte) auf den gemeinsamen Listen-Baustein umstellen
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
