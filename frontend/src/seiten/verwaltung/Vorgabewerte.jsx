@@ -1,7 +1,7 @@
 // Vorgabewerte für Dauer und Kosten (2.6a) – nur Admin (7.2), nach 9.10 aufgebaut.
 // Ein Wert gilt allgemein für eine Reparaturart oder speziell für eine Instrumentenklasse.
 import { useCallback, useEffect, useState } from 'react'
-import { api, datum, euro, zahl } from '../../api.js'
+import { alleEintraege, api, datum, euro, zahl } from '../../api.js'
 import { AktionsButton, Feld, FokusFormular, FormularBereich } from '../../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
@@ -89,7 +89,10 @@ export default function Vorgabewerte() {
   )
   useEffect(() => { neuLaden() }, [neuLaden])
   useEffect(() => {
-    Promise.all([api.admin.arten(true), api.admin.klassen(true)])
+    Promise.all([
+      alleEintraege(api.admin.arten, { status: 'alle' }),
+      alleEintraege(api.admin.klassen, { status: 'alle' }),
+    ])
       .then(([a, k]) => { setArten(a); setKlassen(k) })
       .catch((e) => setFehler(e.message))
   }, [])

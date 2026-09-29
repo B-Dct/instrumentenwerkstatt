@@ -12,8 +12,8 @@ const TEXT = {
 }
 
 const SPALTEN = [
-  { titel: 'Bezeichnung', wert: (e) => e.bezeichnung },
-  { titel: 'Oberkategorie', wert: (e) => e.oberkategorie },
+  { titel: 'Bezeichnung', spalte: 'bezeichnung', wert: (e) => e.bezeichnung },
+  { titel: 'Oberkategorie', spalte: 'oberkategorie', wert: (e) => e.oberkategorie },
 ]
 
 function Felder({ werte, setze, felder }) {
@@ -44,6 +44,8 @@ export default function Instrumentenklassen() {
       archivieren={api.admin.klasseArchivieren}
       reaktivieren={api.admin.klasseReaktivieren}
       spalten={SPALTEN}
+      sortierung="oberkategorie"
+      suchhinweis="Suchen: Bezeichnung, Oberkategorie"
       startwerte={(e) => ({ bezeichnung: e?.bezeichnung ?? '', oberkategorie: e?.oberkategorie ?? '' })}
       zuDaten={(w) => ({ bezeichnung: w.bezeichnung, oberkategorie: w.oberkategorie })}
       Felder={Felder}

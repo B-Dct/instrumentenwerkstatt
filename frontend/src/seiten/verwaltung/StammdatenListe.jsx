@@ -1,14 +1,24 @@
-// Gemeinsame Seite für einfache Stammdaten (Instrumentenklassen, Reparaturarten) nach 9.10:
-// Liste im Vordergrund, "Neu" oder Klick auf eine Zeile öffnet das Formular eingebettet,
+// Gemeinsame Seite für einfache Stammdaten (Instrumentenklassen, Reparaturarten) nach 9.10/9.11:
+// Liste im Vordergrund (Suche, Status-Filter, Sortierung, Seiten über den Listen-Baustein),
+// "Neu" oder Klick auf eine Zeile öffnet das Formular eingebettet,
 // Archivieren/Reaktivieren als Zeilenaktion (nie als Löschen).
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AktionsButton, FokusFormular, FormularBereich } from '../../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
+import { ListeLeer, Listenkopf, Seitenwahl, SortierKopf } from '../../komponenten/Liste.jsx'
+import { useListe } from '../../komponenten/liste.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
 import { useSpeichern } from '../../komponenten/speichern.js'
 
 const NEU = 'neu'
+
+// Die ganze Seite ist nur für Admins (7.2), daher sehen alle hier den Status-Filter
+const FILTER = [
+  { name: 'status', label: 'Status', standard: 'aktiv', optionen: [
+    { wert: 'aktiv', text: 'aktiv' }, { wert: 'archiviert', text: 'archiviert' }, { wert: 'alle', text: 'alle' },
+  ] },
+]
 
 function EintragFormular({ formular, eintrag, text, anlegen, aendern, startwerte, zuDaten, Felder, onGespeichert }) {
   const [werte, setWerte] = useState(startwerte(eintrag))
@@ -27,26 +37,21 @@ function EintragFormular({ formular, eintrag, text, anlegen, aendern, startwerte
   )
 }
 
+// spalten: [{ titel, spalte (Sortierschlüssel im Backend), wert, zahl? }]
 export default function StammdatenListe({ text, laden, anlegen, aendern, archivieren, reaktivieren,
-                                          spalten, startwerte, zuDaten, Felder }) {
+                                          spalten, sortierung, suchhinweis, startwerte, zuDaten, Felder }) {
   const formular = useFokusFormular()
   const rueckmeldung = useRueckmeldung()
   const [hervorgehoben, hervorheben] = useHervorhebung()
-  const [archivierte, setArchivierte] = useState(false)
-  const [eintraege, setEintraege] = useState(null)
-  const [fehler, setFehler] = useState(null)
   const [aktionsfehler, setAktionsfehler] = useState(null)
+  const liste = useListe({ laden, filter: FILTER, sortierung })
+  const { daten, fehler } = liste
+  const eintraege = daten?.eintraege
 
-  const neuLaden = useCallback(
-    () => laden(archivierte).then(setEintraege).catch((e) => setFehler(e.message)),
-    [laden, archivierte],
-  )
-  useEffect(() => { neuLaden() }, [neuLaden])
-
-  async function gespeichert(eintrag, neu) {
+  function gespeichert(eintrag, neu) {
     formular.gespeichert()
     rueckmeldung(`${text.einzahl} „${eintrag.bezeichnung}“ ${neu ? 'angelegt' : 'gespeichert'}`)
-    await neuLaden()
+    liste.neuLaden()
     hervorheben(eintrag.id)
   }
 
@@ -62,7 +67,7 @@ export default function StammdatenListe({ text, laden, anlegen, aendern, archivi
       rueckmeldung(archiv
         ? `„${eintrag.bezeichnung}“ archiviert – bleibt für bestehende Daten erhalten und kann reaktiviert werden`
         : `„${eintrag.bezeichnung}“ reaktiviert`)
-      await neuLaden()
+      liste.neuLaden()
       hervorheben(eintrag.id)
     } catch (err) {
       setAktionsfehler(err.message)
@@ -91,20 +96,20 @@ export default function StammdatenListe({ text, laden, anlegen, aendern, archivi
         )}
       </FormularBereich>
 
-      <div className="filterleiste">
-        <label className="feld--inline leise">
-          <input type="checkbox" checked={archivierte} onChange={(e) => setArchivierte(e.target.checked)} />
-          archivierte anzeigen
-        </label>
-      </div>
+      <Listenkopf liste={liste} suchhinweis={suchhinweis} />
 
       {fehler && <p className="meldung meldung--fehler">{fehler}</p>}
-      {eintraege === null && !fehler && <p className="leise">Lädt …</p>}
-      {eintraege?.length === 0 && <p className="leise">{text.leer}</p>}
+      {!daten && !fehler && <p className="leise">Lädt …</p>}
+      <ListeLeer liste={liste} leerText={text.leer} />
       {eintraege?.length > 0 && (
         <div className="tabelle-rahmen">
           <table className="tabelle tabelle--klickbar">
-            <thead><tr>{spalten.map((s) => <th key={s.titel} className={s.zahl ? 'zahl' : undefined}>{s.titel}</th>)}<th></th></tr></thead>
+            <thead>
+              <tr>
+                {spalten.map((s) => <SortierKopf key={s.spalte} liste={liste} spalte={s.spalte} zahl={s.zahl}>{s.titel}</SortierKopf>)}
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
               {eintraege.map((e) => {
                 const archiviert = e.archiviert_am !== null
@@ -135,6 +140,7 @@ export default function StammdatenListe({ text, laden, anlegen, aendern, archivi
           </table>
         </div>
       )}
+      <Seitenwahl liste={liste} />
     </>
   )
 }

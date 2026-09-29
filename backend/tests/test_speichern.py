@@ -100,6 +100,9 @@ def _konflikt_vorgabewert_reaktivieren(client, w):
     return client.post(f"/admin/vorgabewerte/{allgemein}/reaktivieren")
 
 
+ALLE_KLASSEN = {"status": "alle", "seitengroesse": 100}
+
+
 @pytest.mark.parametrize("konflikt", [
     _konflikt_neue_reparaturart,
     _konflikt_klasse_umbenennen,
@@ -108,7 +111,7 @@ def _konflikt_vorgabewert_reaktivieren(client, w):
     _konflikt_vorgabewert_reaktivieren,
 ])
 def test_nach_konflikt_bleibt_nichts_haengen(client, db, w, konflikt):
-    klassen_vorher = {k["id"]: k["bezeichnung"] for k in client.get("/admin/instrumentenklassen").json()}
+    klassen_vorher = {k["id"]: k["bezeichnung"] for k in client.get("/admin/instrumentenklassen", params=ALLE_KLASSEN).json()["eintraege"]}
     vorgaben_vorher = _vorgabe_ids(client, w)
 
     antwort = konflikt(client, w)
@@ -119,7 +122,7 @@ def test_nach_konflikt_bleibt_nichts_haengen(client, db, w, konflikt):
     folge = client.post("/admin/reparaturarten", json={"bezeichnung": f"TEST neu {uuid.uuid4()}", "standard_komplexitaet": 2})
     assert folge.status_code == 201
     # … und der abgelehnte Wert wurde nirgends übernommen
-    assert {k["id"]: k["bezeichnung"] for k in client.get("/admin/instrumentenklassen").json()} == klassen_vorher
+    assert {k["id"]: k["bezeichnung"] for k in client.get("/admin/instrumentenklassen", params=ALLE_KLASSEN).json()["eintraege"]} == klassen_vorher
     nachher = _vorgabe_ids(client, w)
     if konflikt is _konflikt_vorgabewert_reaktivieren:
         # Der archivierte Wert ist archiviert geblieben, der neue allgemeine Wert ist aktiv

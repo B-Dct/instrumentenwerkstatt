@@ -58,7 +58,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST, PATCH | `/instrumente`, `/instrumente/{id}` | Instrument anlegen/bearbeiten (alle Angemeldeten) |
 | POST | `/instrumente/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin) |
 | GET | `/instrumentenklassen`, `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, nur aktive, für alle Angemeldeten) |
-| GET, POST, PATCH | `/admin/instrumentenklassen`, `/admin/reparaturarten` (+ `/{id}`) | Stammdaten pflegen (nur Admin; `?archivierte=true` zeigt auch archivierte) |
+| GET, POST, PATCH | `/admin/instrumentenklassen`, `/admin/reparaturarten` (+ `/{id}`) | Stammdaten pflegen (nur Admin); Listen nach 9.11 mit `suche`, `status` (aktiv/archiviert/alle), `sortierung`, `seite` |
 | POST | `/admin/…/{id}/archivieren`, `/admin/…/{id}/reaktivieren` | Stammdaten archivieren/zurückholen (nur Admin) |
 | GET | `/admin/mitarbeiter`, `/admin/mitarbeiter/{id}` | Mitarbeiter mit Rolle, Status, aktuellen Wochenstunden, offenen Aufträgen (nur Admin) |
 | POST | `/admin/mitarbeiter/{id}/deaktivieren`, `/…/aktivieren` | Deaktivieren/Reaktivieren (nicht sich selbst, nicht den letzten Admin, nicht bei offenen Aufträgen) |

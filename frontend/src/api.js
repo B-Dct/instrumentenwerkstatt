@@ -105,6 +105,17 @@ export async function anmelden(email, passwort) {
   return antwort.mitarbeiter
 }
 
+// Alle Einträge einer seitenweisen Liste (9.11) nacheinander holen – nur für Auswahlfelder,
+// die wirklich jeden Eintrag brauchen (z. B. auch archivierte Stammdaten in der Verwaltung)
+export async function alleEintraege(laden, filter = {}) {
+  const eintraege = []
+  for (let seite = 1; ; seite += 1) {
+    const daten = await laden({ ...filter, seite, seitengroesse: 100 })
+    eintraege.push(...daten.eintraege)
+    if (eintraege.length >= daten.treffer || daten.eintraege.length === 0) return eintraege
+  }
+}
+
 export const api = {
   auftraege: (filter = {}) => anfrage('/auftraege?' + new URLSearchParams(filter)),
   auftrag: (id) => anfrage(`/auftraege/${id}`),
@@ -126,12 +137,12 @@ export const api = {
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
   // Verwaltung (nur Admin)
   admin: {
-    klassen: (archivierte = false) => anfrage('/admin/instrumentenklassen?' + new URLSearchParams({ archivierte })),
+    klassen: (filter = {}) => anfrage('/admin/instrumentenklassen?' + new URLSearchParams(filter)),
     klasseAnlegen: (daten) => anfrage('/admin/instrumentenklassen', { methode: 'POST', daten }),
     klasseAendern: (id, daten) => anfrage(`/admin/instrumentenklassen/${id}`, { methode: 'PATCH', daten }),
     klasseArchivieren: (id) => anfrage(`/admin/instrumentenklassen/${id}/archivieren`, { methode: 'POST' }),
     klasseReaktivieren: (id) => anfrage(`/admin/instrumentenklassen/${id}/reaktivieren`, { methode: 'POST' }),
-    arten: (archivierte = false) => anfrage('/admin/reparaturarten?' + new URLSearchParams({ archivierte })),
+    arten: (filter = {}) => anfrage('/admin/reparaturarten?' + new URLSearchParams(filter)),
     artAnlegen: (daten) => anfrage('/admin/reparaturarten', { methode: 'POST', daten }),
     artAendern: (id, daten) => anfrage(`/admin/reparaturarten/${id}`, { methode: 'PATCH', daten }),
     artArchivieren: (id) => anfrage(`/admin/reparaturarten/${id}/archivieren`, { methode: 'POST' }),

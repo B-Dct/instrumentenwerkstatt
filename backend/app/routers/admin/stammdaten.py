@@ -6,7 +6,7 @@ Instrumente, Aufträge und Vorgabewerte nicht mehr zur Auswahl, bestehende bleib
 """
 
 import uuid
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
 from app.ereignisse import protokollieren, werte
+from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.speichern import sicher_speichern
 from app.models import Instrumentenklasse, Reparaturart
 from app.schemas import (
@@ -40,11 +41,22 @@ def _laden(db: Session, modell: type[M], eintrag_id: uuid.UUID, name: str) -> M:
     return eintrag
 
 
-def _auflisten(db: Session, modell, archivierte: bool, *sortierung):
-    abfrage = select(modell).order_by(*sortierung)
-    if not archivierte:
-        abfrage = abfrage.where(modell.archiviert_am.is_(None))
-    return list(db.scalars(abfrage))
+StatusFilter = Literal["aktiv", "archiviert", "alle"]
+STATUS_QUERY = Query("aktiv", alias="status", description="aktiv (Standard), archiviert oder alle")
+
+
+def _auflisten(db: Session, modell, schema, liste: ListenParameter, status_: StatusFilter, sortierbar, suchspalten):
+    """Liste nach 9.11: Suche, Status-Filter, Sortierung, seitenweise."""
+    basis = select(modell)
+    gefiltert = basis
+    if (muster := liste.suchmuster()) is not None:
+        gefiltert = gefiltert.where(enthaelt(muster, *suchspalten))
+    if status_ == "aktiv":
+        gefiltert = gefiltert.where(modell.archiviert_am.is_(None))
+    elif status_ == "archiviert":
+        gefiltert = gefiltert.where(modell.archiviert_am.is_not(None))
+    return seite_abfragen(db, basis, gefiltert, liste, sortierbar,
+                          umwandeln=lambda zeile: schema.model_validate(zeile[0]), eindeutig=modell.id)
 
 
 def _anlegen(db: Session, modell, daten, felder, entitaet, name, mitarbeiter_id):
@@ -88,11 +100,21 @@ def _archivieren(db: Session, eintrag, entitaet, name, mitarbeiter_id, archivier
 # --- Instrumentenklassen ------------------------------------------------------------
 
 KLASSE, KLASSE_FELDER = "Instrumentenklasse", ["bezeichnung", "oberkategorie"]
+KLASSEN_SORTIERUNG = {
+    "oberkategorie": (Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung),
+    "bezeichnung": Instrumentenklasse.bezeichnung,
+}
 
 
-@router.get("/instrumentenklassen", response_model=list[InstrumentenklasseEintrag])
-def klassen_auflisten(archivierte: bool = Query(False), db: Session = Depends(get_db)):
-    return _auflisten(db, Instrumentenklasse, archivierte, Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung)
+@router.get("/instrumentenklassen", response_model=Seite[InstrumentenklasseEintrag])
+def klassen_auflisten(
+    liste: ListenParameter = Depends(listen_parameter(KLASSEN_SORTIERUNG, standard="oberkategorie")),
+    status_: StatusFilter = STATUS_QUERY,
+    db: Session = Depends(get_db),
+) -> Seite[InstrumentenklasseEintrag]:
+    """Suche über Bezeichnung und Oberkategorie; Standard: nach Oberkategorie, darin nach Bezeichnung."""
+    return _auflisten(db, Instrumentenklasse, InstrumentenklasseEintrag, liste, status_, KLASSEN_SORTIERUNG,
+                      [Instrumentenklasse.bezeichnung, Instrumentenklasse.oberkategorie])
 
 
 @router.post("/instrumentenklassen", response_model=InstrumentenklasseEintrag, status_code=status.HTTP_201_CREATED)
@@ -125,11 +147,20 @@ def klasse_reaktivieren(klasse_id: uuid.UUID, db: Session = Depends(get_db),
 # --- Reparaturarten -----------------------------------------------------------------
 
 ART, ART_FELDER = "Reparaturart", ["bezeichnung", "standard_komplexitaet"]
+ARTEN_SORTIERUNG = {
+    "bezeichnung": Reparaturart.bezeichnung,
+    "standard_komplexitaet": (Reparaturart.standard_komplexitaet, Reparaturart.bezeichnung),
+}
 
 
-@router.get("/reparaturarten", response_model=list[ReparaturartEintrag])
-def arten_auflisten(archivierte: bool = Query(False), db: Session = Depends(get_db)):
-    return _auflisten(db, Reparaturart, archivierte, Reparaturart.bezeichnung)
+@router.get("/reparaturarten", response_model=Seite[ReparaturartEintrag])
+def arten_auflisten(
+    liste: ListenParameter = Depends(listen_parameter(ARTEN_SORTIERUNG, standard="bezeichnung")),
+    status_: StatusFilter = STATUS_QUERY,
+    db: Session = Depends(get_db),
+) -> Seite[ReparaturartEintrag]:
+    """Suche über die Bezeichnung; Standard: alphabetisch."""
+    return _auflisten(db, Reparaturart, ReparaturartEintrag, liste, status_, ARTEN_SORTIERUNG, [Reparaturart.bezeichnung])
 
 
 @router.post("/reparaturarten", response_model=ReparaturartEintrag, status_code=status.HTTP_201_CREATED)

@@ -10,6 +10,10 @@ Verwendung in einem Endpunkt:
         basis = select(Mitarbeiter)                         # ohne Suche/Filter → "gesamt"
         gefiltert = basis.where(…Suche/Filter…)              # → "treffer"
         return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG, umwandeln=…)
+
+Ein Sortierschlüssel darf auch ein Tupel von Spalten sein, z. B.
+`"oberkategorie": (Klasse.oberkategorie, Klasse.bezeichnung)`: die erste Spalte folgt der
+gewählten Richtung, die weiteren ordnen gleiche Werte immer aufsteigend.
 """
 
 from collections.abc import Callable
@@ -23,6 +27,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 T = TypeVar("T")
+
+Sortierspalten = ColumnElement | tuple[ColumnElement, ...]
 
 SEITENGROESSE_STANDARD = 25
 SEITENGROESSE_MAX = 100
@@ -56,7 +62,7 @@ class ListenParameter:
         return f"%{text}%"
 
 
-def listen_parameter(sortierbar: dict[str, ColumnElement], standard: str, richtung: Literal["auf", "ab"] = "auf"):
+def listen_parameter(sortierbar: dict[str, Sortierspalten], standard: str, richtung: Literal["auf", "ab"] = "auf"):
     """Dependency-Fabrik für die gemeinsamen Listen-Parameter einer Liste."""
 
     def parameter(
@@ -88,14 +94,16 @@ def seite_abfragen(
     basis: Select,
     gefiltert: Select,
     liste: ListenParameter,
-    sortierbar: dict[str, ColumnElement],
+    sortierbar: dict[str, Sortierspalten],
     umwandeln: Callable,
     eindeutig: ColumnElement | None = None,
 ) -> Seite:
     """Zählt, sortiert und liefert eine Seite. `eindeutig` (z. B. die ID) macht die Reihenfolge
     bei gleichen Sortierwerten stabil, damit beim Blättern nichts doppelt erscheint oder fehlt."""
-    spalte = sortierbar[liste.sortierung]
-    ordnung = [spalte.desc().nulls_last() if liste.richtung == "ab" else spalte.asc().nulls_last()]
+    spalten = sortierbar[liste.sortierung]
+    erste, *weitere = spalten if isinstance(spalten, tuple) else (spalten,)
+    ordnung = [erste.desc().nulls_last() if liste.richtung == "ab" else erste.asc().nulls_last()]
+    ordnung += [spalte.asc().nulls_last() for spalte in weitere]
     if eindeutig is not None:
         ordnung.append(eindeutig)
     treffer = _anzahl(db, gefiltert)

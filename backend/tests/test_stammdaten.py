@@ -20,6 +20,14 @@ def w(db):
     return Werkstatt(db)
 
 
+def _ids(antwort):
+    return [x["id"] for x in antwort.json()["eintraege"]]
+
+
+def _bezeichnungen(antwort, kennung):
+    return [x["bezeichnung"].removeprefix(f"{kennung} ") for x in antwort.json()["eintraege"]]
+
+
 # --- Berechtigungen -------------------------------------------------------------
 
 @pytest.mark.parametrize("rolle", [Systemrolle.mitarbeiter, Systemrolle.werkstattleiter])
@@ -27,6 +35,7 @@ def w(db):
     ("post", "/admin/reparaturarten", {"bezeichnung": "X", "standard_komplexitaet": 1}),
     ("post", "/admin/instrumentenklassen", {"bezeichnung": "X", "oberkategorie": "Y"}),
     ("get", "/admin/reparaturarten", None),
+    ("get", "/admin/instrumentenklassen", None),
     ("post", "/admin/vorgabewerte", {"reparaturart_id": str(uuid.uuid4()), "vorgabe_stunden": 1, "vorgabe_kosten": 1}),
     ("patch", f"/admin/vorgabewerte/{uuid.uuid4()}", {"notiz": "x"}),
 ])
@@ -59,9 +68,9 @@ def test_reparaturart_anlegen_bearbeiten_archivieren(client, db, admin):
     assert r["archiviert_am"] is not None
     # Nicht gelöscht, nur ausgeblendet
     assert db.get(Reparaturart, uuid.UUID(r["id"])) is not None
-    assert r["id"] not in [x["id"] for x in client.get("/admin/reparaturarten", headers=admin).json()]
-    assert r["id"] in [x["id"] for x in client.get("/admin/reparaturarten", headers=admin,
-                                                   params={"archivierte": True}).json()]
+    suche = {"suche": "TEST Bogen"}
+    assert _ids(client.get("/admin/reparaturarten", headers=admin, params=suche)) == []
+    assert _ids(client.get("/admin/reparaturarten", headers=admin, params={**suche, "status": "archiviert"})) == [r["id"]]
     assert r["id"] not in [x["id"] for x in client.get("/reparaturarten", headers=admin).json()]
 
     r = client.post(f"/admin/reparaturarten/{r['id']}/reaktivieren", headers=admin).json()
@@ -89,8 +98,8 @@ def test_doppelte_bezeichnung(client, admin, w):
                            json={"bezeichnung": "TEST Kontrabass"})
     assert antwort.status_code == 409
     # Folgeanfrage funktioniert, die abgelehnte Bezeichnung wurde nicht übernommen
-    klassen = client.get("/admin/instrumentenklassen", headers=admin).json()
-    assert next(k for k in klassen if k["id"] == str(w.violine.id))["bezeichnung"] == "TEST Violine"
+    klassen = client.get("/admin/instrumentenklassen", headers=admin, params={"suche": "TEST Violine"}).json()
+    assert [k["bezeichnung"] for k in klassen["eintraege"]] == ["TEST Violine"]
 
 
 def test_archivierte_reparaturart_nicht_fuer_neue_auftraege(client, admin, w):
@@ -138,3 +147,60 @@ def test_vorgabewert_bleibt_bearbeitbar_nach_archivierung_der_reparaturart(clien
         "vorgabe_stunden": 1, "vorgabe_kosten": 30,
     })
     assert antwort.status_code == 422
+
+
+# --- Listen nach 9.11 -------------------------------------------------------------
+
+@pytest.fixture
+def klassenkreis(client, admin):
+    """Eigene Test-Klassen mit eindeutiger Kennung, damit echte Daten nicht stören."""
+    kennung = f"KK{uuid.uuid4().hex[:6]}"
+    for bezeichnung, oberkategorie in [("Viola", "Streich"), ("Harfe", "Zupf"), ("Cello", "Streich"), ("Laute", "Zupf")]:
+        client.post("/admin/instrumentenklassen", headers=admin,
+                    json={"bezeichnung": f"{kennung} {bezeichnung}", "oberkategorie": f"{kennung} {oberkategorie}"})
+    laute = client.get("/admin/instrumentenklassen", headers=admin, params={"suche": f"{kennung} Laute"}).json()
+    client.post(f"/admin/instrumentenklassen/{laute['eintraege'][0]['id']}/archivieren", headers=admin)
+    return kennung
+
+
+def test_klassenliste_standard_nach_oberkategorie_dann_bezeichnung(client, admin, klassenkreis):
+    antwort = client.get("/admin/instrumentenklassen", headers=admin, params={"suche": klassenkreis})
+    assert _bezeichnungen(antwort, klassenkreis) == ["Cello", "Viola", "Harfe"]  # Streich vor Zupf; Laute archiviert
+    daten = antwort.json()
+    assert daten["treffer"] == 3 and daten["gesamt"] > daten["treffer"]
+
+
+def test_klassenliste_absteigend_bezeichnung_bleibt_aufsteigend(client, admin, klassenkreis):
+    antwort = client.get("/admin/instrumentenklassen", headers=admin,
+                         params={"suche": klassenkreis, "richtung": "ab", "status": "alle"})
+    assert _bezeichnungen(antwort, klassenkreis) == ["Harfe", "Laute", "Cello", "Viola"]  # Zupf vor Streich
+
+
+def test_klassenliste_suche_auch_in_oberkategorie_und_status_filter(client, admin, klassenkreis):
+    assert _bezeichnungen(client.get("/admin/instrumentenklassen", headers=admin,
+                                     params={"suche": f"{klassenkreis} Zupf", "status": "alle"}), klassenkreis) == ["Harfe", "Laute"]
+    assert _bezeichnungen(client.get("/admin/instrumentenklassen", headers=admin,
+                                     params={"suche": klassenkreis, "status": "archiviert"}), klassenkreis) == ["Laute"]
+
+
+def test_reparaturartenliste_sortierung_seiten_und_platzhalter(client, admin):
+    kennung = f"RA{uuid.uuid4().hex[:6]}"
+    for bezeichnung, komplexitaet in [("Bogen", 3), ("Anstrich 100%_neu", 3), ("Steg", 1)]:
+        client.post("/admin/reparaturarten", headers=admin,
+                    json={"bezeichnung": f"{kennung} {bezeichnung}", "standard_komplexitaet": komplexitaet})
+    params = {"suche": kennung}
+    assert _bezeichnungen(client.get("/admin/reparaturarten", headers=admin, params=params), kennung) == \
+        ["Anstrich 100%_neu", "Bogen", "Steg"]
+    params |= {"sortierung": "standard_komplexitaet", "richtung": "ab", "seitengroesse": 2}
+    seite1, seite2 = (client.get("/admin/reparaturarten", headers=admin, params={**params, "seite": n}) for n in (1, 2))
+    assert _bezeichnungen(seite1, kennung) + _bezeichnungen(seite2, kennung) == ["Anstrich 100%_neu", "Bogen", "Steg"]
+    assert seite1.json()["treffer"] == 3
+    assert _bezeichnungen(client.get("/admin/reparaturarten", headers=admin, params={"suche": "100%_neu"}), kennung) == \
+        ["Anstrich 100%_neu"]
+    assert _ids(client.get("/admin/reparaturarten", headers=admin, params={"suche": f"{kennung} %"})) == []
+
+
+@pytest.mark.parametrize("pfad", ["/admin/instrumentenklassen", "/admin/reparaturarten"])
+def test_stammdatenliste_ungueltige_parameter(client, admin, pfad):
+    assert client.get(pfad, headers=admin, params={"sortierung": "archiviert_am"}).status_code == 422
+    assert client.get(pfad, headers=admin, params={"status": "geloescht"}).status_code == 422
