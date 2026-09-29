@@ -1,10 +1,12 @@
 // Mitarbeiterseite (2.2, 2.12, 7.4) – nur Admin, nach 9.10: Lesen zuerst, Bearbeiten auf Wunsch.
-// Aktionen: Systemrolle ändern · Deaktivieren/Reaktivieren. Schutzregeln (kein Selbst-Deaktivieren,
+// Aktionen: Wochenstunden ändern · Systemrolle ändern · Deaktivieren/Reaktivieren.
+// Darunter der zugeklappte Wochenstunden-Verlauf (2.12). Schutzregeln (kein Selbst-Deaktivieren,
 // kein Selbst-Herabstufen, letzter Admin, offene Aufträge) prüft das Backend; die Oberfläche
 // blendet die Aktionen am eigenen Konto gleich aus.
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { angemeldeterNutzer, api, datum, zahl } from '../../api.js'
+import { angemeldeterNutzer, api, datum, zahl, zeit } from '../../api.js'
+import Aufklappbereich from '../../komponenten/Aufklappbereich.jsx'
 import { AktionsButton, Feld, FokusFormular, FormularBereich } from '../../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
@@ -13,6 +15,93 @@ import { useSpeichern } from '../../komponenten/speichern.js'
 import { ROLLEN } from './rollen.js'
 
 const ROLLE = 'rolle'
+const WOCHENSTUNDEN = 'wochenstunden'
+
+const isoDatum = (d) => d.toLocaleDateString('sv-SE') // JJJJ-MM-TT in lokaler Zeit
+function naechsterTag(iso) {
+  const d = new Date(`${iso}T12:00:00`)
+  d.setDate(d.getDate() + 1)
+  return isoDatum(d)
+}
+
+// Ein neuer Wert muss nach dem Beginn des bisher offenen Eintrags liegen (2.12)
+function fruehesterBeginn(offenerEintrag) {
+  const heute = isoDatum(new Date())
+  if (!offenerEintrag) return { vorschlag: heute, minimum: null }
+  const minimum = naechsterTag(offenerEintrag.gueltig_ab)
+  return { vorschlag: minimum > heute ? minimum : heute, minimum }
+}
+
+function WochenstundenFormular({ formular, mitarbeiter, offenerEintrag, onGespeichert }) {
+  const { vorschlag, minimum } = fruehesterBeginn(offenerEintrag)
+  const [werte, setWerte] = useState({ wochenstunden: '', gueltig_ab: vorschlag })
+  const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(
+    () => api.admin.wochenstundenFestlegen(mitarbeiter.id, {
+      wochenstunden: werte.wochenstunden === '' ? null : Number(werte.wochenstunden),
+      gueltig_ab: werte.gueltig_ab || null,
+    }),
+    onGespeichert,
+    { konfliktFeld: 'gueltig_ab' },
+  )
+  const setze = (feld) => (e) => { feldGeaendert(feld); setWerte((w) => ({ ...w, [feld]: e.target.value })) }
+  return (
+    <FokusFormular formular={formular} titel="Wochenstunden ändern" onSpeichern={ausfuehren} sendet={sendet} fehler={fehler}>
+      <div className="spalten spalten--eng">
+        <Feld label="Wochenstunden" fehler={felder.wochenstunden} hinweis="Über 0, höchstens 80, bis zu 2 Nachkommastellen">
+          <input type="number" min="0.01" max="80" step="0.25" value={werte.wochenstunden}
+                 onChange={setze('wochenstunden')} required />
+        </Feld>
+        <Feld label="Gültig ab" fehler={felder.gueltig_ab}
+              hinweis={minimum ? `Frühestens ${datum(minimum)} (Tag nach Beginn des aktuellen Werts)` : 'Auch rückwirkend möglich'}>
+          <input type="date" value={werte.gueltig_ab} min={minimum ?? undefined} onChange={setze('gueltig_ab')} required />
+        </Feld>
+      </div>
+      <p className="leise">
+        Der bisherige Wert endet automatisch am Vortag und bleibt im Verlauf erhalten. Neue Terminschätzungen
+        rechnen sofort mit dem neuen Wert; bereits berechnete Termine offener Aufträge werden nicht automatisch
+        angepasst (Abschnitt 4.0a). Bei Bedarf lassen sie sich per Kommandozeile neu berechnen
+        (<code>termine_nachrechnen --alle</code>, siehe backend/README.md).
+      </p>
+    </FokusFormular>
+  )
+}
+
+function Verlauf({ verlauf, namen }) {
+  const eintraege = verlauf?.eintraege ?? []
+  const heute = isoDatum(new Date())
+  const zusammenfassung = !verlauf ? 'Lädt …'
+    : eintraege.length === 0 ? 'Noch keine Wochenstunden hinterlegt – es gilt der Standard von 40 Std.'
+    : `${eintraege.length} ${eintraege.length === 1 ? 'Eintrag' : 'Einträge'}, zuletzt ${zahl(eintraege[0].wochenstunden)} Std. ab ${datum(eintraege[0].gueltig_ab)}`
+  return (
+    <Aufklappbereich titel="Verlauf der Wochenstunden" zusammenfassung={zusammenfassung}>
+      {eintraege.length === 0 ? <p className="leise">{zusammenfassung}</p> : (
+        <div className="tabelle-rahmen">
+          <table className="tabelle">
+            <thead><tr><th>Zeitraum</th><th className="zahl">Wochenstd.</th><th>Geändert von</th><th>Geändert am</th></tr></thead>
+            <tbody>
+              {eintraege.map((e) => {
+                const geplant = e.gueltig_ab > heute
+                const aktuell = !geplant && (e.gueltig_bis === null || e.gueltig_bis >= heute)
+                return (
+                  <tr key={e.id}>
+                    <td>
+                      {datum(e.gueltig_ab)} – {e.gueltig_bis ? datum(e.gueltig_bis) : 'offen'}
+                      {aktuell && <span className="marke marke--aktuell">aktuell</span>}
+                      {geplant && <span className="marke">geplant</span>}
+                    </td>
+                    <td className="zahl">{zahl(e.wochenstunden)}</td>
+                    <td>{e.geaendert_von_mitarbeiter_id ? namen[e.geaendert_von_mitarbeiter_id] ?? 'unbekannt' : '–'}</td>
+                    <td>{zeit(e.geaendert_am)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Aufklappbereich>
+  )
+}
 
 function RolleFormular({ formular, mitarbeiter, onGespeichert }) {
   const [rolle, setRolle] = useState(mitarbeiter.systemrolle)
@@ -40,8 +129,19 @@ export default function MitarbeiterDetail() {
   const [fehler, setFehler] = useState(null)
   const [aktionsfehler, setAktionsfehler] = useState(null)
 
-  const laden = useCallback(() => api.admin.mitarbeiter(id).then(setMitarbeiter).catch((e) => setFehler(e.message)), [id])
+  const [verlauf, setVerlauf] = useState(null)
+  const [namen, setNamen] = useState({})
+
+  const laden = useCallback(() => Promise.all([api.admin.mitarbeiter(id), api.admin.wochenstunden(id)])
+    .then(([m, v]) => { setMitarbeiter(m); setVerlauf(v) })
+    .catch((e) => setFehler(e.message)), [id])
   useEffect(() => { laden() }, [laden])
+  useEffect(() => {
+    // Namen für "Geändert von" (auch deaktivierte Admins)
+    api.admin.mitarbeiterListe({ status: 'alle', seitengroesse: 100 })
+      .then((seite) => setNamen(Object.fromEntries(seite.eintraege.map((e) => [e.id, e.name]))))
+      .catch(() => {})
+  }, [])
 
   if (fehler) return <p className="meldung meldung--fehler">{fehler}</p>
   if (!mitarbeiter) return <p className="leise">Lädt …</p>
@@ -66,6 +166,15 @@ export default function MitarbeiterDetail() {
     } catch (err) {
       setAktionsfehler(err.message)
     }
+  }
+
+  async function wochenstundenGespeichert(neuerVerlauf) {
+    formular.gespeichert()
+    setVerlauf(neuerVerlauf)
+    const neu = neuerVerlauf.eintraege[0]
+    rueckmeldung(`Wochenstunden von ${m.name}: ${zahl(neu.wochenstunden)} Std. ab ${datum(neu.gueltig_ab)}`)
+    setMitarbeiter(await api.admin.mitarbeiter(m.id))
+    hervorheben('status')
   }
 
   function rolleGespeichert(neu) {
@@ -101,6 +210,7 @@ export default function MitarbeiterDetail() {
       </dl>
 
       <div className="aktionsleiste">
+        {m.aktiv && <AktionsButton formular={formular} schluessel={WOCHENSTUNDEN}>Wochenstunden ändern</AktionsButton>}
         {!selbst && m.aktiv && <AktionsButton formular={formular} schluessel={ROLLE}>Systemrolle ändern</AktionsButton>}
         {!selbst && m.aktiv && (
           <button type="button" className="btn btn--gefahr aktionsleiste__rechts" onClick={() => statusWechseln(false)}>
@@ -126,7 +236,14 @@ export default function MitarbeiterDetail() {
 
       <FormularBereich formular={formular}>
         {formular.offen === ROLLE && <RolleFormular key={ROLLE} formular={formular} mitarbeiter={m} onGespeichert={rolleGespeichert} />}
+        {formular.offen === WOCHENSTUNDEN && (
+          <WochenstundenFormular key={WOCHENSTUNDEN} formular={formular} mitarbeiter={m}
+                                 offenerEintrag={verlauf?.eintraege.find((e) => e.gueltig_bis === null)}
+                                 onGespeichert={wochenstundenGespeichert} />
+        )}
       </FormularBereich>
+
+      <Verlauf verlauf={verlauf} namen={namen} />
     </>
   )
 }

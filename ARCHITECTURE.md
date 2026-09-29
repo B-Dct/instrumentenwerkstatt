@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 29.09.2026 | Wochenstunden ändern und Verlauf auf der Mitarbeiterseite (Verwaltung Schritt 4c-2); Aufklappbereich-Baustein; Trefferzahl zeigt „x von y“ auch bei Standardfiltern |
 | 29.09.2026 | Listen-Baustein (9.11) im Backend und Frontend; Mitarbeiterliste und Mitarbeiterseite (Verwaltung Schritt 4c-1) |
 | 28.09.2026 | Externe Kundennummer eindeutig ohne Beachtung der Groß-/Kleinschreibung (Index auf lower(...); Migration bricht bei Altkonflikten ab) |
 | 28.09.2026 | Externe Kundennummer am Kunden (optional, eindeutig falls gesetzt, in Suche); Konfliktmeldungen können den betroffenen Datensatz nennen |

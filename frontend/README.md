@@ -26,6 +26,8 @@ Eine andere Backend-Adresse lässt sich über `VITE_API_URL` setzen (siehe `.env
 | `/kunden/:id` | Kundenseite: Eckdaten, Aktionen (bearbeiten, Instrument hinzufügen, archivieren), Instrumente |
 | `/verwaltung/instrumentenklassen`, `/verwaltung/reparaturarten` | Stammdaten pflegen und archivieren (nur Admin) |
 | `/verwaltung/vorgabewerte` | Vorgabewerte für Dauer/Kosten je Reparaturart (nur Admin) |
+| `/verwaltung/mitarbeiter` | Mitarbeiterliste mit Suche, Filtern, Sortierung, Seiten (9.11, nur Admin) |
+| `/verwaltung/mitarbeiter/:id` | Mitarbeiterseite: Wochenstunden ändern, Systemrolle ändern, Deaktivieren/Reaktivieren, Wochenstunden-Verlauf |
 | `/auftrag/:id` | Details, Statuswechsel (bei „Fertig“ mit Pflicht-Arbeitszeit), Schätzungs-Korrektur, Statusverlauf, Schätzungsprotokoll |
 
 ## Design-System
@@ -53,6 +55,8 @@ Neue Seiten verwenden die Bausteine aus `src/komponenten/`:
 - `useHervorhebung()` (`hervorhebung.js`): geänderten Eintrag kurz hervorheben
 - `useSpeichern()` (`speichern.js`): Senden, Fehler je Feld; „gibt es bereits“ (409) am passenden Feld
 - `NurRolle` (`NurRolle.jsx`): Seite nur ab einer Mindestrolle
+- `useListe()` (`liste.js`) + `Listenkopf`, `SortierKopf`, `Seitenwahl`, `ListeLeer` (`Liste.jsx`): Listen nach 9.11
+- `Aufklappbereich` (`Aufklappbereich.jsx`): zugeklappter Lese-Bereich mit Zusammenfassung (9.10, Regel 6)
 - `seiten/verwaltung/StammdatenListe.jsx`: gemeinsame Listenseite für einfache Stammdaten
 
 Aktionen werden nur angezeigt, wenn die Rolle sie erlaubt (`hatRolle(...)` in `api.js`);

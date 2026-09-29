@@ -296,3 +296,13 @@ textarea { resize: vertical; }
 th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierzeichen { color: var(--farbe-primaer); }
 .seitenwahl { display: flex; align-items: center; gap: var(--abstand-3); margin-top: var(--abstand-4); font-size: var(--groesse-14); }
 .klein { font-size: var(--groesse-12); }
+
+/* Zugeklappte Lese-Bereiche (9.10, Regel 6) */
+.aufklappbereich h2 { margin-bottom: var(--abstand-2); }
+.aufklappbereich__knopf {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: var(--abstand-2);
+}
+.aufklappbereich__zeichen { font-size: var(--groesse-16); color: var(--farbe-text-leise); width: 1em; }
+.aufklappbereich__zusammenfassung { margin: 0; padding-left: calc(1em + var(--abstand-2)); }
+.marke--aktuell { color: var(--farbe-erfolg); border-color: var(--farbe-erfolg); margin-left: var(--abstand-2); }

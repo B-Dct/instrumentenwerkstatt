@@ -23,7 +23,10 @@ export function Listenkopf({ liste, suchhinweis }) {
       <div className="filterchips" aria-live="polite">
         {daten && (
           <span className="trefferzahl">
-            {liste.gefiltert ? `${daten.treffer} von ${daten.gesamt}` : `${daten.gesamt}`} {daten.gesamt === 1 ? 'Eintrag' : 'Einträge'}
+            {/* "4 von 5", sobald nicht alles gezeigt wird – auch wenn nur ein Standardfilter greift */}
+            {daten.treffer === daten.gesamt
+              ? `${daten.gesamt} ${daten.gesamt === 1 ? 'Eintrag' : 'Einträge'}`
+              : `${daten.treffer} von ${daten.gesamt} Einträgen`}
           </span>
         )}
         {zustand.suche && (
