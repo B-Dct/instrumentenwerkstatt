@@ -15,6 +15,7 @@ from app.db import get_db
 from app.eingabe import feldfehler
 from app.einstellungen import EINSTELLUNGEN
 from app.ereignisse import protokollieren
+from app.feiertage import automatik_zuruecksetzen, feiertage_sicherstellen
 from app.models import Einstellung, Mitarbeiter
 from app.schemas import EinstellungEintrag, EinstellungWert
 from app.speichern import sicher_speichern
@@ -69,4 +70,9 @@ def einstellung_setzen(
         protokollieren(db, mitarbeiter_id, "einstellung_geaendert", "einstellung", gespeichert.id,
                        {"schluessel": schluessel, "alt": alt, "neu": daten.wert})
         db.commit()
+        if schluessel == "bundesland":
+            # Laufendes und kommendes Jahr anlegen, falls noch nie erzeugt (9.13.1). Bereits erzeugte
+            # Jahre bleiben bei einem Wechsel des Bundeslands unverändert.
+            automatik_zuruecksetzen()
+            feiertage_sicherstellen(db)
     return _eintrag(db, schluessel)

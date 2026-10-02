@@ -146,6 +146,8 @@ export const api = {
   // Verwaltung (nur Admin)
   admin: {
     einstellungen: () => anfrage('/admin/einstellungen'),
+    feiertage: () => anfrage('/admin/feiertage'),
+    feiertageErzeugen: (jahr) => anfrage('/admin/feiertage', { methode: 'POST', daten: { jahr } }),
     einstellungSetzen: (schluessel, wert) => anfrage(`/admin/einstellungen/${schluessel}`, { methode: 'PUT', daten: { wert } }),
     klassen: (filter = {}) => anfrage('/admin/instrumentenklassen?' + new URLSearchParams(filter)),
     klasseAnlegen: (daten) => anfrage('/admin/instrumentenklassen', { methode: 'POST', daten }),

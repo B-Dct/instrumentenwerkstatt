@@ -459,3 +459,35 @@ class EinstellungEintrag(BaseModel):
 
 class EinstellungWert(BaseModel):
     wert: str
+
+
+# --- Feiertage erzeugen (Datenmodell 9.13.1) -----------------------------------
+
+class FeiertageNeu(BaseModel):
+    jahr: int
+
+
+class FeiertagTag(BaseModel):
+    datum: date
+    name: str
+
+
+class FeiertageErgebnis(BaseModel):
+    jahr: int
+    bundesland: str
+    angelegt: list[FeiertagTag]
+    uebersprungen: list[FeiertagTag]  # schon vorhanden oder früher erzeugt (nichts wird überschrieben)
+
+
+class FeiertageJahr(BaseModel):
+    jahr: int
+    bundesland: str  # Bundesland beim ersten Erzeugen dieses Jahres
+    erzeugt_am: datetime
+    anzahl: int  # insgesamt automatisch angelegte Feiertage
+
+
+class FeiertageStand(BaseModel):
+    bundesland: str | None  # aktuelle Einstellung
+    jahr_von: int  # erlaubter Bereich für "Feiertage für Jahr X erzeugen"
+    jahr_bis: int
+    jahre: list[FeiertageJahr]

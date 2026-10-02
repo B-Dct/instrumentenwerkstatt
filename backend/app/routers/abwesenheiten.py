@@ -24,6 +24,7 @@ from app.auth import aktueller_mitarbeiter_id, rolle_mindestens
 from app.db import get_db
 from app.eingabe import feldfehler
 from app.ereignisse import protokollieren, werte
+from app.feiertage import feiertage_sicherstellen
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.models import Abwesenheit, Abwesenheitstyp, Mitarbeiter, MitarbeiterArbeitszeit, Systemrolle
 from app.schemas import AbwesenheitAenderung, AbwesenheitEintrag, AbwesenheitNeu, AbwesenheitsRaster, RasterZeile
@@ -157,6 +158,7 @@ def abwesenheiten_raster(
     """Daten für das Abwesenheits-Raster (9.13): je aktivem Mitarbeiter die normalen Tagesstunden
     (Wochenstunden / 5, sonst Standard) und alle Abwesenheiten, die den Ausschnitt berühren –
     auch die werkstattweiten. Die Darstellung je Zelle übernimmt die Oberfläche."""
+    feiertage_sicherstellen(db)  # laufendes und kommendes Jahr automatisch (9.13.1), z. B. nach dem Jahreswechsel
     alle_tage = [von + timedelta(days=n) for n in range(tage)]
     bis = alle_tage[-1]
     mitarbeiter = db.scalars(select(Mitarbeiter).where(Mitarbeiter.aktiv).order_by(Mitarbeiter.name, Mitarbeiter.id)).all()

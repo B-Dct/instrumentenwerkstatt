@@ -76,6 +76,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST | `/abwesenheiten/{id}/stornieren`, `/…/wiederherstellen` | Stornieren statt Löschen (zählt dann nicht mehr für die Terminschätzung) und Zurückholen |
 | GET | `/abwesenheiten/raster?von=…&tage=7&stornierte=…` | Daten für das Abwesenheits-Raster (9.13): aktive Mitarbeiter mit normalen Tagesstunden und alle Abwesenheiten im Ausschnitt |
 | GET, PUT | `/admin/einstellungen`, `/admin/einstellungen/{schluessel}` | Werkstatt-Einstellungen lesen/setzen (nur Admin; bisher `bundesland`, Auswahl aus den 16 Bundesländern) |
+| GET, POST | `/admin/feiertage` | Stand der erzeugten Jahre / „Feiertage für Jahr X erzeugen“ (nur Admin; Bundesland aus den Einstellungen; legt nur Fehlendes an, überschreibt nichts). Laufendes und kommendes Jahr entstehen automatisch beim Festlegen des Bundeslands und beim Öffnen des Rasters |
 
 Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.
 

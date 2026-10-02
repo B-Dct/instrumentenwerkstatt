@@ -26,7 +26,7 @@ def werte(objekt, felder: list[str]) -> dict:
 
 def protokollieren(
     db: Session, mitarbeiter_id: uuid.UUID | None, aktion: str, entitaet: str,
-    betroffene_id: uuid.UUID, details: dict | None = None,
+    betroffene_id: uuid.UUID | None, details: dict | None = None,
 ) -> None:
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,

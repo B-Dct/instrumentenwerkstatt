@@ -329,7 +329,11 @@ export default function Abwesenheiten() {
                             {z.art === 'abwesend' && <span className="raster__wert">{zahl(z.stunden)}</span>}
                             {eintragHier && (
                               <span className="raster__typ">
-                                {TYPEN[eintragHier.typ]}{z.eigene.length > 1 && ` +${z.eigene.length - 1}`}{eintragHier.notiz && ' ✎'}
+                                {/* Werkstatt-Zeile: der Name sagt mehr als der Typ (z. B. „Fronleichnam“ statt „Feiertag“) */}
+                                {zeile.id === WERKSTATT && eintragHier.notiz
+                                  ? eintragHier.notiz
+                                  : <>{TYPEN[eintragHier.typ]}{eintragHier.notiz && ' ✎'}</>}
+                                {z.eigene.length > 1 && ` +${z.eigene.length - 1}`}
                               </span>
                             )}
                             {stornoMarke}
