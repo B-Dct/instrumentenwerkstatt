@@ -702,6 +702,13 @@ Ersetzt für diese beiden Rollen die Startseite nach dem Login (der "Startseite 
 
 **Zugriff:** Nur Werkstattleitung und Admin (7.2). Von hier aus weiterhin direkter Zugriff auf Umverteilung von Aufträgen und den Administrationsbereich.
 
+**Präzisierungen aus der Umsetzung (Teilschritt 1, Kennzahl-Kacheln):**
+- Die Auftragsliste liegt unter einer eigenen Adresse (`/auftraege`), da `/` für Werkstattleitung und Admin jetzt die Übersicht ist; normale Mitarbeiter werden von dort direkt zur Auftragsliste weitergeleitet, ihre Startseite bleibt unverändert
+- Kachel-Bezeichnungen in der Oberfläche: "Offene Aufträge", "Überfällig", "Hohe Priorität", "Pausiert". "Hohe Priorität" und "Pausiert" zählen nur offene Aufträge
+- Die "Überfällig"-Kachel ist nur dann rot mit Warnsymbol hervorgehoben, wenn die Zahl über 0 liegt; bei 0 ist sie neutral dargestellt
+- Jede Kachel führt per Klick zur Auftragsliste mit demselben Filter, der auch die Kachel-Zahl ermittelt (neuer Filter "Pausiert" in 9.11, siehe dort) — Zahl und Liste stimmen dadurch immer überein
+- Der Button "Neuer Auftrag" steht auch oben auf der Übersicht, nicht nur in der Seitenleiste
+
 ### 9.6 Design-System (Farbgebung & Anmutung)
 
 Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, damit keine Seite optisch aus der Reihe fällt. Bewusst am Thema Musikinstrumenten-Werkstatt orientiert statt an einer generischen Software-Optik.
@@ -860,7 +867,7 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 
 **Beispiel Reparaturarten:** Suche über die Bezeichnung; Standardsortierung Bezeichnung; zusätzlich sortierbar nach Standard-Komplexität mit Bezeichnung als Nachrang; Filter "Status" wie oben. Ein Filter nach Oberkategorie/Reparaturkategorie kommt erst mit 9.12.
 
-**Beispiel Aufträge** (größte und letzte umgestellte Liste): Suche über Auftragsnummer, Kundenname, externe Kundennummer sowie am Instrument über Klasse, Hersteller, Typ und Seriennummer; Standardsortierung Priorität (absteigend) mit Eingang als Nachrang (aufsteigend), siehe 9.4; sortierbar nach allen Spalten inkl. "Fertig bis" (Aufträge ohne Termin am Ende); Standardfilter "nur offene"; weitere Filter Status (auch einzeln), Mitarbeiter (auch "nicht zugewiesen"), Instrumentenklasse, Priorität, Termin "überfällig". Die Auswahllisten für den Mitarbeiter- und Instrumentenklassen-Filter zeigen nur aktive Einträge; Aufträge zu deaktivierten Mitarbeitern oder archivierten Klassen bleiben über Suche oder den Status-Wert "alle" auffindbar. Ein Archiv-Filter entfällt, da Aufträge nicht archiviert werden.
+**Beispiel Aufträge** (größte und letzte umgestellte Liste): Suche über Auftragsnummer, Kundenname, externe Kundennummer sowie am Instrument über Klasse, Hersteller, Typ und Seriennummer; Standardsortierung Priorität (absteigend) mit Eingang als Nachrang (aufsteigend), siehe 9.4; sortierbar nach allen Spalten inkl. "Fertig bis" (Aufträge ohne Termin am Ende); Standardfilter "nur offene"; weitere Filter Status (auch einzeln), Mitarbeiter (auch "nicht zugewiesen"), Instrumentenklasse, Priorität, Termin "überfällig", Pausiert (Aufträge mit laufender `unterbrechung`, siehe 2.9). Die Auswahllisten für den Mitarbeiter- und Instrumentenklassen-Filter zeigen nur aktive Einträge; Aufträge zu deaktivierten Mitarbeitern oder archivierten Klassen bleiben über Suche oder den Status-Wert "alle" auffindbar. Ein Archiv-Filter entfällt, da Aufträge nicht archiviert werden.
 
 **Beispiel Vorgabewerte:** Suche über Reparaturart, Instrumentenklasse und Notiz; Standardsortierung nach Reparaturart, darin "allgemein vor speziell" und "aktiv vor archiviert" als Nachrang; zusätzlich sortierbar nach "Gilt für", Stunden, Kosten und Änderungsdatum; Filter nach Reparaturart, Instrumentenklasse und Status. Ein Filter "nur allgemeine Werte" sowie Filter nach Kategorie/Familie (letztere erst mit 9.12) stehen noch aus.
 
