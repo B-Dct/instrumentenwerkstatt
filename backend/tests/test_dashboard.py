@@ -166,3 +166,38 @@ def test_auslastung_nur_aktive_mitarbeiter_nach_name(client, db, leitung):
     zeilen = client.get(URL).json()["auslastung"]
     assert str(ehemalig.id) not in [z["mitarbeiter_id"] for z in zeilen]
     assert [z["name"] for z in zeilen] == sorted(z["name"] for z in zeilen)
+
+
+# --- Heute abwesend (9.13) ---------------------------------------------------------
+
+def test_heute_abwesend(client, db, leitung):
+    heute = date.today()
+    for a in db.scalars(select(Abwesenheit).where(Abwesenheit.von_datum <= heute, Abwesenheit.bis_datum >= heute)):
+        db.delete(a)  # Ausgangslage unabhängig von echten Daten
+    db.flush()
+    assert client.get(URL).json()["heute_abwesend"] == []
+
+    anna, bernd = konto_anlegen(db, name="AAA Anna"), konto_anlegen(db, name="BBB Bernd")
+    ehemalig = konto_anlegen(db, name="Ehemalig", aktiv=False, deaktiviert_am=datetime.now(timezone.utc))
+    gestern, morgen = heute - timedelta(days=1), heute + timedelta(days=1)
+    db.add_all([
+        Abwesenheit(mitarbeiter_id=bernd.id, typ=Abwesenheitstyp.schulung, von_datum=heute, bis_datum=heute,
+                    reduzierte_stunden=20, notiz="Vormittags"),
+        Abwesenheit(mitarbeiter_id=anna.id, typ=Abwesenheitstyp.urlaub, von_datum=gestern, bis_datum=morgen),
+        Abwesenheit(mitarbeiter_id=None, typ=Abwesenheitstyp.betriebsschliessung, von_datum=heute, bis_datum=heute, notiz="Inventur"),
+        # Zählen nicht: storniert, erst morgen, schon vorbei, deaktivierter Mitarbeiter
+        Abwesenheit(mitarbeiter_id=anna.id, typ=Abwesenheitstyp.krankheit, von_datum=heute, bis_datum=heute,
+                    storniert_am=datetime.now(timezone.utc)),
+        Abwesenheit(mitarbeiter_id=bernd.id, typ=Abwesenheitstyp.urlaub, von_datum=morgen, bis_datum=morgen),
+        Abwesenheit(mitarbeiter_id=bernd.id, typ=Abwesenheitstyp.krankheit, von_datum=gestern, bis_datum=gestern),
+        Abwesenheit(mitarbeiter_id=ehemalig.id, typ=Abwesenheitstyp.urlaub, von_datum=heute, bis_datum=heute),
+    ])
+    db.flush()
+
+    eintraege = client.get(URL).json()["heute_abwesend"]
+    assert [(e["name"], e["typ"], e["verfuegbare_tagesstunden"], e["notiz"]) for e in eintraege] == [
+        (None, "betriebsschliessung", None, "Inventur"),   # ganze Werkstatt zuerst
+        ("AAA Anna", "urlaub", None, None),
+        ("BBB Bernd", "schulung", 4, "Vormittags"),         # 20 Wochenstunden = 4 Std. am Tag
+    ]
+    assert eintraege[1]["bis_datum"] == morgen.isoformat()

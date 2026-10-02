@@ -517,8 +517,20 @@ class Auslastung(BaseModel):
     auslastung_prozent: int  # (Abwesenheit + Aufträge) / Wochenstunden
 
 
+class HeuteAbwesend(BaseModel):
+    """Eine heute geltende Abwesenheit (9.13)."""
+
+    mitarbeiter_id: uuid.UUID | None  # None = ganze Werkstatt (Feiertag, Betriebsschließung)
+    name: str | None
+    typ: Abwesenheitstyp
+    bis_datum: date
+    verfuegbare_tagesstunden: float | None  # None = ganztägig abwesend
+    notiz: str | None
+
+
 class Dashboard(BaseModel):
     kennzahlen: DashboardKennzahlen
     naechste_faellige: list[AuftragKurz]  # offene Aufträge mit dem nächstgelegenen Termin
     woche_von: date  # Montag der Woche, für die die Auslastung gilt
     auslastung: list[Auslastung]  # je aktivem Mitarbeiter
+    heute_abwesend: list[HeuteAbwesend]  # werkstattweite Einträge zuerst

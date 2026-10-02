@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import rolle_mindestens
 from app.db import get_db
-from app.models import Auftrag, Auftragsstatus, Mitarbeiter, Prioritaet, Systemrolle
+from app.models import Abwesenheit, Auftrag, Auftragsstatus, Mitarbeiter, Prioritaet, Systemrolle
 from app.routers.auftraege import _kurz_felder, _listen_abfrage, ist_pausiert, ist_ueberfaellig
-from app.schemas import AuftragKurz, Auslastung, Dashboard, DashboardKennzahlen
+from app.schemas import AuftragKurz, Auslastung, Dashboard, DashboardKennzahlen, HeuteAbwesend
 from app.terminschaetzung import ARBEITSTAGE_PRO_WOCHE, _kalender
 
 NAECHSTE_FAELLIGE = 5
@@ -80,6 +80,26 @@ def _auslastung(db: Session, heute: date) -> list[Auslastung]:
     return ergebnis
 
 
+def _heute_abwesend(db: Session, heute: date) -> list[HeuteAbwesend]:
+    """Geltende Abwesenheiten von heute (wie im Raster, 9.13): werkstattweite zuerst, dann aktive
+    Mitarbeiter nach Name. Stornierte Einträge und deaktivierte Mitarbeiter erscheinen nicht."""
+    zeilen = db.execute(
+        select(Abwesenheit, Mitarbeiter.name)
+        .outerjoin(Mitarbeiter, Abwesenheit.mitarbeiter_id == Mitarbeiter.id)
+        .where(Abwesenheit.von_datum <= heute, Abwesenheit.bis_datum >= heute, Abwesenheit.storniert_am.is_(None),
+               Abwesenheit.mitarbeiter_id.is_(None) | Mitarbeiter.aktiv)
+        .order_by(Abwesenheit.mitarbeiter_id.is_not(None), Mitarbeiter.name, Abwesenheit.von_datum, Abwesenheit.id)
+    ).all()
+    return [
+        HeuteAbwesend(
+            mitarbeiter_id=a.mitarbeiter_id, name=name, typ=a.typ, bis_datum=a.bis_datum, notiz=a.notiz,
+            # Gespeichert sind Wochenstunden (2.3) – das Raster zeigt Tagesstunden
+            verfuegbare_tagesstunden=None if a.reduzierte_stunden is None else a.reduzierte_stunden / ARBEITSTAGE_PRO_WOCHE,
+        )
+        for a, name in zeilen
+    ]
+
+
 @router.get("", response_model=Dashboard)
 def dashboard(db: Session = Depends(get_db)) -> Dashboard:
     heute = date.today()
@@ -88,4 +108,5 @@ def dashboard(db: Session = Depends(get_db)) -> Dashboard:
         naechste_faellige=_naechste_faellige(db),
         woche_von=heute - timedelta(days=heute.weekday()),
         auslastung=_auslastung(db, heute),
+        heute_abwesend=_heute_abwesend(db, heute),
     )

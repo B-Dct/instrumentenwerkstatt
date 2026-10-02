@@ -88,6 +88,41 @@ function AuslastungListe({ zeilen, wocheVon }) {
   )
 }
 
+const TYPEN = {
+  urlaub: 'Urlaub', krankheit: 'Krankheit', schulung: 'Schulung', reduzierte_stunden: 'reduzierte Stunden',
+  feiertag: 'Feiertag', betriebsschliessung: 'Betriebsschließung',
+}
+
+// Kurzer Hinweis auf heutige Abwesenheiten, aus dem Abwesenheits-Raster (9.13)
+function HeuteAbwesend({ eintraege }) {
+  const heute = new Date().toLocaleDateString('sv-SE')
+  const geschlossen = eintraege.filter((e) => e.mitarbeiter_id === null)
+  const personen = eintraege.filter((e) => e.mitarbeiter_id !== null)
+  const einzelheiten = (e) => [
+    TYPEN[e.typ] ?? e.typ,
+    e.verfuegbare_tagesstunden !== null && `${zahl(e.verfuegbare_tagesstunden)} Std. verfügbar`,
+    e.bis_datum > heute && `bis ${datum(e.bis_datum)}`,
+  ].filter(Boolean).join(', ')
+  return (
+    <section className="abschnitt">
+      <h2>Heute</h2>
+      {geschlossen.length > 0 && (
+        <p>
+          <strong>Die Werkstatt ist heute geschlossen:</strong>{' '}
+          {geschlossen.map((e) => e.notiz ?? TYPEN[e.typ]).join(', ')}
+          {geschlossen.some((e) => e.bis_datum > heute) && ` (bis ${datum(geschlossen.map((e) => e.bis_datum).sort().at(-1))})`}.
+        </p>
+      )}
+      <p>
+        {personen.length === 0
+          ? 'Heute ist niemand abwesend.'
+          : <><strong>Heute abwesend:</strong> {personen.map((e) => `${e.name} (${einzelheiten(e)})`).join(' · ')}</>}
+        {' '}<Link to="/abwesenheiten">Zum Abwesenheits-Raster</Link>
+      </p>
+    </section>
+  )
+}
+
 function Dashboard() {
   const [daten, setDaten] = useState(null)
   const [fehler, setFehler] = useState(null)
@@ -121,6 +156,8 @@ function Dashboard() {
         <NaechsteFaellige auftraege={daten.naechste_faellige} />
         <AuslastungListe zeilen={daten.auslastung} wocheVon={daten.woche_von} />
       </div>
+
+      <HeuteAbwesend eintraege={daten.heute_abwesend} />
     </>
   )
 }
