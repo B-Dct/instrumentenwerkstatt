@@ -348,7 +348,7 @@ export default function AuftragDetail() {
 
   return (
     <>
-      <nav className="brotkrumen"><span><Link to="/">Aufträge</Link></span><span>{a.auftragsnummer}</span></nav>
+      <nav className="brotkrumen"><span><Link to="/auftraege">Aufträge</Link></span><span>{a.auftragsnummer}</span></nav>
       <div className="kopf">
         <h1>Auftrag {a.auftragsnummer}</h1>
         <Status status={a.status} />

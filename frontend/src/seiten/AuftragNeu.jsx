@@ -56,7 +56,7 @@ export default function AuftragNeu() {
 
   return (
     <>
-      <nav className="brotkrumen"><span><Link to="/">Aufträge</Link></span><span>Neuer Auftrag</span></nav>
+      <nav className="brotkrumen"><span><Link to="/auftraege">Aufträge</Link></span><span>Neuer Auftrag</span></nav>
       <h1>Neuer Auftrag</h1>
       {!listen && (fehler ? <p className="meldung meldung--fehler">{fehler}</p> : <p className="leise">Lädt …</p>)}
       {listen && (

@@ -218,9 +218,15 @@ SORTIERUNG = {
 }
 
 
-def _ist_ueberfaellig():
+def ist_ueberfaellig():
     """Gleiche Regel wie ist_ueberfaellig in _kurz_felder: Termin vorbei und nicht abgeschlossen."""
     return (Auftrag.geschaetztes_fertigstellungsdatum < date.today()) & Auftragsstatus.ist_abgeschlossen.is_(False)
+
+
+def ist_pausiert():
+    """Auftrag hat eine laufende Unterbrechung (2.9), z. B. "Wartet auf Ersatzteil"."""
+    return select(Unterbrechung.id).where(
+        Unterbrechung.auftrag_id == Auftrag.id, Unterbrechung.bis_datum.is_(None)).exists()
 
 
 @router.get("", response_model=Seite[AuftragKurz])
@@ -233,6 +239,7 @@ def auftraege_auflisten(
     instrumentenklasse_id: uuid.UUID | None = Query(None),
     prioritaet: Prioritaet | None = Query(None),
     termin: Literal["alle", "ueberfaellig"] = Query("alle", description="ueberfaellig = Termin vorbei, nicht abgeschlossen"),
+    pausiert: bool = Query(False, description="Nur Aufträge mit laufender Unterbrechung (2.9)"),
     kunde_id: uuid.UUID | None = Query(None),
     db: Session = Depends(get_db),
 ) -> Seite[AuftragKurz]:
@@ -262,7 +269,9 @@ def auftraege_auflisten(
     if prioritaet is not None:
         gefiltert = gefiltert.where(Auftrag.prioritaet == prioritaet)
     if termin == "ueberfaellig":
-        gefiltert = gefiltert.where(_ist_ueberfaellig())
+        gefiltert = gefiltert.where(ist_ueberfaellig())
+    if pausiert:
+        gefiltert = gefiltert.where(ist_pausiert())
     if kunde_id is not None:
         gefiltert = gefiltert.where(Auftrag.kunde_id == kunde_id)
     return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG,

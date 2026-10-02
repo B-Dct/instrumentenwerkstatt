@@ -15,7 +15,8 @@ function Seitenleiste({ nutzer }) {
     <aside className="seitenleiste">
       <Link to="/" className="seitenleiste__start">Instrumenten&shy;werkstatt</Link>
       <nav className="seitenleiste__nav" aria-label="Hauptnavigation">
-        <NavLink to="/" className={aktivWenn(pathname === '/' || pathname.startsWith('/auftrag/'))}>Aufträge</NavLink>
+        {hatRolle('werkstattleiter') && <NavLink to="/" end className="seitenleiste__link">Übersicht</NavLink>}
+        <NavLink to="/auftraege" className={aktivWenn(pathname === '/auftraege' || pathname.startsWith('/auftrag/'))}>Aufträge</NavLink>
         <NavLink to="/neu" className="seitenleiste__link">Neuer Auftrag</NavLink>
         <NavLink to="/kunden" className="seitenleiste__link">Kunden</NavLink>
         {hatRolle('werkstattleiter') && <NavLink to="/abwesenheiten" className="seitenleiste__link">Abwesenheiten</NavLink>}

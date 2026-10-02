@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 02.10.2026 | Werkstattleiter-Startseite (9.5), Teil 1: vier Kennzahl-Kacheln mit Sprung in die gefilterte Auftragsliste; Auftragsliste jetzt unter `/auftraege`, neuer Listenfilter „Pausiert“ |
 | 02.10.2026 | Feiertags-Automatik (9.13.1): `app/feiertage.py` mit der Bibliothek `holidays`, Bundesland aus den Einstellungen, laufendes und kommendes Jahr automatisch, Admin-Aktion für weitere Jahre; nichts wird überschrieben (Abgleich über vorhandene Einträge und das Änderungsprotokoll) |
 | 02.10.2026 | Abwesenheits-Raster (9.13) statt Liste: Mitarbeiter als Zeilen, Tage einer Woche als Spalten, Eingabe direkt unter der Zeile, mehrere Tage per Ziehen; verfügbare Stunden bei jedem persönlichen Typ (halber Urlaubstag); Endpunkt `/abwesenheiten/raster` |
 | 02.10.2026 | Werkstatt-Einstellungen (7.5): Tabelle `einstellung`, Admin-Endpunkt und Seite „Einstellungen“ (erster Schlüssel: Bundesland); Notizfeld an Abwesenheiten |

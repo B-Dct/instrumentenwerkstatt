@@ -31,6 +31,8 @@ function filterAus({ status, mitarbeiter, klassen }) {
     { name: 'termin', label: 'Termin', standard: 'alle', optionen: [
       { wert: 'alle', text: 'alle' }, { wert: 'ueberfaellig', text: 'überfällig' },
     ] },
+    // Laufende Unterbrechung (2.9), z. B. "Wartet auf Ersatzteil"
+    { name: 'pausiert', label: 'Pausiert', standard: '', optionen: [alle, { wert: 'true', text: 'nur pausierte' }] },
   ]
 }
 

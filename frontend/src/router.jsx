@@ -8,6 +8,7 @@ import AuftragNeu from './seiten/AuftragNeu.jsx'
 import KundeDetail from './seiten/KundeDetail.jsx'
 import Kunden from './seiten/Kunden.jsx'
 import Login from './seiten/Login.jsx'
+import Startseite from './seiten/Startseite.jsx'
 import Einstellungen from './seiten/verwaltung/Einstellungen.jsx'
 import Instrumentenklassen from './seiten/verwaltung/Instrumentenklassen.jsx'
 import Reparaturarten from './seiten/verwaltung/Reparaturarten.jsx'
@@ -21,7 +22,9 @@ export const router = createBrowserRouter([
   {
     element: <Intern />,
     children: [
-      { path: '/', element: <AuftragListe /> },
+      // Startseite: Übersicht für Werkstattleitung/Admin (9.5), sonst weiter zur Auftragsliste
+      { path: '/', element: <Startseite /> },
+      { path: '/auftraege', element: <AuftragListe /> },
       { path: '/neu', element: <AuftragNeu /> },
       { path: '/auftrag/:id', element: <AuftragDetail /> },
       { path: '/kunden', element: <Kunden /> },

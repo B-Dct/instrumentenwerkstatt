@@ -491,3 +491,18 @@ class FeiertageStand(BaseModel):
     jahr_von: int  # erlaubter Bereich für "Feiertage für Jahr X erzeugen"
     jahr_bis: int
     jahre: list[FeiertageJahr]
+
+
+# --- Werkstattleiter-Startseite (Datenmodell 9.5) ------------------------------
+
+class DashboardKennzahlen(BaseModel):
+    """Jede Zahl entspricht der Trefferzahl der Auftragsliste mit dem passenden Filter."""
+
+    offen: int
+    ueberfaellig: int  # Termin vorbei, nicht abgeschlossen
+    priorisiert: int  # offen mit hoher Priorität
+    pausiert: int  # offen mit laufender Unterbrechung (2.9)
+
+
+class Dashboard(BaseModel):
+    kennzahlen: DashboardKennzahlen

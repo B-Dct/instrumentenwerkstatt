@@ -339,3 +339,17 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .raster__eingabe td { padding: var(--abstand-3); background: var(--farbe-flaeche-leise); user-select: text; }
 .raster__eingabe .fokus-formular { margin: 0; max-width: none; }
 .raster__storniert { margin: var(--abstand-3) 0 0; padding-left: var(--abstand-4); color: var(--farbe-text-leise); }
+
+/* --- Startseite der Werkstattleitung (9.5): Kennzahl-Kacheln --- */
+.kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--spalte-min-eng), 1fr)); gap: var(--abstand-4); list-style: none; margin: 0 0 var(--abstand-6); padding: 0; }
+.kachel {
+  display: flex; flex-direction: column; gap: var(--abstand-1); height: 100%; padding: var(--abstand-4);
+  border: var(--randbreite) solid var(--farbe-rand); border-radius: var(--radius);
+  box-shadow: inset var(--markierungsbreite) 0 0 var(--farbe-rand);
+  color: inherit; text-decoration: none;
+}
+.kachel:hover { background: var(--farbe-flaeche-leise); }
+.kachel__zahl { font-family: var(--schrift-titel); font-size: var(--groesse-36); line-height: var(--zeilenhoehe-titel); font-variant-numeric: tabular-nums; }
+.kachel__titel { color: var(--farbe-text-leise); }
+.kachel--warnung { box-shadow: inset var(--markierungsbreite) 0 0 var(--farbe-warnung); }
+.kachel--warnung .kachel__zahl, .kachel--warnung .kachel__titel { color: var(--farbe-warnung); }
