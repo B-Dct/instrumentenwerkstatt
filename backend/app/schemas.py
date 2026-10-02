@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
 
 from app.models import Abwesenheitstyp, Prioritaet, Systemrolle
 
@@ -390,6 +390,10 @@ class WochenstundenVerlauf(BaseModel):
 # --- Abwesenheiten (Datenmodell 2.3) -------------------------------------------
 
 VerfuegbareStunden = Annotated[Decimal, Field(gt=0, le=80, max_digits=5, decimal_places=2)]
+# Leere Notiz = keine Notiz
+Notiz = Annotated[
+    str | None, StringConstraints(strip_whitespace=True, max_length=500), AfterValidator(lambda w: w or None)
+]
 
 
 class AbwesenheitNeu(BaseModel):
@@ -399,6 +403,7 @@ class AbwesenheitNeu(BaseModel):
     bis_datum: date
     # Nur beim Typ "reduzierte_stunden": in diesem Zeitraum verfügbare Wochenstunden
     reduzierte_stunden: VerfuegbareStunden | None = None
+    notiz: Notiz = None
 
 
 class AbwesenheitAenderung(BaseModel):
@@ -409,6 +414,7 @@ class AbwesenheitAenderung(BaseModel):
     von_datum: date | None = None
     bis_datum: date | None = None
     reduzierte_stunden: VerfuegbareStunden | None = None
+    notiz: Notiz = None
 
 
 class AbwesenheitEintrag(BaseModel):
@@ -419,4 +425,21 @@ class AbwesenheitEintrag(BaseModel):
     von_datum: date
     bis_datum: date
     reduzierte_stunden: Stunden | None
+    notiz: str | None
     storniert_am: datetime | None  # None = gilt
+
+
+# --- Werkstatt-Einstellungen (Datenmodell 7.5) ---------------------------------
+
+class EinstellungEintrag(BaseModel):
+    schluessel: str
+    bezeichnung: str
+    beschreibung: str
+    optionen: list[str]  # erlaubte Werte (Auswahl, kein Freitext)
+    wert: str | None  # None = noch nicht festgelegt
+    geaendert_von_name: str | None
+    geaendert_am: datetime | None
+
+
+class EinstellungWert(BaseModel):
+    wert: str

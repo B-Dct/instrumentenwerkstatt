@@ -29,7 +29,7 @@ from app.schemas import AbwesenheitAenderung, AbwesenheitEintrag, AbwesenheitNeu
 router = APIRouter(prefix="/abwesenheiten", tags=["Abwesenheiten"],
                    dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
 
-FELDER = ["mitarbeiter_id", "typ", "von_datum", "bis_datum", "reduzierte_stunden"]
+FELDER = ["mitarbeiter_id", "typ", "von_datum", "bis_datum", "reduzierte_stunden", "notiz"]
 # Diese Typen gelten für die ganze Werkstatt, alle anderen für genau einen Mitarbeiter
 BETRIEBSWEIT = {Abwesenheitstyp.feiertag, Abwesenheitstyp.betriebsschliessung}
 
@@ -42,7 +42,7 @@ def _antwort(zeile) -> AbwesenheitEintrag:
     a, name = zeile
     return AbwesenheitEintrag(
         id=a.id, mitarbeiter_id=a.mitarbeiter_id, mitarbeiter_name=name, typ=a.typ,
-        von_datum=a.von_datum, bis_datum=a.bis_datum, reduzierte_stunden=a.reduzierte_stunden,
+        von_datum=a.von_datum, bis_datum=a.bis_datum, reduzierte_stunden=a.reduzierte_stunden, notiz=a.notiz,
         storniert_am=a.storniert_am,
     )
 

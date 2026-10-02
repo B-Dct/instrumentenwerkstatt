@@ -44,6 +44,7 @@ KONFLIKT_MELDUNGEN: dict[str, str] = {
     "uq_unterbrechung_offen_je_auftrag": "Für diesen Auftrag läuft bereits eine Unterbrechung",
     "uq_mitarbeiter_arbeitszeit_aktuell":
         "Für diesen Mitarbeiter wurden gerade gleichzeitig Wochenstunden festgelegt – bitte neu laden",
+    "uq_einstellung_schluessel": "Diese Einstellung wurde gerade gleichzeitig geändert – bitte neu laden",
 }
 
 ALLGEMEINE_MELDUNG = "Speichern nicht möglich: Die Eingabe widerspricht einer Datenregel"

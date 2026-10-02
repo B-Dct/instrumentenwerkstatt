@@ -142,6 +142,7 @@ class Abwesenheit(Base):
     bis_datum: Mapped[date] = mapped_column(Date)
     typ: Mapped[Abwesenheitstyp] = mapped_column(pg_enum(Abwesenheitstyp, "abwesenheitstyp"))
     reduzierte_stunden: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))  # NULL = ganztägig
+    notiz: Mapped[str | None] = mapped_column(Text)  # optional, z. B. "Betriebsurlaub Weihnachten"
     # Stornieren statt Löschen: gesetzt = zählt nicht mehr für die Terminschätzung, bleibt aber erhalten
     storniert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -420,3 +421,18 @@ class SystemEreignisLog(Base):
     betroffene_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     details: Mapped[dict | None] = mapped_column(JSONB)
     zeitpunkt: Mapped[datetime] = zeitstempel_jetzt()
+
+
+# --- 7.5 Werkstatt-Einstellungen ------------------------------------------------
+
+class Einstellung(Base):
+    """Schlüssel-Wert-Tabelle für werkstattweite Einstellungen (z. B. Bundesland für Feiertage).
+    Welche Schlüssel und Werte erlaubt sind, legt app/einstellungen.py fest."""
+
+    __tablename__ = "einstellung"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    schluessel: Mapped[str] = mapped_column(String(50), unique=True)
+    wert: Mapped[str] = mapped_column(String(200))
+    geaendert_von_mitarbeiter_id: Mapped[uuid.UUID | None] = fk("mitarbeiter", nullable=True, index=False)
+    geaendert_am: Mapped[datetime] = zeitstempel_jetzt()

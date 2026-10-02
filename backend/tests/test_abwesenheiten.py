@@ -116,6 +116,17 @@ def test_doppeleintrag_gleicher_typ_abgelehnt(client, leitung, m, db):
     assert client.post(URL, json=urlaub(m, 15, 20)).status_code == 201
 
 
+def test_notiz_optional_und_leer_ist_keine(client, db, leitung, m):
+    a = client.post(URL, json=urlaub(m, notiz="  Familienfeier  ")).json()
+    assert a["notiz"] == "Familienfeier"
+    assert client.patch(f"{URL}/{a['id']}", json={"notiz": "   "}).json()["notiz"] is None
+    assert client.post(URL, json=urlaub(m, 40, 41)).json()["notiz"] is None
+    assert "notiz" in _felder(client.post(URL, json=urlaub(m, 60, 61, notiz="x" * 501)))
+    log = db.scalars(select(SystemEreignisLog).where(SystemEreignisLog.betroffene_id == uuid.UUID(a["id"]))
+                     .order_by(SystemEreignisLog.zeitpunkt)).all()
+    assert (log[0].details["neu"]["notiz"], log[1].details["neu"]["notiz"]) == ("Familienfeier", None)
+
+
 # --- Bearbeiten, Stornieren, Wiederherstellen --------------------------------------
 
 def test_bearbeiten_mit_protokoll_und_ablehnung_ohne_reste(client, db, leitung, m):

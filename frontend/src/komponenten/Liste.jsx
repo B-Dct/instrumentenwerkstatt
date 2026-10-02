@@ -90,5 +90,14 @@ export function ListeLeer({ liste, leerText }) {
       </p>
     )
   }
+  // Nichts gesucht/gefiltert, aber ein Standardfilter (z. B. "nur aktive") blendet alles aus
+  if (liste.daten.gesamt > 0) {
+    return (
+      <p className="leise">
+        In der Standardansicht gibt es gerade nichts zu zeigen –{' '}
+        {liste.daten.gesamt === 1 ? '1 Eintrag ist' : `${liste.daten.gesamt} Einträge sind`} ausgeblendet (siehe Filter oben).
+      </p>
+    )
+  }
   return <p className="leise">{leerText}</p>
 }

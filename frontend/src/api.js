@@ -136,8 +136,16 @@ export const api = {
   instrumentArchivieren: (id) => anfrage(`/instrumente/${id}/archivieren`, { methode: 'POST' }),
   instrumentReaktivieren: (id) => anfrage(`/instrumente/${id}/reaktivieren`, { methode: 'POST' }),
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
+  // Abwesenheiten (nur Werkstattleitung/Admin)
+  abwesenheiten: (filter = {}) => anfrage('/abwesenheiten?' + new URLSearchParams(filter)),
+  abwesenheitAnlegen: (daten) => anfrage('/abwesenheiten', { methode: 'POST', daten }),
+  abwesenheitAendern: (id, daten) => anfrage(`/abwesenheiten/${id}`, { methode: 'PATCH', daten }),
+  abwesenheitStornieren: (id) => anfrage(`/abwesenheiten/${id}/stornieren`, { methode: 'POST' }),
+  abwesenheitWiederherstellen: (id) => anfrage(`/abwesenheiten/${id}/wiederherstellen`, { methode: 'POST' }),
   // Verwaltung (nur Admin)
   admin: {
+    einstellungen: () => anfrage('/admin/einstellungen'),
+    einstellungSetzen: (schluessel, wert) => anfrage(`/admin/einstellungen/${schluessel}`, { methode: 'PUT', daten: { wert } }),
     klassen: (filter = {}) => anfrage('/admin/instrumentenklassen?' + new URLSearchParams(filter)),
     klasseAnlegen: (daten) => anfrage('/admin/instrumentenklassen', { methode: 'POST', daten }),
     klasseAendern: (id, daten) => anfrage(`/admin/instrumentenklassen/${id}`, { methode: 'PATCH', daten }),

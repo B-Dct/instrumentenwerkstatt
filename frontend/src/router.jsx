@@ -7,6 +7,7 @@ import AuftragNeu from './seiten/AuftragNeu.jsx'
 import KundeDetail from './seiten/KundeDetail.jsx'
 import Kunden from './seiten/Kunden.jsx'
 import Login from './seiten/Login.jsx'
+import Einstellungen from './seiten/verwaltung/Einstellungen.jsx'
 import Instrumentenklassen from './seiten/verwaltung/Instrumentenklassen.jsx'
 import Reparaturarten from './seiten/verwaltung/Reparaturarten.jsx'
 import Vorgabewerte from './seiten/verwaltung/Vorgabewerte.jsx'
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: '/verwaltung/reparaturarten', element: <NurRolle rolle="admin"><Reparaturarten /></NurRolle> },
       { path: '/verwaltung/vorgabewerte', element: <NurRolle rolle="admin"><Vorgabewerte /></NurRolle> },
       { path: '/verwaltung/mitarbeiter', element: <NurRolle rolle="admin"><Mitarbeiter /></NurRolle> },
+      { path: '/verwaltung/einstellungen', element: <NurRolle rolle="admin"><Einstellungen /></NurRolle> },
       { path: '/verwaltung/mitarbeiter/:id', element: <NurRolle rolle="admin"><MitarbeiterDetail /></NurRolle> },
     ],
   },
