@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 29.09.2026 | Auftragsdetailseite nach 9.10: Eckdaten im Lesezustand, Aktionsleiste (Status ändern, Schätzung korrigieren, Zuweisung & Priorität) mit eingebetteten Formularen, Verläufe zugeklappt; Namen der Handelnden liefert das Backend direkt in Statusverlauf, Schätzprotokoll und Wochenstunden-Verlauf (auch für deaktivierte Mitarbeiter) |
 | 29.09.2026 | Auftragsliste auf Listen-Baustein umgestellt (Standard offene Aufträge nach Priorität, dann Eingang; Filter Status, Mitarbeiter, Instrument, Priorität, überfällig) – Umstellung aller Listen abgeschlossen |
 | 29.09.2026 | Vorgabewerte auf Listen-Baustein umgestellt (Suche, Filter Reparaturart/Instrumentenklasse/Status, sortierbar) |
 | 29.09.2026 | Instrumentenklassen und Reparaturarten auf Listen-Baustein umgestellt (Status-Filter statt „archivierte anzeigen“) |
