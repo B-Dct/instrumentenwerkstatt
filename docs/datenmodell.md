@@ -684,13 +684,23 @@ Diese Regeln gelten seitenübergreifend für die gesamte Software (internes Dash
 - Nutzer kann die Sortierung umschalten (z. B. zusätzlich nach geschätztem Fertigstellungsdatum)
 - Ein Klick führt direkt zur Auftragsdetailseite (Statuswechsel, Notizen)
 
-### 9.5 Werkstattleiter-Dashboard
+### 9.5 Werkstattleiter-Dashboard (Startseite für Werkstattleitung und Admin)
 
-- **Gesamtübersicht** aller Aufträge werkstattweit, nicht nur eigene
-- Kennzahlen auf einen Blick: Anzahl offener, abgeschlossener und pausierter Aufträge (pausiert = Aufträge mit aktiver `unterbrechung`, siehe 2.9)
-- Auslastung pro Mitarbeiter (Anzahl zugewiesener offener Aufträge)
-- Überfällige und priorisierte Aufträge separat hervorgehoben/filterbar
-- Von hier aus direkter Zugriff auf Umverteilung von Aufträgen und den Administrationsbereich (sofern Rolle `admin`)
+Ersetzt für diese beiden Rollen die Startseite nach dem Login (der "Startseite oben links"-Link aus 9.2 führt für sie hierhin). Für normale Mitarbeiter ändert sich nichts, ihre Startseite bleibt die eigene Auftragsliste.
+
+**Aufbau, von oben nach unten:**
+
+1. **Vier Kennzahl-Kacheln**, jede anklickbar und führt zur entsprechend vorgefilterten Auftragsliste (nutzt die Filter aus 9.11):
+   - Offene Aufträge (gesamt)
+   - Überfällig (rot, Statusfarbe aus 9.6)
+   - Priorisiert / hohe Priorität
+   - Pausiert (Aufträge mit aktiver `unterbrechung`, siehe 2.9)
+2. **Zwei Spalten nebeneinander:**
+   - **"Nächste fällige Aufträge":** die 5 Aufträge mit dem nächstgelegenen `geschätztes_fertigstellungsdatum`, Klick führt direkt zur Auftragsdetailseite
+   - **"Auslastung":** eine Zeile je aktivem Mitarbeiter mit Auslastungsbalken (grün/gelb/rot), berechnet nach der Formel aus Abschnitt 8.2 — das ist zugleich die erste, kompakte Version des in 9.9 beschriebenen Kapazitäts-Dashboards; eine ausführlichere Wochenansicht kann später von hier aus verlinkt werden, statt sie zusätzlich zu bauen
+3. **Kurzer Hinweis auf heutige Abwesenheiten** (z. B. "Heute abwesend: Demo Geigenbauer" oder "Niemand abwesend"), direkt aus dem Abwesenheits-Raster (9.13)
+
+**Zugriff:** Nur Werkstattleitung und Admin (7.2). Von hier aus weiterhin direkter Zugriff auf Umverteilung von Aufträgen und den Administrationsbereich.
 
 ### 9.6 Design-System (Farbgebung & Anmutung)
 
@@ -755,9 +765,9 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - Eingabe möglichst einfach halten (z. B. Stunden **und/oder** Minuten, keine Pflicht zu sekundengenauer Erfassung)
 - Nach dem Speichern erscheint dieselbe nicht-blockierende Erfolgsbestätigung wie bei anderen Speichervorgängen (9.1), z. B. "Auftrag abgeschlossen, Arbeitszeit erfasst"
 
-### 9.9 Kapazitäts-Dashboard (Werkstattleiter/Admin)
+### 9.9 Kapazitäts-Dashboard, ausführliche Ansicht (spätere Erweiterung)
 
-Umsetzung der Kapazitätsplanung aus Abschnitt 8 als einfache, wöchentliche Balkenansicht — dem Muster gängiger Ressourcenplanungs-Tools (Float, Resource Guru) folgend:
+Eine kompakte erste Version (eine Zeile je Mitarbeiter, aktuelle Woche) ist bereits Teil der Werkstattleiter-Startseite (9.5). Dieser Abschnitt beschreibt die spätere, ausführlichere Wochenübersicht über mehrere Wochen hinweg, erreichbar von dort aus verlinkt, nicht als separat zu bauende Seite von Anfang an — dem Muster gängiger Ressourcenplanungs-Tools (Float, Resource Guru) folgend:
 
 - Eine Zeile pro Mitarbeiter, eine Spalte pro Woche (aktuelle Woche + einige Wochen im Voraus)
 - Je Zeile/Woche ein horizontaler Balken, der sich proportional zur Auslastung füllt, farblich abgestuft (z. B. grün < 80 %, gelb 80–100 %, rot > 100 % = überbucht)
@@ -941,9 +951,9 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.5 Offen, Funktionsausbau
 
-9. Internes Mitarbeiter-Dashboard nach 9.4 (Liste existiert, Dashboard-Charakter fehlt)
-10. Werkstattleiter-Dashboard (9.5): Kennzahlen offen/abgeschlossen/pausiert, Auslastung, überfällige und priorisierte Aufträge
-11. Kapazitäts-Dashboard (Abschnitt 8 und 9.9)
+9. Internes Mitarbeiter-Dashboard nach 9.4 (Liste existiert, Dashboard-Charakter fehlt) — zurückgestellt, Werkstattleiter-Dashboard (Punkt 10) zuerst
+10. **Werkstattleiter-Dashboard als Startseite** (9.5): vier Kennzahl-Kacheln, "Nächste fällige Aufträge", kompakte Auslastungsliste, Hinweis auf heutige Abwesenheiten — konkret ausgearbeitet, bereit für die Umsetzung
+11. Kapazitäts-Dashboard, ausführliche Wochenansicht (9.9) — spätere Erweiterung der kompakten Auslastungsliste aus Punkt 10, kein eigener Schritt von Anfang an
 12. Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
 13. Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
 14. Gliederung der Stammdaten (Abschnitt 9.12), in drei Schritten: (a) Instrumentenfamilien und Reparaturkategorien im Datenmodell und Backend inkl. Migration, (b) gegliederte Verwaltungslisten, (c) gruppierte Auswahl mit "Häufig verwendet" im Auftragsformular
