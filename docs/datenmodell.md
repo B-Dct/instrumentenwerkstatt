@@ -724,6 +724,14 @@ Ersetzt für diese beiden Rollen die Startseite nach dem Login (der "Startseite 
 - "Auslastung": Balken mit drei Farbstufen nach den Schwellen aus 9.9, der Text steht immer mit dabei ("frei" / "fast voll" / "überbucht"), nie nur die Farbe (9.3). Für die mittlere Stufe wird der Primärakzent (Messing) verwendet, da die Farbpalette in 9.6 kein eigenes Gelb vorsieht. Unter dem Balken steht die Herleitung in Zahlen (z. B. "46,00 Std. in 5 offenen Aufträgen + 24,00 Std. abwesend von 40,00 Wochenstunden"). Der Mitarbeitername verlinkt zu dessen gefilterter Auftragsliste als Einstieg zum Umverteilen
 - Für die Abwesenheitsstunden gilt derselbe Kalender wie für die Terminschätzung (ganztägige und halbe Tage, werkstattweite Feiertage/Schließungen; stornierte Einträge zählen nicht)
 
+**Präzisierungen aus der Umsetzung (Teilschritt 3, Abschnitt "Heute"):**
+- Zu jeder abwesenden Person stehen Typ, bei Teilabwesenheit die verfügbaren Stunden, und das Enddatum, falls die Abwesenheit über heute hinausgeht; mehrere Personen stehen nebeneinander
+- Eine werkstattweite Schließung (Feiertag/Betriebsschließung) erscheint als eigener, einzelner Satz oberhalb, nicht wiederholt bei jedem Mitarbeiter
+- Ohne eingetragene Abwesenheit steht "Heute ist niemand abwesend" — auch am Wochenende, es wird nichts automatisch angenommen
+- Ein Link führt zum Abwesenheits-Raster (9.13); deaktivierte Mitarbeiter und stornierte Einträge erscheinen nicht
+
+Damit ist die Werkstattleiter-Startseite (9.5) vollständig umgesetzt.
+
 ### 9.6 Design-System (Farbgebung & Anmutung)
 
 Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, damit keine Seite optisch aus der Reihe fällt. Bewusst am Thema Musikinstrumenten-Werkstatt orientiert statt an einer generischen Software-Optik.
@@ -951,6 +959,8 @@ Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Ab
 
 Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand *heute*, die Auswertungen zeigen die Entwicklung *über die Zeit*. Zugriff nur für Werkstattleitung und Admin (7.2).
 
+**Technische Umsetzung:** Liniendiagramme und Balken werden als eigene, einfache Grafiken gezeichnet statt über eine Diagramm-Bibliothek eingebunden — passend zum eigenständigen Design-System (9.6), ohne zusätzliche Abhängigkeit. Reicht für die hier benötigten einfachen Verläufe und Verteilungen ohne Zoom oder aufwendige Interaktivität.
+
 **Filter:** Jahr, Standard das laufende Kalenderjahr, wählbar auch vergangene Jahre. "Abgeschlossen im Jahr X" heißt: `tatsächliches_fertigstellungsdatum` liegt in Jahr X (nicht der Auftragseingang).
 
 **9.14.1 Menge**
@@ -1006,10 +1016,11 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Werkstatt-Einstellungen (7.5), zunächst für das Bundesland
 - Abwesenheiten: Backend und Raster-Oberfläche (9.13), ersetzt die ursprünglich geplante Listen-Seite
 - Feiertags-Automatik (9.13.1), Bundesland Baden-Württemberg hinterlegt
+- Werkstattleiter-Dashboard als Startseite (9.5), vollständig: Kennzahl-Kacheln, "Nächste fällige Aufträge", "Auslastung", Abschnitt "Heute"
 
 ### 10.2 In Arbeit
 
-- **Werkstattleiter-Dashboard als Startseite** (9.5): Kennzahl-Kacheln und die zwei Spalten ("Nächste fällige Aufträge", "Auslastung") fertig; der Hinweis auf heutige Abwesenheiten (dritter und letzter Teilschritt) steht noch aus
+- **Auswertungen/Jahresstatistik** (9.14): Konzept steht, Umsetzung beginnt mit Teilschritt 1 (Menge)
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
