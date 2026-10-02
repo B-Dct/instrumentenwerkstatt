@@ -889,6 +889,13 @@ Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Ab
 - Zugriff nur für Werkstattleitung und Admin (7.2)
 - Hinweis, dass eine Änderung bestehende Termine nicht automatisch neu berechnet (4.0a)
 
+**Präzisierungen aus der Umsetzung:**
+- Ein neuer Eintrag ist mit `0` Stunden vorbelegt (ganztägig), nicht mit dem Normalwert — sonst müsste man für jeden Urlaubstag erst die Normalstunden herauslöschen
+- Das Eingabefeld öffnet sich unter der ganzen Zeile, nicht in der Zelle selbst (eine Zelle ist dafür zu schmal), mit Stunden, Typ, **Von/Bis** und Notiz. Die Von/Bis-Felder sind nicht nur Komfort, sondern der nötige Weg für Tastatur- und Touch-Bedienung, wo Ziehen über mehrere Zellen nicht funktioniert
+- Typ "Reduzierte Stunden" verlangt Stunden über 0; bei `0` Stunden muss ein anderer, ganztägiger Typ gewählt werden
+- Überschneiden sich mehrere Einträge an einem Tag (z. B. krank im Urlaub, siehe 2.3), zeigt die Zelle den Eintrag mit den wenigsten verfügbaren Stunden plus die Anzahl weiterer Einträge (z. B. "+1") — das ist die für die Terminschätzung tatsächlich maßgebliche Zahl
+- Deaktivierte Mitarbeiter erscheinen nicht als Zeile, auch nicht mit noch laufenden Einträgen in der angezeigten Woche
+
 **9.13.1 Feiertage automatisch erzeugen:** Das Bundesland kommt aus den Werkstatt-Einstellungen (7.5), nicht fest im Code. Auf Basis des Bundeslands werden gesetzliche Feiertage für das laufende und das kommende Jahr automatisch als "Ganze Werkstatt"-Einträge vom Typ Feiertag angelegt (z. B. über eine gängige Feiertagsbibliothek), statt sie von Hand einzutragen. Eine admin-ausgelöste Funktion "Feiertage für Jahr X erzeugen" legt fehlende Jahre nach und überschreibt keine bereits manuell angepassten Einträge.
 
 ---
@@ -916,11 +923,12 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Externe Kundennummer am Kunden (siehe 2.1)
 - Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
+- Werkstatt-Einstellungen (7.5), zunächst für das Bundesland
+- Abwesenheiten: Backend und Raster-Oberfläche (9.13), ersetzt die ursprünglich geplante Listen-Seite
 
 ### 10.2 In Arbeit
 
-- **Abwesenheiten:** Backend (Endpunkte, Regeln, `storniert_am`, Protokoll) fertig und bereit zum Committen. Die Oberfläche wird statt als flache Liste als Raster umgesetzt (Abschnitt 9.13) — Mitarbeiter als Zeilen, Tage als Spalten, Klick/Ziehen zum Eintragen, Normalwert ist die tägliche Stundenzahl aus 2.12
-- **Werkstatt-Einstellungen** (7.5, neu): Tabelle und Admin-Seite, zunächst nur für das Bundesland, Voraussetzung für die automatische Feiertagserzeugung (9.13.1)
+- **Feiertags-Automatik** (9.13.1): wartet auf das gesetzte Bundesland in den Werkstatt-Einstellungen (7.5)
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
