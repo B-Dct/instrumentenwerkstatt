@@ -63,6 +63,17 @@ Für Urlaub, Krankheit, Feiertage — wichtig sowohl für die interne Kapazität
 | bis_datum | DATE | |
 | typ | VARCHAR | Urlaub / Krankheit / Feiertag / Betriebsschließung / Schulung / Reduzierte Stunden |
 | reduzierte_stunden | DECIMAL | NULL = ganztägig abwesend im angegebenen Zeitraum. Ansonsten: die in diesem Zeitraum tatsächlich **verfügbare** Wochenstundenzahl (absoluter Wert, kein Abzugsbetrag) — z. B. "diese Woche nur 20 Std. verfügbar" wegen Arztterminen o. Ä., statt der vollen `mitarbeiter_arbeitszeit.wochenstunden` |
+| notiz | TEXT | Optional, z. B. "Betriebsurlaub Weihnachten" |
+| storniert_am | TIMESTAMP | NULL = gilt. Stornierte Einträge bleiben erhalten, zählen aber nicht mehr für die Terminschätzung |
+
+**Regeln:**
+- Urlaub, Krankheit, Schulung und Reduzierte Stunden brauchen einen aktiven Mitarbeiter. Feiertag und Betriebsschließung gelten immer für die ganze Werkstatt (`mitarbeiter_id` = NULL)
+- `reduzierte_stunden` nur beim Typ "Reduzierte Stunden", Wert über 0 und höchstens 80
+- Schutz vor Doppeleinträgen: Derselbe Typ für dieselbe Person im überschneidenden Zeitraum wird abgelehnt, mit Verweis auf den vorhandenen Eintrag. Verschiedene Typen dürfen sich überschneiden (z. B. krank im Urlaub)
+- Eine stornierte Abwesenheit lässt sich erst nach dem Wiederherstellen bearbeiten
+- Abwesenheiten in der Vergangenheit sind erlaubt (z. B. nachgetragene Krankheit)
+- Pflege nur durch Werkstattleitung und Admin (siehe 7.2)
+- Neue Terminschätzungen berücksichtigen Abwesenheiten sofort; bereits berechnete Termine werden nicht automatisch angepasst (siehe 4.0a)
 
 ---
 
@@ -534,6 +545,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Instrumentenklassen pflegen | ❌ | ❌ | ✅ |
 | Reparaturarten + Standard-Komplexität pflegen | ❌ | ❌ | ✅ |
 | Instrumentenfamilien und Reparaturkategorien pflegen | ❌ | ❌ | ✅ |
+| Werkstatt-Einstellungen pflegen (z. B. Bundesland) | ❌ | ❌ | ✅ |
 | Vorgabewerte (Dauer/Kosten) je Reparaturart pflegen | ❌ | ❌ | ✅ |
 | Neue Mitarbeiter-Accounts anlegen | ❌ | ❌ | ✅ |
 | Mitarbeiter deaktivieren | ❌ | ❌ | ✅ |
@@ -562,11 +574,25 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 ### 7.4 Funktionsübersicht des Administrationsbereichs
 
 - **Mitarbeiterverwaltung** (nur Admin): Accounts anlegen, Systemrolle zuweisen, deaktivieren (nie hart löschen — sonst verwaisen vergangene Aufträge), Wochenarbeitsstunden festlegen (2.12), Qualifikationen pflegen (2.13)
-- **Abwesenheitskalender** (Werkstattleiter + Admin): idealerweise als Kalenderansicht pro Mitarbeiter und für die gesamte Werkstatt, direkt verknüpft mit der `abwesenheit`-Tabelle (2.3, inkl. Typ "Schulung" und reduzierter Stunden) und damit unmittelbar wirksam für die Terminschätzung (Stufe 1) sowie die Kapazitätsplanung (Abschnitt 8)
+- **Abwesenheits-Raster** (Werkstattleiter + Admin): Mitarbeiter als Zeilen, Tage als Spalten, siehe 9.13 — direkt verknüpft mit der `abwesenheit`-Tabelle (2.3) und damit unmittelbar wirksam für die Terminschätzung (Stufe 1) sowie die Kapazitätsplanung (Abschnitt 8)
 - **Gleitzeit-Anpassungen** (Werkstattleiter + Admin): einzelne Wochen-Abweichungen erfassen (2.14), operativ genutzt, ohne vollständige Zeiterfassung
 - **Stammdatenpflege** (nur Admin): Instrumentenfamilien (2.4a), Instrumentenklassen (2.4), Reparaturkategorien (2.6b), Reparaturarten (2.6) inkl. Standardkomplexität, sowie Vorgabewerte für Dauer und Kosten je Reparaturart/Instrumentenklasse (2.6a)
+- **Werkstatt-Einstellungen** (nur Admin): siehe 7.5
 - **Werkstattübersicht** (Werkstattleiter + Admin): alle laufenden Aufträge, Auslastung pro Mitarbeiter, überfällige/kritische Aufträge hervorgehoben
 - **Änderungsprotokoll** (nur Admin einsehbar): Anzeige des `system_ereignis_log`
+
+### 7.5 Werkstatt-Einstellungen
+
+Einfache Schlüssel-Wert-Tabelle für werkstattweite Einstellungen, die keine eigene fachliche Tabelle rechtfertigen. Erster und bisher einziger Zweck: das Bundesland für die automatische Feiertagserzeugung (siehe 9.13.4), statt es fest im Code zu hinterlegen.
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| schlüssel | VARCHAR, UNIQUE | z. B. `bundesland` |
+| wert | VARCHAR | z. B. `Baden-Württemberg` |
+| geändert_von_mitarbeiter_id | FK → mitarbeiter | |
+| geändert_am | TIMESTAMP | |
+
+**Pflege:** Eigene Seite "Einstellungen" im Administrationsbereich, nur Admin. Für `bundesland` ein Auswahlfeld mit den 16 deutschen Bundesländern, kein Freitext. Änderungen landen im Änderungsprotokoll (7.3).
 
 ---
 
@@ -640,6 +666,8 @@ Diese Regeln gelten seitenübergreifend für die gesamte Software (internes Dash
 - **Startseiten-Link oben links:** Auf jeder Seite führt ein fest positioniertes Element oben links zurück zur jeweiligen Startseite (Mitarbeiter zur Mitarbeiter-Übersicht, Werkstattleiter/Admin zu deren Dashboard, Kunde zur Statusabfrage)
 - **Breadcrumbs** auf tieferliegenden Seiten (z. B. Auftrag-Detail), damit klar ist, wo man sich befindet
 - **Kein hartes Löschen:** Aufträge, Mitarbeiter und Stammdaten werden nie endgültig gelöscht, sondern archiviert/deaktiviert — ein versehentlicher Klick soll nichts unwiederbringlich zerstören
+- **Seitenleiste einklappbar:** Ein Umschalt-Knopf (oben in der Leiste) wechselt zwischen voll ausgeklappt (Icon + Beschriftung je Punkt) und eingeklappt (nur Icon). Der gewählte Zustand wird pro Gerät gemerkt (lokale Speicherung im Browser, keine Serverdaten). Im eingeklappten Zustand bekommt jedes Icon eine über Hover/Tastaturfokus erreichbare Beschriftung (Tooltip) sowie ein `aria-label`, damit die Bedeutung nicht nur über das Symbol erraten werden muss. Einheitliches, schlichtes Icon-Set für alle Navigationspunkte, passend zur Anmutung aus 9.6 (keine bunten oder verspielten Icon-Stile).
+- **Primäre Aktion abgesetzt:** "Neuer Auftrag" (und vergleichbare Haupt-Aktionen je Bereich) ist kein gleichwertiger Navigationspunkt, sondern ein eigener, in der Primärfarbe gefüllter Button am Anfang der Leiste, deutlich von der übrigen Navigation abgesetzt. Bleibt auch im eingeklappten Zustand als eigenständiges, erkennbares Element bestehen (nicht einfach ein Icon unter vielen).
 
 ### 9.3 Statusdarstellung
 
@@ -698,7 +726,7 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - Typskala: 12 / 14 / 16 / 20 / 28 / 36 px, Zeilenhöhe 1,5 für Fließtext
 
 **Layout:**
-- Interne Oberfläche (Mitarbeiter/Werkstattleiter/Admin): feste linke Seitenleiste mit Navigation (erfüllt zugleich die Regel "Startseite oben links erreichbar", Abschnitt 9.2), Inhalt datendicht und linksbündig, Tabellenzeilen mit klaren Trennlinien statt einheitlicher Card-Kacheln mit Schlagschatten
+- Interne Oberfläche (Mitarbeiter/Werkstattleiter/Admin): feste linke Seitenleiste mit Navigation, einklappbar auf reine Icons (siehe 9.2), erfüllt zugleich die Regel "Startseite oben links erreichbar", Abschnitt 9.2; Inhalt datendicht und linksbündig, Tabellenzeilen mit klaren Trennlinien statt einheitlicher Card-Kacheln mit Schlagschatten
 - Kunden-Dashboard: einspaltig, zentriert, großzügiger Weißraum, ruhiger — andere Zielgruppe (kein Fachpersonal), anderer Zweck (kurzer Statuscheck statt Arbeiten)
 
 **Bewusst vermieden** (typische generische/KI-Standardoptik): warmes Creme mit Terracotta-Akzent, identische abgerundete Karten mit gleichem grauem Schlagschatten überall, ALL-CAPS-Eyebrow-Labels über Überschriften, Pfeile (→) an Buttons/Links.
@@ -840,6 +868,29 @@ Ziel: Keine endlosen, ungeordneten Listen. Umgesetzt über Instrumentenfamilien 
 
 ---
 
+### 9.13 Abwesenheits-Raster
+
+Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Abwesenheit einen Mitarbeiter erst auszuwählen, stehen alle aktiven Mitarbeiter als Zeilen schon da — man trägt nur noch Werte in die Tage ein. Reduziert zugleich das Risiko einer unübersichtlich wachsenden Liste, weil immer nur ein begrenzter Zeitraum sichtbar ist.
+
+**Aufbau:**
+- Zeilen: alle aktiven Mitarbeiter, automatisch vorbefüllt (keine manuelle Anlage nötig), plus eine feste erste Zeile "Ganze Werkstatt" für Feiertage und Betriebsschließung
+- Spalten: Tage, standardmäßig die laufende Woche; Navigation wochenweise vor/zurück, Sprung zu "heute". Wochenenden sind ausgegraut und nicht editierbar
+- Zellwert: der Normalfall ist die tägliche verfügbare Stundenzahl (`mitarbeiter_arbeitszeit.wochenstunden` / 5, siehe 2.12), angezeigt als Zahl. Eine Abwesenheit überschreibt diesen Wert
+- Ein Eintrag von `0` bedeutet ganztägig abwesend (entspricht `reduzierte_stunden` = NULL in 2.3); ein Wert darüber bedeutet teilweise verfügbar (`reduzierte_stunden` = dieser Wert)
+- Ist für einen Tag ein werkstattweiter Eintrag ("Ganze Werkstatt") gesetzt, zeigen alle Mitarbeiter-Zeilen diesen Tag automatisch als geschlossen und nicht editierbar — er wird nicht zusätzlich pro Person eingetragen
+
+**Bedienung (bewusste Ausnahme von Regel 9.10):** Ein Klick auf eine Zelle öffnet ein kleines, eingebettetes Eingabefeld direkt an der Stelle: Stunden (vorbelegt mit dem aktuellen Wert), eine Pflichtauswahl des Typs (Urlaub, Krankheit, Schulung, Reduzierte Stunden, bei der "Ganze Werkstatt"-Zeile Feiertag/Betriebsschließung) sowie ein optionales Notizfeld. Mehrere zusammenhängende Tage lassen sich durch Ziehen über die Zellen gemeinsam markieren und als ein einziger Eintrag anlegen (z. B. eine Urlaubswoche), statt für jeden Tag einen eigenen Vorgang zu benötigen. Das direkte Bearbeiten per Klick widerspricht nicht Regel 9.10, Punkt 5 ("verworfene Alternativen"): Ein Kalenderraster ist ein eigenständiges, in Kalender- und Tabellenwerkzeugen etabliertes Bedienmuster, kein Formular mit Pflichtbegründung wie bei der Auftragsbearbeitung.
+
+**Weiterhin gültig, nur anders dargestellt:**
+- Stornieren setzt eine Zelle/einen Zeitraum auf den Normalwert zurück; der zugrundeliegende Eintrag wird storniert, nicht gelöscht (`storniert_am`, 2.3), und ist über einen Umschalter "Stornierte anzeigen" einsehbar
+- Alle Regeln aus 2.3 gelten unverändert (Doppeleintrag-Schutz, aktiver Mitarbeiter nötig, Grenzen bei reduzierten Stunden)
+- Zugriff nur für Werkstattleitung und Admin (7.2)
+- Hinweis, dass eine Änderung bestehende Termine nicht automatisch neu berechnet (4.0a)
+
+**9.13.1 Feiertage automatisch erzeugen:** Das Bundesland kommt aus den Werkstatt-Einstellungen (7.5), nicht fest im Code. Auf Basis des Bundeslands werden gesetzliche Feiertage für das laufende und das kommende Jahr automatisch als "Ganze Werkstatt"-Einträge vom Typ Feiertag angelegt (z. B. über eine gängige Feiertagsbibliothek), statt sie von Hand einzutragen. Eine admin-ausgelöste Funktion "Feiertage für Jahr X erzeugen" legt fehlende Jahre nach und überschreibt keine bereits manuell angepassten Einträge.
+
+---
+
 ## 10. Fahrplan und offene Punkte
 
 Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und kann angepasst werden.
@@ -864,15 +915,19 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
 
+### 10.2 In Arbeit
+
+- **Abwesenheiten:** Backend (Endpunkte, Regeln, `storniert_am`, Protokoll) fertig und bereit zum Committen. Die Oberfläche wird statt als flache Liste als Raster umgesetzt (Abschnitt 9.13) — Mitarbeiter als Zeilen, Tage als Spalten, Klick/Ziehen zum Eintragen, Normalwert ist die tägliche Stundenzahl aus 2.12
+- **Werkstatt-Einstellungen** (7.5, neu): Tabelle und Admin-Seite, zunächst nur für das Bundesland, Voraussetzung für die automatische Feiertagserzeugung (9.13.1)
+
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
-2. **Abwesenheiten pflegen** (2.3): Urlaub, Krankheit, Schulung, Betriebsschließung. Ohne diese Eingabe ignoriert die Terminschätzung Abwesenheiten. Feiertage möglichst automatisch aus einer Feiertagsbibliothek des Bundeslands erzeugen statt manuell zu pflegen
-3. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
-4. **Login-Schutz:** Begrenzung der Fehlversuche
-5. **Auftragsliste für normale Mitarbeiter** auf eigene Aufträge einschränken, dazu Suche, Filter und Sortierung nach Regel 9.11, und zwar für alle Listen einheitlich, bei Aufträgen u. a. (Status, Mitarbeiter, Instrumentenklasse, Priorität; Kundenname, Auftragsnummer, externe Kundennummer)
-6. **Datenschutz:** Konzept für Löschwünsche von Kunden (Anonymisieren statt hart löschen, damit Statistik und Historie erhalten bleiben), Hosting-Region und Auftragsverarbeitungsvertrag mit dem Datenbankanbieter klären
-7. **Sicherung und Wiederherstellung** der Datenbank (Backups prüfen, Wiederherstellung einmal testen)
-8. **Hosting/Bereitstellung** mit HTTPS (Voraussetzung, bevor jemand außerhalb des eigenen Rechners damit arbeitet)
+1. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
+2. **Login-Schutz:** Begrenzung der Fehlversuche
+3. **Auftragsliste für normale Mitarbeiter** auf eigene Aufträge einschränken, dazu Suche, Filter und Sortierung nach Regel 9.11, und zwar für alle Listen einheitlich, bei Aufträgen u. a. (Status, Mitarbeiter, Instrumentenklasse, Priorität; Kundenname, Auftragsnummer, externe Kundennummer)
+4. **Datenschutz:** Konzept für Löschwünsche von Kunden (Anonymisieren statt hart löschen, damit Statistik und Historie erhalten bleiben), Hosting-Region und Auftragsverarbeitungsvertrag mit dem Datenbankanbieter klären
+5. **Sicherung und Wiederherstellung** der Datenbank (Backups prüfen, Wiederherstellung einmal testen)
+6. **Hosting/Bereitstellung** mit HTTPS (Voraussetzung, bevor jemand außerhalb des eigenen Rechners damit arbeitet)
 
 ### 10.5 Offen, Funktionsausbau
 
