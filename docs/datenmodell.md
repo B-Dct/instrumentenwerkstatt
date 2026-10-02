@@ -63,12 +63,12 @@ Für Urlaub, Krankheit, Feiertage — wichtig sowohl für die interne Kapazität
 | bis_datum | DATE | |
 | typ | VARCHAR | Urlaub / Krankheit / Feiertag / Betriebsschließung / Schulung / Reduzierte Stunden |
 | reduzierte_stunden | DECIMAL | NULL = ganztägig abwesend im angegebenen Zeitraum. Ansonsten: die in diesem Zeitraum tatsächlich **verfügbare** Wochenstundenzahl (absoluter Wert, kein Abzugsbetrag) — z. B. "diese Woche nur 20 Std. verfügbar" wegen Arztterminen o. Ä., statt der vollen `mitarbeiter_arbeitszeit.wochenstunden` |
-| notiz | TEXT | Optional, z. B. "Betriebsurlaub Weihnachten" |
+| notiz | TEXT | Optional, höchstens 500 Zeichen, z. B. "Betriebsurlaub Weihnachten". Eine leere Eingabe zählt als "keine Notiz" |
 | storniert_am | TIMESTAMP | NULL = gilt. Stornierte Einträge bleiben erhalten, zählen aber nicht mehr für die Terminschätzung |
 
 **Regeln:**
 - Urlaub, Krankheit, Schulung und Reduzierte Stunden brauchen einen aktiven Mitarbeiter. Feiertag und Betriebsschließung gelten immer für die ganze Werkstatt (`mitarbeiter_id` = NULL)
-- `reduzierte_stunden` nur beim Typ "Reduzierte Stunden", Wert über 0 und höchstens 80
+- `reduzierte_stunden` ist bei jedem persönlichen Typ zulässig (Urlaub, Krankheit, Schulung, Reduzierte Stunden) — erlaubt z. B. einen halben Urlaubstag, statt eine andere Abwesenheit dafür vorzutäuschen. Wert über 0 und höchstens 80, bei Feiertag/Betriebsschließung nicht zulässig (immer ganztägig)
 - Schutz vor Doppeleinträgen: Derselbe Typ für dieselbe Person im überschneidenden Zeitraum wird abgelehnt, mit Verweis auf den vorhandenen Eintrag. Verschiedene Typen dürfen sich überschneiden (z. B. krank im Urlaub)
 - Eine stornierte Abwesenheit lässt sich erst nach dem Wiederherstellen bearbeiten
 - Abwesenheiten in der Vergangenheit sind erlaubt (z. B. nachgetragene Krankheit)
@@ -565,7 +565,7 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | ausgeführt_von_mitarbeiter_id | FK → mitarbeiter | |
-| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "mitarbeiter_aktiviert", "wochenstunden_festgelegt", "vorgabewert_archiviert", "vorgabewert_reaktiviert", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
+| aktion | VARCHAR | z. B. "mitarbeiter_deaktiviert", "reparaturart_geändert", "mitarbeiter_aktiviert", "wochenstunden_festgelegt", "vorgabewert_archiviert", "vorgabewert_reaktiviert", "einstellung_geaendert", "rolle_geändert", "kunde_angelegt", "instrument_archiviert", "kunde_reaktiviert" |
 | betroffene_entität | VARCHAR | z. B. "mitarbeiter", "reparaturart", "kunde", "instrument", "instrumentenklasse" |
 | betroffene_id | UUID | ID des betroffenen Datensatzes |
 | details | JSONB | Was genau geändert wurde (alter/neuer Wert) |
@@ -583,12 +583,13 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 
 ### 7.5 Werkstatt-Einstellungen
 
-Einfache Schlüssel-Wert-Tabelle für werkstattweite Einstellungen, die keine eigene fachliche Tabelle rechtfertigen. Erster und bisher einziger Zweck: das Bundesland für die automatische Feiertagserzeugung (siehe 9.13.4), statt es fest im Code zu hinterlegen.
+Einfache Schlüssel-Wert-Tabelle für werkstattweite Einstellungen, die keine eigene fachliche Tabelle rechtfertigen. Erster und bisher einziger Zweck: das Bundesland für die automatische Feiertagserzeugung (siehe 9.13.1), statt es fest im Code zu hinterlegen.
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
+| id | UUID / SERIAL | Primärschlüssel |
 | schlüssel | VARCHAR, UNIQUE | z. B. `bundesland` |
-| wert | VARCHAR | z. B. `Baden-Württemberg` |
+| wert | VARCHAR | Ausgeschriebener Wert, z. B. `Baden-Württemberg`. Das Kürzel für die Feiertagsbibliothek wird daraus im Code abgeleitet |
 | geändert_von_mitarbeiter_id | FK → mitarbeiter | |
 | geändert_am | TIMESTAMP | |
 
@@ -876,7 +877,8 @@ Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Ab
 - Zeilen: alle aktiven Mitarbeiter, automatisch vorbefüllt (keine manuelle Anlage nötig), plus eine feste erste Zeile "Ganze Werkstatt" für Feiertage und Betriebsschließung
 - Spalten: Tage, standardmäßig die laufende Woche; Navigation wochenweise vor/zurück, Sprung zu "heute". Wochenenden sind ausgegraut und nicht editierbar
 - Zellwert: der Normalfall ist die tägliche verfügbare Stundenzahl (`mitarbeiter_arbeitszeit.wochenstunden` / 5, siehe 2.12), angezeigt als Zahl. Eine Abwesenheit überschreibt diesen Wert
-- Ein Eintrag von `0` bedeutet ganztägig abwesend (entspricht `reduzierte_stunden` = NULL in 2.3); ein Wert darüber bedeutet teilweise verfügbar (`reduzierte_stunden` = dieser Wert)
+- Die Zelle zeigt und erwartet **Tagesstunden**. Gespeichert wird in `abwesenheit.reduzierte_stunden` weiterhin die Wochenstundenzahl (2.3), also Zelleneingabe × 5 — Datenbank und Terminschätzung bleiben dadurch unverändert
+- Ein Eintrag von `0` Tagesstunden bedeutet ganztägig abwesend (entspricht `reduzierte_stunden` = NULL in 2.3); ein Wert darüber bedeutet teilweise verfügbar an diesem Tag. Das gilt für jeden persönlichen Typ (Urlaub, Krankheit, Schulung, Reduzierte Stunden) — ein halber Urlaubstag bleibt also als "Urlaub" erkennbar, statt als "Reduzierte Stunden" verbucht zu werden
 - Ist für einen Tag ein werkstattweiter Eintrag ("Ganze Werkstatt") gesetzt, zeigen alle Mitarbeiter-Zeilen diesen Tag automatisch als geschlossen und nicht editierbar — er wird nicht zusätzlich pro Person eingetragen
 
 **Bedienung (bewusste Ausnahme von Regel 9.10):** Ein Klick auf eine Zelle öffnet ein kleines, eingebettetes Eingabefeld direkt an der Stelle: Stunden (vorbelegt mit dem aktuellen Wert), eine Pflichtauswahl des Typs (Urlaub, Krankheit, Schulung, Reduzierte Stunden, bei der "Ganze Werkstatt"-Zeile Feiertag/Betriebsschließung) sowie ein optionales Notizfeld. Mehrere zusammenhängende Tage lassen sich durch Ziehen über die Zellen gemeinsam markieren und als ein einziger Eintrag anlegen (z. B. eine Urlaubswoche), statt für jeden Tag einen eigenen Vorgang zu benötigen. Das direkte Bearbeiten per Klick widerspricht nicht Regel 9.10, Punkt 5 ("verworfene Alternativen"): Ein Kalenderraster ist ein eigenständiges, in Kalender- und Tabellenwerkzeugen etabliertes Bedienmuster, kein Formular mit Pflichtbegründung wie bei der Auftragsbearbeitung.
