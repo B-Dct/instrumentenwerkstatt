@@ -906,7 +906,16 @@ Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Ab
 - Überschneiden sich mehrere Einträge an einem Tag (z. B. krank im Urlaub, siehe 2.3), zeigt die Zelle den Eintrag mit den wenigsten verfügbaren Stunden plus die Anzahl weiterer Einträge (z. B. "+1") — das ist die für die Terminschätzung tatsächlich maßgebliche Zahl
 - Deaktivierte Mitarbeiter erscheinen nicht als Zeile, auch nicht mit noch laufenden Einträgen in der angezeigten Woche
 
-**9.13.1 Feiertage automatisch erzeugen:** Das Bundesland kommt aus den Werkstatt-Einstellungen (7.5), nicht fest im Code. Auf Basis des Bundeslands werden gesetzliche Feiertage für das laufende und das kommende Jahr automatisch als "Ganze Werkstatt"-Einträge vom Typ Feiertag angelegt (z. B. über eine gängige Feiertagsbibliothek), statt sie von Hand einzutragen. Eine admin-ausgelöste Funktion "Feiertage für Jahr X erzeugen" legt fehlende Jahre nach und überschreibt keine bereits manuell angepassten Einträge.
+**9.13.1 Feiertage automatisch erzeugen:** Das Bundesland kommt aus den Werkstatt-Einstellungen (7.5), nicht fest im Code. Auf Basis des Bundeslands werden gesetzliche Feiertage für das laufende und das kommende Jahr automatisch als "Ganze Werkstatt"-Einträge vom Typ Feiertag angelegt (über die Python-Bibliothek `holidays`), statt sie von Hand einzutragen. Eine admin-ausgelöste Funktion "Feiertage für ein Jahr erzeugen" legt fehlende Jahre nach und überschreibt keine bereits manuell angepassten Einträge.
+
+**Präzisierungen aus der Umsetzung:**
+- "Automatisch" heißt: ausgelöst beim Festlegen des Bundeslands und beim Öffnen des Rasters, kein nächtlicher Hintergrundlauf. So wird auch nach einem Jahreswechsel das neue Jahr nachgelegt, ohne dass es ein separater Dienst oder eine Erinnerung braucht
+- Ein Tag wird übersprungen, wenn dort schon ein Feiertags-Eintrag liegt oder für diesen Tag früher schon einmal einer erzeugt wurde — erkannt am Änderungsprotokoll. Das gilt auch für geänderte, stornierte oder auf einen anderen Tag verschobene Feiertage
+- Ändert sich das Bundesland, lässt der automatische Lauf bereits erzeugte Jahre unangetastet. Löst ein Admin die Aktion für ein solches Jahr ausdrücklich erneut aus, werden nur die noch fehlenden Feiertage des neuen Bundeslands ergänzt — entfernt wird nie etwas
+- Feiertage, die auf ein Wochenende fallen, werden ebenfalls angelegt (im Raster ohnehin ausgegraut)
+- Jeder Lauf hinterlässt einen Protokolleintrag `feiertage_erzeugt` mit Jahr, Bundesland sowie angelegten und übersprungenen Tagen; bei automatischen Läufen ohne auslösenden Mitarbeiter
+- Admin-Aktion wählbar für Vorjahr bis fünf Jahre voraus
+- Bekannte Grenze: Die Bibliothek liefert die landesweit geltenden Feiertage; regionale Besonderheiten innerhalb eines Bundeslands (z. B. Mariä Himmelfahrt nur in Teilen Bayerns) sind nicht enthalten. Für Baden-Württemberg ohne Bedeutung, bei einem späteren Bundeslandwechsel ggf. zu prüfen
 
 ---
 
@@ -935,10 +944,11 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Status "Wartet auf Ersatzteil" samt automatischem `unterbrechung`-Eintrag (2.9)
 - Werkstatt-Einstellungen (7.5), zunächst für das Bundesland
 - Abwesenheiten: Backend und Raster-Oberfläche (9.13), ersetzt die ursprünglich geplante Listen-Seite
+- Feiertags-Automatik (9.13.1), Bundesland Baden-Württemberg hinterlegt
 
 ### 10.2 In Arbeit
 
-- **Feiertags-Automatik** (9.13.1): wartet auf das gesetzte Bundesland in den Werkstatt-Einstellungen (7.5)
+- **Werkstattleiter-Dashboard als Startseite** (9.5)
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
