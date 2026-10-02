@@ -148,14 +148,17 @@ def _detail(db: Session, auftrag_id: uuid.UUID) -> AuftragDetail:
     if zeile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Auftrag nicht gefunden")
     a = zeile[0]
+    # Namen der Handelnden direkt mitliefern (auch deaktivierte, unabhängig von der Rolle des Betrachters)
     verlauf = db.execute(
-        select(AuftragStatusverlauf, Auftragsstatus)
+        select(AuftragStatusverlauf, Auftragsstatus, Mitarbeiter.name)
         .join(Auftragsstatus, AuftragStatusverlauf.status_id == Auftragsstatus.id)
+        .outerjoin(Mitarbeiter, AuftragStatusverlauf.geaendert_von_mitarbeiter_id == Mitarbeiter.id)
         .where(AuftragStatusverlauf.auftrag_id == auftrag_id)
         .order_by(AuftragStatusverlauf.geaendert_am, AuftragStatusverlauf.id)
     ).all()
-    schaetzungen = db.scalars(
-        select(SchaetzungsLog)
+    schaetzungen = db.execute(
+        select(SchaetzungsLog, Mitarbeiter.name)
+        .outerjoin(Mitarbeiter, SchaetzungsLog.korrigiert_von_mitarbeiter_id == Mitarbeiter.id)
         .where(SchaetzungsLog.auftrag_id == auftrag_id)
         .order_by(SchaetzungsLog.berechnet_am, SchaetzungsLog.id)
     ).all()
@@ -177,11 +180,15 @@ def _detail(db: Session, auftrag_id: uuid.UUID) -> AuftragDetail:
                 status=_status_kurz(s),
                 geaendert_am=v.geaendert_am,
                 geaendert_von_mitarbeiter_id=v.geaendert_von_mitarbeiter_id,
+                geaendert_von_name=name,
                 kommentar=v.kommentar,
             )
-            for v, s in verlauf
+            for v, s, name in verlauf
         ],
-        schaetzungen=[SchaetzungsLogEintrag.model_validate(s) for s in schaetzungen],
+        schaetzungen=[
+            SchaetzungsLogEintrag.model_validate(s).model_copy(update={"korrigiert_von_name": name})
+            for s, name in schaetzungen
+        ],
         unterbrechungen=[UnterbrechungEintrag.model_validate(u) for u in unterbrechungen],
     )
 

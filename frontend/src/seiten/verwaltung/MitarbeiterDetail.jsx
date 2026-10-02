@@ -66,7 +66,7 @@ function WochenstundenFormular({ formular, mitarbeiter, offenerEintrag, onGespei
   )
 }
 
-function Verlauf({ verlauf, namen }) {
+function Verlauf({ verlauf }) {
   const eintraege = verlauf?.eintraege ?? []
   const heute = isoDatum(new Date())
   const zusammenfassung = !verlauf ? 'Lädt …'
@@ -90,7 +90,7 @@ function Verlauf({ verlauf, namen }) {
                       {geplant && <span className="marke">geplant</span>}
                     </td>
                     <td className="zahl">{zahl(e.wochenstunden)}</td>
-                    <td>{e.geaendert_von_mitarbeiter_id ? namen[e.geaendert_von_mitarbeiter_id] ?? 'unbekannt' : '–'}</td>
+                    <td>{e.geaendert_von_name ?? '–'}</td>
                     <td>{zeit(e.geaendert_am)}</td>
                   </tr>
                 )
@@ -130,18 +130,11 @@ export default function MitarbeiterDetail() {
   const [aktionsfehler, setAktionsfehler] = useState(null)
 
   const [verlauf, setVerlauf] = useState(null)
-  const [namen, setNamen] = useState({})
 
   const laden = useCallback(() => Promise.all([api.admin.mitarbeiter(id), api.admin.wochenstunden(id)])
     .then(([m, v]) => { setMitarbeiter(m); setVerlauf(v) })
     .catch((e) => setFehler(e.message)), [id])
   useEffect(() => { laden() }, [laden])
-  useEffect(() => {
-    // Namen für "Geändert von" (auch deaktivierte Admins)
-    api.admin.mitarbeiterListe({ status: 'alle', seitengroesse: 100 })
-      .then((seite) => setNamen(Object.fromEntries(seite.eintraege.map((e) => [e.id, e.name]))))
-      .catch(() => {})
-  }, [])
 
   if (fehler) return <p className="meldung meldung--fehler">{fehler}</p>
   if (!mitarbeiter) return <p className="leise">Lädt …</p>
@@ -243,7 +236,7 @@ export default function MitarbeiterDetail() {
         )}
       </FormularBereich>
 
-      <Verlauf verlauf={verlauf} namen={namen} />
+      <Verlauf verlauf={verlauf} />
     </>
   )
 }

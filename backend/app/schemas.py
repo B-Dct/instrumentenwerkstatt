@@ -104,6 +104,8 @@ class StatusverlaufEintrag(BaseModel):
     status: StatusKurz
     geaendert_am: datetime
     geaendert_von_mitarbeiter_id: uuid.UUID | None
+    # Name direkt mitgeliefert – bleibt sichtbar, auch wenn der Mitarbeiter deaktiviert ist
+    geaendert_von_name: str | None
     kommentar: str | None
 
 
@@ -118,6 +120,7 @@ class SchaetzungsLogEintrag(BaseModel):
     geschaetztes_datum: date | None
     eingabefaktoren: dict | None
     korrigiert_von_mitarbeiter_id: uuid.UUID | None
+    korrigiert_von_name: str | None = None  # auch für deaktivierte Mitarbeiter
     grund: str | None
 
 
@@ -366,6 +369,7 @@ class WochenstundenEintrag(BaseModel):
     gueltig_ab: date
     gueltig_bis: date | None  # None = aktuell gültig
     geaendert_von_mitarbeiter_id: uuid.UUID | None
+    geaendert_von_name: str | None = None  # auch für deaktivierte Mitarbeiter
     geaendert_am: datetime
 
 

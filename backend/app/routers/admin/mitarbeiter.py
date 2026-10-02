@@ -185,12 +185,15 @@ def systemrolle_aendern(
 
 
 def _verlauf(db: Session, mitarbeiter_id: uuid.UUID) -> WochenstundenVerlauf:
-    eintraege = db.scalars(select(MitarbeiterArbeitszeit)
+    # Name des Ändernden direkt mitliefern (auch deaktivierte Admins)
+    eintraege = db.execute(select(MitarbeiterArbeitszeit, Mitarbeiter.name)
+                           .outerjoin(Mitarbeiter, MitarbeiterArbeitszeit.geaendert_von_mitarbeiter_id == Mitarbeiter.id)
                            .where(MitarbeiterArbeitszeit.mitarbeiter_id == mitarbeiter_id)
                            .order_by(MitarbeiterArbeitszeit.gueltig_ab.desc())).all()
     return WochenstundenVerlauf(
         aktuell=_aktuelle_wochenstunden(db, mitarbeiter_id),
-        eintraege=[WochenstundenEintrag.model_validate(e) for e in eintraege],
+        eintraege=[WochenstundenEintrag.model_validate(e).model_copy(update={"geaendert_von_name": name})
+                   for e, name in eintraege],
     )
 
 

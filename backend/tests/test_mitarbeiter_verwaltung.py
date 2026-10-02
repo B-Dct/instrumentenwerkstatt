@@ -1,7 +1,7 @@
 """Mitarbeiter-Verwaltung und Wochenstunden – nur Admin (2.2, 2.12, 7.2)."""
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -171,6 +171,16 @@ def test_wochenstunden_verlauf_schliesst_alten_eintrag_ab(client, db, admin):
     [eintrag] = log(db, m.id, "wochenstunden_festgelegt")[1:]
     assert eintrag.details["alt"] == {"wochenstunden": "20.00", "gueltig_ab": "2025-01-01", "gueltig_bis": "2026-02-28"}
     assert eintrag.details["neu"] == {"wochenstunden": "30.00", "gueltig_ab": "2026-03-01"}
+
+
+def test_wochenstunden_verlauf_nennt_aendernden_auch_nach_deaktivierung(client, db, admin):
+    m = konto_anlegen(db, name="Teilzeit")
+    client.post(f"{URL}/{m.id}/wochenstunden", json={"wochenstunden": 20, "gueltig_ab": "2025-01-01"})
+    admin.aktiv, admin.deaktiviert_am = False, datetime.now(timezone.utc)
+    db.flush()
+    zweiter_admin = angemeldet_als(konto_anlegen(db, Systemrolle.admin, name="Zweiter Admin"))
+    [eintrag] = client.get(f"{URL}/{m.id}/wochenstunden", headers=zweiter_admin).json()["eintraege"]
+    assert eintrag["geaendert_von_name"] == admin.name
 
 
 def test_wochenstunden_in_der_zukunft_gelten_noch_nicht(client, db, admin):

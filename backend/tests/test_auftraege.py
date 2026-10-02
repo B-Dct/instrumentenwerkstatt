@@ -2,16 +2,16 @@
 
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
-from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, SchaetzungsLog
+from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, SchaetzungsLog, Systemrolle
 from app.routers.auftraege import _neue_auftragsnummer  # Original (Tests nutzen Ersatz)
 from tests.beispieldaten import Werkstatt
-from tests.conftest import OHNE_ANMELDUNG, angemeldet_als
+from tests.conftest import OHNE_ANMELDUNG, angemeldet_als, konto_anlegen
 
 URL = "/auftraege"
 
@@ -198,6 +198,23 @@ def test_statuswechsel_erzeugt_historieneintrag(client, w):
     assert [v["status"]["schluessel"] for v in verlauf] == ["angenommen", "in_bearbeitung"]
     assert verlauf[1]["kommentar"] == "Begonnen"
     assert verlauf[1]["geaendert_von_mitarbeiter_id"] == str(w.mitarbeiter.id)
+
+
+def test_verlauf_nennt_handelnde_auch_nach_deaktivierung(client, w, db):
+    """Namen im Statusverlauf und Schätzprotokoll bleiben sichtbar – unabhängig vom Aktivstatus
+    des Handelnden und von der Rolle des Betrachters."""
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    client.post(f"{URL}/{a['id']}/status", json={"status_id": str(w.in_bearbeitung)})
+    client.post(f"{URL}/{a['id']}/schaetzung-korrektur", json={"geschaetzte_kosten": 99, "grund": "Teuer"})
+    w.mitarbeiter.aktiv, w.mitarbeiter.deaktiviert_am = False, datetime.now(timezone.utc)
+    db.flush()
+
+    betrachter = angemeldet_als(konto_anlegen(db, Systemrolle.mitarbeiter, name="Kollege"))
+    detail = client.get(f"{URL}/{a['id']}", headers=betrachter).json()
+    assert [v["geaendert_von_name"] for v in detail["statusverlauf"]] == ["Test Geigenbauer", "Test Geigenbauer"]
+    korrektur = detail["schaetzungen"][-1]
+    assert (korrektur["methode"], korrektur["korrigiert_von_name"]) == ("manuelle_korrektur", "Test Geigenbauer")
+    assert detail["schaetzungen"][0]["korrigiert_von_name"] is None  # automatische Schätzung
 
 
 def test_statuswechsel_in_gleichen_status_abgelehnt(client, w):
