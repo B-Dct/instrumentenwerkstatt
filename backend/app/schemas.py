@@ -504,5 +504,21 @@ class DashboardKennzahlen(BaseModel):
     pausiert: int  # offen mit laufender Unterbrechung (2.9)
 
 
+class Auslastung(BaseModel):
+    """Auslastung eines Mitarbeiters in der laufenden Woche (Formel aus 8.2)."""
+
+    mitarbeiter_id: uuid.UUID
+    name: str
+    wochenstunden: float
+    abwesenheitsstunden: float  # in dieser Woche (ganztägig oder reduzierte Stunden, auch werkstattweit)
+    auftragsstunden: float  # geschätzte Stunden aller zugewiesenen offenen Aufträge
+    offene_auftraege: int
+    freie_stunden: float  # Wochenstunden − Abwesenheit − Aufträge; negativ = überbucht
+    auslastung_prozent: int  # (Abwesenheit + Aufträge) / Wochenstunden
+
+
 class Dashboard(BaseModel):
     kennzahlen: DashboardKennzahlen
+    naechste_faellige: list[AuftragKurz]  # offene Aufträge mit dem nächstgelegenen Termin
+    woche_von: date  # Montag der Woche, für die die Auslastung gilt
+    auslastung: list[Auslastung]  # je aktivem Mitarbeiter

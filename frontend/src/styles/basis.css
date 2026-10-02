@@ -353,3 +353,25 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .kachel__titel { color: var(--farbe-text-leise); }
 .kachel--warnung { box-shadow: inset var(--markierungsbreite) 0 0 var(--farbe-warnung); }
 .kachel--warnung .kachel__zahl, .kachel--warnung .kachel__titel { color: var(--farbe-warnung); }
+
+/* Startseite: nächste fällige Aufträge */
+.faellig { list-style: none; margin: 0 0 var(--abstand-3); padding: 0; border-top: var(--randbreite) solid var(--farbe-rand); }
+.faellig__eintrag {
+  display: grid; grid-template-columns: max-content 1fr max-content; gap: var(--abstand-1) var(--abstand-4); align-items: start;
+  padding: var(--abstand-3) var(--abstand-2); border-bottom: var(--randbreite) solid var(--farbe-rand);
+  color: inherit; text-decoration: none; font-size: var(--groesse-14);
+}
+.faellig__eintrag:hover { background: var(--farbe-flaeche-leise); }
+.faellig__termin, .faellig__auftrag, .faellig__status { display: flex; flex-direction: column; gap: var(--abstand-1); }
+.faellig__termin { font-variant-numeric: tabular-nums; }
+.faellig__status { align-items: flex-end; }
+
+/* Startseite: Auslastung je Mitarbeiter (8.2) – Stufenfarben aus der Palette (9.6) */
+.auslastung { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--abstand-4); }
+.auslastung__zeile { --stufe: var(--farbe-erfolg); font-size: var(--groesse-14); }
+.auslastung__zeile--gelb { --stufe: var(--farbe-primaer); }
+.auslastung__zeile--rot { --stufe: var(--farbe-warnung); }
+.auslastung__kopf { display: flex; justify-content: space-between; gap: var(--abstand-3); }
+.auslastung__kopf strong { color: var(--stufe); }
+.auslastung__balken { height: var(--abstand-2); margin: var(--abstand-1) 0; background: var(--farbe-flaeche-leise); border: var(--randbreite) solid var(--farbe-rand); border-radius: var(--radius); overflow: hidden; }
+.auslastung__balken span { display: block; height: 100%; background: var(--stufe); }

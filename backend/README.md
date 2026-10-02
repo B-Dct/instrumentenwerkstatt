@@ -64,7 +64,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST | `/admin/mitarbeiter/{id}/deaktivieren`, `/…/aktivieren` | Deaktivieren/Reaktivieren (nicht sich selbst, nicht den letzten Admin, nicht bei offenen Aufträgen) |
 | PATCH | `/admin/mitarbeiter/{id}/systemrolle` | Systemrolle ändern (sich selbst nicht herabstufen, letzter Admin bleibt) |
 | GET, POST | `/admin/mitarbeiter/{id}/wochenstunden` | Verlauf ansehen / neuen Wert ab Datum festlegen (schließt den bisherigen ab) |
-| GET | `/dashboard` | Werkstattleiter-Startseite (9.5, nur Werkstattleitung/Admin): Kennzahlen offen, überfällig, hohe Priorität, pausiert – jeweils passend zum Filter der Auftragsliste |
+| GET | `/dashboard` | Werkstattleiter-Startseite (9.5, nur Werkstattleitung/Admin): Kennzahlen offen, überfällig, hohe Priorität, pausiert – jeweils passend zum Filter der Auftragsliste; die 5 nächsten fälligen Aufträge; Auslastung je aktivem Mitarbeiter in der laufenden Woche (Formel 8.2) |
 | GET | `/auftraege` | Auftragsliste nach 9.11 (Standard: offene, Priorität hoch zuerst, dann älteste; `suche`; Filter `status` = offen/abgeschlossen/alle/Status-Schlüssel, `mitarbeiter` = ID/keiner, `instrumentenklasse_id`, `prioritaet`, `termin=ueberfaellig`, `pausiert=true`, `kunde_id`) |
 | GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
 | POST | `/auftraege` | Auftrag anlegen – schätzt Stunden, Kosten und Fertigstellungstermin automatisch und protokolliert die Schätzung |
