@@ -624,6 +624,14 @@ Diese Berechnung läuft automatisch im Hintergrund und muss von niemandem manuel
 
 Eine Reparaturwerkstatt hat in der Regel keine exakt terminierten Slots wie ein Frisör oder eine Arztpraxis — die Reihenfolge der Bearbeitung ergibt sich ohnehin aus Priorität und Auftragseingang (siehe Mitarbeiter-Dashboard, Abschnitt 9.4). Eine wochenweise Kapazitätsübersicht reicht daher aus, um zu erkennen: "Mitarbeiter X ist diese und nächste Woche schon voll ausgelastet, neue Aufträge besser an Mitarbeiter Y vergeben." Sollte sich später herausstellen, dass doch eine feinere Terminplanung nötig ist (z. B. bei Zusagen fester Abholtermine), lässt sich das Modell erweitern, ohne die Grundstruktur zu ändern.
 
+### 8.4 Bekannte vereinfachte Annahmen (Version 1)
+
+- **Alle offenen, zugewiesenen Aufträge zählen voll in die laufende Woche**, auch wenn sich ihre Arbeit tatsächlich über mehrere Wochen verteilen würde. Ein Wert über 100 % bedeutet deshalb "insgesamt mehr zugewiesene Arbeit, als eine Woche fasst" — also einen Rückstau, der sich auf Folgewochen verteilt — und nicht zwingend ein akutes Problem. Eine Verteilung der Stunden über mehrere Wochen wäre Aufgabe der ausführlichen Ansicht (9.9)
+- Aufträge ohne eigene Stundenschätzung zählen als Auftrag mit, gehen aber mit 0 Stunden in die Summe ein
+- Pausierte Aufträge (mit aktiver `unterbrechung`, 2.9) zählen weiterhin voll mit, wie in 4.0a für die Terminschätzung festgehalten
+- Ändern sich die Wochenstunden eines Mitarbeiters mitten in der angezeigten Woche (2.12), gilt der Durchschnitt über die fünf Arbeitstage
+- Abwesenheit bindet Stunden wie zugewiesene Arbeit: Eine volle Woche Urlaub ergibt 100 % Auslastung (keine freie Kapazität), auch ohne einen einzigen zugewiesenen Auftrag
+
 ---
 
 ## 8a. Abfrage-Assistent für historische Erfahrungswerte (spätere Erweiterung)
@@ -710,6 +718,11 @@ Ersetzt für diese beiden Rollen die Startseite nach dem Login (der "Startseite 
 - Die "Überfällig"-Kachel ist nur dann rot mit Warnsymbol hervorgehoben, wenn die Zahl über 0 liegt; bei 0 ist sie neutral dargestellt
 - Jede Kachel führt per Klick zur Auftragsliste mit demselben Filter, der auch die Kachel-Zahl ermittelt (neuer Filter "Pausiert" in 9.11, siehe dort) — Zahl und Liste stimmen dadurch immer überein
 - Der Button "Neuer Auftrag" steht auch oben auf der Übersicht, nicht nur in der Seitenleiste
+
+**Präzisierungen aus der Umsetzung (Teilschritt 2, zwei Spalten):**
+- "Nächste fällige Aufträge": die 5 offenen Aufträge mit dem nächstgelegenen Termin (Aufträge ohne Termin und abgeschlossene Aufträge ausgeschlossen); bei gleichem Termin zuerst hohe Priorität, dann der ältere Eingang als Nachrang (wie in 9.4/9.11). Ein Link führt zur vollständigen, entsprechend sortierten Auftragsliste
+- "Auslastung": Balken mit drei Farbstufen nach den Schwellen aus 9.9, der Text steht immer mit dabei ("frei" / "fast voll" / "überbucht"), nie nur die Farbe (9.3). Für die mittlere Stufe wird der Primärakzent (Messing) verwendet, da die Farbpalette in 9.6 kein eigenes Gelb vorsieht. Unter dem Balken steht die Herleitung in Zahlen (z. B. "46,00 Std. in 5 offenen Aufträgen + 24,00 Std. abwesend von 40,00 Wochenstunden"). Der Mitarbeitername verlinkt zu dessen gefilterter Auftragsliste als Einstieg zum Umverteilen
+- Für die Abwesenheitsstunden gilt derselbe Kalender wie für die Terminschätzung (ganztägige und halbe Tage, werkstattweite Feiertage/Schließungen; stornierte Einträge zählen nicht)
 
 ### 9.6 Design-System (Farbgebung & Anmutung)
 
@@ -996,7 +1009,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- **Werkstattleiter-Dashboard als Startseite** (9.5)
+- **Werkstattleiter-Dashboard als Startseite** (9.5): Kennzahl-Kacheln und die zwei Spalten ("Nächste fällige Aufträge", "Auslastung") fertig; der Hinweis auf heutige Abwesenheiten (dritter und letzter Teilschritt) steht noch aus
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
