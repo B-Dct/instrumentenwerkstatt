@@ -552,6 +552,7 @@ Ein Admin hat automatisch auch alle Rechte eines Werkstattleiters (Rollen sind k
 | Systemrollen vergeben (wer ist Werkstattleiter/Admin) | ❌ | ❌ | ✅ |
 | Parameter der Stufe-1-Berechnungslogik anpassen (z. B. Komplexitätsfaktoren) | ❌ | ❌ | ✅ |
 | Abfrage-Assistent für historische Erfahrungswerte nutzen (Abschnitt 8a) | ❌ | ✅ | ✅ |
+| Auswertungen/Jahresstatistik einsehen (Abschnitt 9.14) | ❌ | ✅ | ✅ |
 
 **Schutzregeln (gelten unabhängig von der Rolle):** Kein Selbst-Deaktivieren und kein Selbst-Herabstufen, der letzte aktive Admin bleibt immer erhalten, und ein Mitarbeiter mit offenen zugewiesenen Aufträgen wird nicht deaktiviert (Details in 2.2).
 
@@ -579,6 +580,7 @@ Protokolliert Änderungen an Stammdaten und Benutzerverwaltung nachvollziehbar, 
 - **Stammdatenpflege** (nur Admin): Instrumentenfamilien (2.4a), Instrumentenklassen (2.4), Reparaturkategorien (2.6b), Reparaturarten (2.6) inkl. Standardkomplexität, sowie Vorgabewerte für Dauer und Kosten je Reparaturart/Instrumentenklasse (2.6a)
 - **Werkstatt-Einstellungen** (nur Admin): siehe 7.5
 - **Werkstattübersicht** (Werkstattleiter + Admin): alle laufenden Aufträge, Auslastung pro Mitarbeiter, überfällige/kritische Aufträge hervorgehoben
+- **Auswertungen/Jahresstatistik** (Werkstattleiter + Admin): Menge, Zeit, Geld, Schätzgenauigkeit und Betrieb im Jahresverlauf (siehe 9.14)
 - **Änderungsprotokoll** (nur Admin einsehbar): Anzeige des `system_ereignis_log`
 
 ### 7.5 Werkstatt-Einstellungen
@@ -817,7 +819,13 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 **Regeln:**
 
 1. **Ruhige Standardansicht:** Kopf, Eckdaten und Aktionsleiste. Keine Formularfelder sichtbar, solange keine Aktion gewählt ist.
-2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin). Auf der Auftragsdetailseite gibt es vier Aktionen: "Status ändern" und "Schätzung korrigieren" (zugewiesener Mitarbeiter, Werkstattleitung, Admin), "Termin korrigieren" und "Zuweisung & Priorität" (nur Werkstattleitung und Admin). "Termin korrigieren" ist bewusst eine eigene Aktion statt Teil von "Schätzung korrigieren", damit kein Nutzer ein Formular mit einem für ihn gesperrten Feld sieht. Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle (z. B. "Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern"), statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
+2. **Eine feste Aktionsleiste** (Standardfall, z. B. Kunden, Instrumente, Mitarbeiter): Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Zustand des Datensatzes ausführen darf. Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle, statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
+
+**Ausnahme Auftragsdetailseite — Stift-Symbole statt Aktionsleiste:** Da die bearbeitbaren Punkte hier eins-zu-eins Felder sind, die ohnehin schon in den Eckdaten angezeigt werden (Status, Priorität, Zuweisung, geschätzte Stunden/Kosten, Termin), steht statt einer separaten Aktionsleiste neben jedem bearbeitbaren Feld ein Stift-Symbol. Ein Klick öffnet dasselbe eingebettete Formular wie zuvor (inkl. Pflichtbegründung, wo vorgesehen), fokussiert aber direkt auf das angeklickte Feld. Deckt eine Aktion mehrere Felder ab — "Schätzung korrigieren" betrifft Stunden **und** Kosten mit einer gemeinsamen Begründung —, öffnet der Stift neben jedem der beiden Felder dasselbe gemeinsame Formular, nur mit unterschiedlichem Startfokus. "Termin korrigieren" bleibt eine eigene Aktion mit eigenem Stift am Termin-Feld, damit kein Nutzer ein Formular mit einem für ihn gesperrten Feld sieht (siehe 7.2: nur Werkstattleitung/Admin).
+
+Sichtbarkeit folgt derselben Regel wie Zeilenaktionen in Listen (9.11, Punkt "Zeilenaktionen"): bei Mausbedienung erst bei Hover/Tastaturfokus sichtbar, bei Touch immer. Hat ein Nutzer für ein Feld keine Berechtigung, erscheint dort kein Stift-Symbol — ein Hinweistext ist hier nicht mehr nötig, da die Einschränkung jetzt pro Feld statt pro ganzer Aktionsleiste gilt. Alle übrigen Regeln bleiben unverändert: nur ein Formular gleichzeitig, eingebettete Rückfrage bei ungespeicherten Änderungen, Erfolgsbestätigung nach dem Speichern, Fehlermeldungen direkt am Feld.
+
+Dieses Stift-Muster ist bewusst zunächst nur für die Auftragsdetailseite festgelegt; es lässt sich bei Bedarf später auf weitere Detailseiten übertragen, auf denen Aktionen ähnlich eng an einzelnen Eckdaten-Feldern hängen.
 3. **Eingebettet, kein Popup:** Das Formular öffnet sich direkt unter der Aktionsleiste (konform mit 9.1). Der aktive Button ist markiert.
 4. **Nur ein Formular gleichzeitig:** Wählt der Nutzer eine andere Aktion, während im offenen Formular ungespeicherte Änderungen stehen, erscheint die Rückfrage "Änderungen verwerfen?" als eingebetteter Hinweis, nicht als Popup.
 5. **Nach dem Speichern schließt sich das Formular automatisch.** Die Erfolgsbestätigung folgt 9.1, der geänderte Wert wird kurz hervorgehoben. "Abbrechen" schließt ohne Speichern.
@@ -926,6 +934,39 @@ Ersetzt eine klassische Liste mit separatem Anlegen-Formular. Statt für jede Ab
 
 ---
 
+### 9.14 Auswertungen (Jahresstatistik)
+
+Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand *heute*, die Auswertungen zeigen die Entwicklung *über die Zeit*. Zugriff nur für Werkstattleitung und Admin (7.2).
+
+**Filter:** Jahr, Standard das laufende Kalenderjahr, wählbar auch vergangene Jahre. "Abgeschlossen im Jahr X" heißt: `tatsächliches_fertigstellungsdatum` liegt in Jahr X (nicht der Auftragseingang).
+
+**9.14.1 Menge**
+- Kennzahl: Anzahl abgeschlossener Aufträge im gewählten Jahr
+- Liniendiagramm: abgeschlossene Aufträge pro Monat
+- Balkendiagramm: Verteilung nach Reparaturart (Top 5, Rest als "Sonstige")
+- Balkendiagramm: Verteilung nach Instrumentenklasse (Top 5, Rest als "Sonstige")
+
+**9.14.2 Zeit**
+- Kennzahl: Ø Bearbeitungsdauer in Kalendertagen (`erstellt_am` bis `tatsächliches_fertigstellungsdatum`)
+- Kennzahl: Ø reine Arbeitszeit in Stunden (Summe `arbeitszeiterfassung.dauer_minuten` je Auftrag, über alle abgeschlossenen Aufträge gemittelt) — bewusst getrennt von der Kalenderdauer ausgewiesen, da sie nicht durch Wartezeiten auf Ersatzteile verzerrt ist (dieselbe Unterscheidung wie in Abschnitt 4)
+- Liniendiagramm: Ø Bearbeitungsdauer pro Monat
+- Kennzahl: **Pünktlichkeitsquote** — Anteil der Aufträge, deren `tatsächliches_fertigstellungsdatum` nicht nach der *ersten automatischen* Terminschätzung lag (`schätzungs_log`-Eintrag mit `methode = "regelbasiert"` beim Anlegen des Auftrags, nicht eine spätere manuelle Korrektur oder Neuberechnung). Das misst bewusst die Treffsicherheit der ursprünglichen Prognose, nicht ob am Ende irgendein — ggf. nachträglich angepasster — Termin eingehalten wurde
+
+**9.14.3 Geld**
+- Kennzahl: Umsatz im gewählten Jahr (Summe `auftrag.tatsächliche_kosten` aller im Jahr abgeschlossenen Aufträge)
+- Kennzahl: Ø Auftragswert (Umsatz ÷ Anzahl abgeschlossener Aufträge)
+- Liniendiagramm: Umsatz pro Monat
+
+**9.14.4 Schätzgenauigkeit**
+- Kennzahl: Ø Abweichung zwischen geschätzten und tatsächlichen Stunden (in %), Kennzahl: dasselbe für Kosten
+- Bezieht sich bewusst auf die *erste automatische* Schätzung (`methode = "regelbasiert"`), nicht auf spätere manuelle Korrekturen — das zeigt, wie gut das automatische Modell an sich ist, unabhängig von menschlichen Eingriffen danach. Das ist zugleich die Kennzahl, mit der sich später beurteilen lässt, ob und wie gut Stufe 2 (Abschnitt 5) eine Verbesserung bringt
+
+**9.14.5 Betrieb**
+- Kennzahl: Anteil der im Jahr abgeschlossenen Aufträge mit mindestens einem `unterbrechung`-Eintrag (2.9)
+- Liniendiagramm: Ø Auslastung der Mitarbeiter pro Monat im Jahresverlauf — rückblickend berechnet aus der tatsächlich geleisteten Arbeitszeit (`arbeitszeiterfassung`) je Mitarbeiter und Woche, ins Verhältnis gesetzt zu den damals gültigen Wochenstunden (`mitarbeiter_arbeitszeit`, unter Nutzung des Gültigkeitszeitraums aus 2.12) — anders als die vorausschauende Kapazitätsformel in 8.2, die mit offenen, noch nicht erledigten Aufträgen rechnet
+
+---
+
 ## 10. Fahrplan und offene Punkte
 
 Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und kann angepasst werden.
@@ -972,6 +1013,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 10. **Werkstattleiter-Dashboard als Startseite** (9.5): vier Kennzahl-Kacheln, "Nächste fällige Aufträge", kompakte Auslastungsliste, Hinweis auf heutige Abwesenheiten — konkret ausgearbeitet, bereit für die Umsetzung
 11. Kapazitäts-Dashboard, ausführliche Wochenansicht (9.9) — spätere Erweiterung der kompakten Auslastungsliste aus Punkt 10, kein eigener Schritt von Anfang an
 12. Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
+12a. Auswertungen/Jahresstatistik (Abschnitt 9.14): Menge, Zeit, Geld, Schätzgenauigkeit, Betrieb — konkret ausgearbeitet, bereit für die Umsetzung, nach der Werkstattleiter-Startseite (Punkt 10) sinnvoll
 13. Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
 14. Gliederung der Stammdaten (Abschnitt 9.12), in drei Schritten: (a) Instrumentenfamilien und Reparaturkategorien im Datenmodell und Backend inkl. Migration, (b) gegliederte Verwaltungslisten, (c) gruppierte Auswahl mit "Häufig verwendet" im Auftragsformular
 
