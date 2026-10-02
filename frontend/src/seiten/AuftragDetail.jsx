@@ -15,6 +15,7 @@ import { HohePrioritaet, Status, Ueberfaellig } from '../komponenten/Status.jsx'
 
 const STATUS = 'status'
 const KORREKTUR = 'korrektur'
+const TERMIN = 'termin'
 const ZUWEISUNG = 'zuweisung'
 
 const QUELLEN = {
@@ -141,6 +142,43 @@ function KorrekturFormular({ formular, auftrag, onGespeichert }) {
         <textarea rows={2} value={werte.grund} onChange={setze('grund')} required />
       </Feld>
       <p className="leise">Die bisherigen Schätzungen bleiben im Protokoll erhalten.</p>
+    </FokusFormular>
+  )
+}
+
+// Termin = Zusage an den Kunden: nur Werkstattleitung/Admin (4.2, 7.2)
+function TerminFormular({ formular, auftrag, onGespeichert }) {
+  const eingang = auftrag.erstellt_am.slice(0, 10)
+  const [werte, setWerte] = useState({ geschaetztes_fertigstellungsdatum: auftrag.geschaetztes_fertigstellungsdatum ?? '', grund: '' })
+  const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
+    const termin = werte.geschaetztes_fertigstellungsdatum
+    vorabPruefen({
+      geschaetztes_fertigstellungsdatum: (!termin && 'Bitte ein Datum wählen')
+        || (termin === auftrag.geschaetztes_fertigstellungsdatum && 'Das ist der bisherige Termin')
+        || (termin < eingang && 'Der Termin kann nicht vor dem Auftragseingang liegen'),
+      grund: !werte.grund.trim() && 'Pflichtangabe, wird im Protokoll gespeichert',
+    })
+    return api.terminKorrigieren(auftrag.id, { geschaetztes_fertigstellungsdatum: termin, grund: werte.grund })
+  }, onGespeichert)
+  const setze = (feld) => (e) => { feldGeaendert(feld); setWerte((w) => ({ ...w, [feld]: e.target.value })) }
+
+  return (
+    <FokusFormular formular={formular} titel="Termin korrigieren" onSpeichern={ausfuehren} sendet={sendet} fehler={fehler}
+                   speichernText="Termin speichern">
+      <div className="spalten spalten--eng">
+        <Feld label="Voraussichtlich fertig am" fehler={felder.geschaetztes_fertigstellungsdatum}
+              hinweis={`Bisher: ${datum(auftrag.geschaetztes_fertigstellungsdatum)}`}>
+          <input type="date" min={eingang} value={werte.geschaetztes_fertigstellungsdatum}
+                 onChange={setze('geschaetztes_fertigstellungsdatum')} required />
+        </Feld>
+      </div>
+      <Feld label="Begründung" fehler={felder.grund} hinweis="Pflichtangabe, wird im Protokoll gespeichert">
+        <textarea rows={2} value={werte.grund} onChange={setze('grund')} required />
+      </Feld>
+      <p className="leise">
+        Der festgelegte Termin gilt, bis er automatisch neu berechnet wird – das passiert bei einer Umzuweisung
+        oder Prioritätsänderung. Danach bei Bedarf erneut korrigieren.
+      </p>
     </FokusFormular>
   )
 }
@@ -342,12 +380,14 @@ export default function AuftragDetail() {
         <div className="aktionsleiste">
           {darfBearbeiten && <AktionsButton formular={formular} schluessel={STATUS} primaer>Status ändern</AktionsButton>}
           {darfBearbeiten && <AktionsButton formular={formular} schluessel={KORREKTUR}>Schätzung korrigieren</AktionsButton>}
+          {leitung && <AktionsButton formular={formular} schluessel={TERMIN}>Termin korrigieren</AktionsButton>}
           {leitung && <AktionsButton formular={formular} schluessel={ZUWEISUNG}>Zuweisung & Priorität</AktionsButton>}
         </div>
       )}
       {!darfBearbeiten && (
         <p className="leise">
-          Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern.
+          Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern,
+          den Termin nur die Werkstattleitung.
         </p>
       )}
 
@@ -360,6 +400,11 @@ export default function AuftragDetail() {
           <KorrekturFormular key={KORREKTUR} formular={formular} auftrag={a}
                              onGespeichert={(neu) => gespeichert(neu,
                                `Schätzung korrigiert: ${stunden(neu.geschaetzte_arbeitsstunden)} · ${euro(neu.geschaetzte_kosten)}`)} />
+        )}
+        {formular.offen === TERMIN && (
+          <TerminFormular key={TERMIN} formular={formular} auftrag={a}
+                          onGespeichert={(neu) => gespeichert(neu,
+                            `Termin korrigiert: voraussichtlich fertig am ${datum(neu.geschaetztes_fertigstellungsdatum)}`)} />
         )}
         {formular.offen === ZUWEISUNG && (
           <ZuweisungFormular key={ZUWEISUNG} formular={formular} auftrag={a} mitarbeiter={mitarbeiter}

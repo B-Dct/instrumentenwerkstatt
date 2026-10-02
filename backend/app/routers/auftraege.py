@@ -55,6 +55,7 @@ from app.schemas import (
     StatusKurz,
     StatusverlaufEintrag,
     Statuswechsel,
+    TerminKorrektur,
     UnterbrechungEintrag,
 )
 
@@ -345,6 +346,46 @@ def auftrag_anlegen(
             "termin": termin.eingabefaktoren,
         },
     ))
+    db.commit()
+    return _detail(db, auftrag.id)
+
+
+@router.post("/{auftrag_id}/termin-korrektur", response_model=AuftragDetail,
+             dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
+def termin_korrigieren(
+    auftrag_id: uuid.UUID,
+    daten: TerminKorrektur,
+    db: Session = Depends(get_db),
+    mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
+) -> AuftragDetail:
+    """Fertigstellungstermin manuell festlegen (4.2, 7.2: nur Werkstattleitung/Admin – der Termin
+    ist die Zusage an den Kunden). Die nächste automatische Neuberechnung (Umzuweisung,
+    Prioritätsänderung) überschreibt die Korrektur wieder – bewusste Vereinfachung, siehe 4.0a/4.2."""
+    auftrag = _auftrag_laden(db, auftrag_id)
+    neu = daten.geschaetztes_fertigstellungsdatum
+    if neu < auftrag.erstellt_am.date():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Der Termin kann nicht vor dem Auftragseingang liegen")
+
+    def iso(wert: date | None) -> str | None:
+        return None if wert is None else wert.isoformat()
+
+    # Neuer Log-Eintrag – vorherige Einträge bleiben unverändert
+    db.add(SchaetzungsLog(
+        auftrag_id=auftrag.id,
+        methode=METHODE_KORREKTUR,
+        geschaetztes_datum=neu,
+        eingabefaktoren={"vorher": {
+            "geschaetztes_fertigstellungsdatum": iso(auftrag.geschaetztes_fertigstellungsdatum),
+            "geschaetzte_bandbreite_von": iso(auftrag.geschaetzte_bandbreite_von),
+            "geschaetzte_bandbreite_bis": iso(auftrag.geschaetzte_bandbreite_bis),
+        }},
+        korrigiert_von_mitarbeiter_id=mitarbeiter_id,
+        grund=daten.grund,
+    ))
+    auftrag.geschaetztes_fertigstellungsdatum = neu
+    # Ein festgelegter Termin hat keine berechnete Bandbreite mehr (sonst stünde ein veralteter Zeitraum daneben)
+    auftrag.geschaetzte_bandbreite_von = None
+    auftrag.geschaetzte_bandbreite_bis = None
     db.commit()
     return _detail(db, auftrag.id)
 

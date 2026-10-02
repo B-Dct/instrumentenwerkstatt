@@ -70,6 +70,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | PATCH | `/auftraege/{id}` | Zuweisung/Priorität ändern (Werkstattleitung/Admin) – berechnet den Termin neu |
 | POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) |
 | POST | `/auftraege/{id}/schaetzung-korrektur` | Geschätzte Stunden/Kosten manuell korrigieren (Pflicht: `grund`) |
+| POST | `/auftraege/{id}/termin-korrektur` | Fertigstellungstermin manuell festlegen (nur Werkstattleitung/Admin, Begründung Pflicht; eigener Eintrag im Schätzprotokoll; die nächste automatische Neuberechnung überschreibt ihn wieder) |
 
 Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.
 

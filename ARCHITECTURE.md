@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 02.10.2026 | Manuelle Terminkorrektur (4.2): Endpunkt `termin-korrektur` nur für Werkstattleitung/Admin mit Pflichtbegründung und Protokolleintrag; Aktion „Termin korrigieren“ auf der Auftragsdetailseite |
 | 29.09.2026 | Auftragsdetailseite nach 9.10: Eckdaten im Lesezustand, Aktionsleiste (Status ändern, Schätzung korrigieren, Zuweisung & Priorität) mit eingebetteten Formularen, Verläufe zugeklappt; Namen der Handelnden liefert das Backend direkt in Statusverlauf, Schätzprotokoll und Wochenstunden-Verlauf (auch für deaktivierte Mitarbeiter) |
 | 29.09.2026 | Auftragsliste auf Listen-Baustein umgestellt (Standard offene Aufträge nach Priorität, dann Eingang; Filter Status, Mitarbeiter, Instrument, Priorität, überfällig) – Umstellung aller Listen abgeschlossen |
 | 29.09.2026 | Vorgabewerte auf Listen-Baustein umgestellt (Suche, Filter Reparaturart/Instrumentenklasse/Status, sortierbar) |

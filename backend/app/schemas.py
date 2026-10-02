@@ -169,6 +169,15 @@ class SchaetzungKorrektur(BaseModel):
     )
 
 
+class TerminKorrektur(BaseModel):
+    """Manuelle Korrektur des Fertigstellungstermins (4.2) – nur Werkstattleitung/Admin."""
+
+    geschaetztes_fertigstellungsdatum: date
+    grund: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
+        description="Begründung der Korrektur (Pflicht)"
+    )
+
+
 # --- Auswahllisten (nur lesen) -----------------------------------------------
 
 class InstrumentKurz(BaseModel):

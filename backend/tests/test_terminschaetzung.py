@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.terminschaetzung import schaetze_fertigstellung
 from tests.beispieldaten import Werkstatt
-from tests.conftest import angemeldet_als, konto_anlegen
+from tests.conftest import OHNE_ANMELDUNG, angemeldet_als, konto_anlegen
 
 HEUTE = date(2030, 3, 4)  # Montag
 DI, MI, DO, FR = date(2030, 3, 5), date(2030, 3, 6), date(2030, 3, 7), date(2030, 3, 8)
@@ -253,3 +253,69 @@ def test_log_hat_termin(db, client, w, leitung):
     a = api_auftrag(client, w)
     log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(a["id"]))).one()
     assert log.geschaetztes_datum is not None
+
+
+# --- Manuelle Terminkorrektur (4.2) ------------------------------------------------
+
+def _termin_korrigieren(client, auftrag_id, datum, grund="Ersatzteil kommt später", **kw):
+    return client.post(f"/auftraege/{auftrag_id}/termin-korrektur", **kw,
+                       json={"geschaetztes_fertigstellungsdatum": datum.isoformat(), "grund": grund})
+
+
+def test_terminkorrektur_nur_fuer_leitung(client, w, db):
+    """Auch der zugewiesene Mitarbeiter darf den Termin nicht korrigieren (anders als Stunden/Kosten)."""
+    client.headers.update(angemeldet_als(w.mitarbeiter))
+    a = api_auftrag(client, w, zugewiesener_mitarbeiter_id=str(w.mitarbeiter.id))
+    neu = date.today() + timedelta(days=30)
+    assert _termin_korrigieren(client, a["id"], neu).status_code == 403
+    assert db.get(Auftrag, uuid.UUID(a["id"])).geschaetztes_fertigstellungsdatum.isoformat() == a["geschaetztes_fertigstellungsdatum"]
+    assert _termin_korrigieren(client, a["id"], neu, headers=OHNE_ANMELDUNG).status_code == 401
+
+
+def test_terminkorrektur_landet_im_log_und_am_auftrag(client, w, leitung, db):
+    a = api_auftrag(client, w, zugewiesener_mitarbeiter_id=str(w.mitarbeiter.id))
+    neu = date.today() + timedelta(days=45)
+    antwort = _termin_korrigieren(client, a["id"], neu, grund="  Sonderteil lieferbar ab November  ")
+    assert antwort.status_code == 200
+    detail = antwort.json()
+    assert detail["geschaetztes_fertigstellungsdatum"] == neu.isoformat()
+    assert (detail["geschaetzte_bandbreite_von"], detail["geschaetzte_bandbreite_bis"]) == (None, None)
+
+    eintraege = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(a["id"]))
+                           .order_by(SchaetzungsLog.berechnet_am)).all()
+    assert len(eintraege) == 2  # der automatische Eintrag bleibt erhalten
+    korrektur = eintraege[-1]
+    assert (korrektur.methode, korrektur.geschaetztes_datum, korrektur.grund) == \
+        ("manuelle_korrektur", neu, "Sonderteil lieferbar ab November")
+    assert korrektur.korrigiert_von_mitarbeiter_id == leitung.id
+    assert (korrektur.geschaetzte_stunden, korrektur.geschaetzte_kosten) == (None, None)
+    assert korrektur.eingabefaktoren["vorher"]["geschaetztes_fertigstellungsdatum"] == a["geschaetztes_fertigstellungsdatum"]
+    assert detail["schaetzungen"][-1]["korrigiert_von_name"] == leitung.name
+
+
+def test_umzuweisung_ueberschreibt_manuelle_terminkorrektur(client, w, leitung, db):
+    """Bewusstes Verhalten (4.0a/4.2): die nächste automatische Neuberechnung gilt wieder."""
+    a = api_auftrag(client, w, zugewiesener_mitarbeiter_id=str(w.mitarbeiter.id))
+    manuell = date.today() + timedelta(days=200)
+    assert _termin_korrigieren(client, a["id"], manuell).status_code == 200
+
+    kollege = konto_anlegen(db, name="Kollege")
+    neu = client.patch(f"/auftraege/{a['id']}", json={"zugewiesener_mitarbeiter_id": str(kollege.id)}).json()
+    assert neu["geschaetztes_fertigstellungsdatum"] != manuell.isoformat()
+    assert neu["geschaetzte_bandbreite_von"] is not None  # wieder berechnet
+    assert [s["methode"] for s in neu["schaetzungen"]] == ["regelbasiert", "manuelle_korrektur", "regelbasiert"]
+
+
+@pytest.mark.parametrize("daten", [
+    {"geschaetztes_fertigstellungsdatum": "2030-01-01"},                    # Begründung fehlt
+    {"geschaetztes_fertigstellungsdatum": "2030-01-01", "grund": "   "},   # leere Begründung
+    {"grund": "ohne Datum"},
+    {"geschaetztes_fertigstellungsdatum": "2000-01-01", "grund": "vor dem Eingang"},
+])
+def test_terminkorrektur_ungueltig(client, w, leitung, daten):
+    a = api_auftrag(client, w)
+    assert client.post(f"/auftraege/{a['id']}/termin-korrektur", json=daten).status_code == 422
+
+
+def test_terminkorrektur_unbekannter_auftrag(client, w, leitung):
+    assert _termin_korrigieren(client, uuid.uuid4(), date.today()).status_code == 404

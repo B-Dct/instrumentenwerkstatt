@@ -123,6 +123,7 @@ export const api = {
   auftragAendern: (id, daten) => anfrage(`/auftraege/${id}`, { methode: 'PATCH', daten }),
   statusWechseln: (id, daten) => anfrage(`/auftraege/${id}/status`, { methode: 'POST', daten }),
   schaetzungKorrigieren: (id, daten) => anfrage(`/auftraege/${id}/schaetzung-korrektur`, { methode: 'POST', daten }),
+  terminKorrigieren: (id, daten) => anfrage(`/auftraege/${id}/termin-korrektur`, { methode: 'POST', daten }),
   kunden: (filter = {}) => anfrage('/kunden?' + new URLSearchParams(filter)),
   kunde: (id) => anfrage(`/kunden/${id}`),
   kundeAnlegen: (daten) => anfrage('/kunden', { methode: 'POST', daten }),
