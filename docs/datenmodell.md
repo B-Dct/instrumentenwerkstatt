@@ -441,6 +441,11 @@ Stunden, Kosten und Termin lassen sich manuell überschreiben — z. B. wenn ein
 
 **Verhältnis zur automatischen Neuberechnung:** Wie bei den Stunden (4.0a) gilt auch für eine manuelle Terminkorrektur: Die nächste automatische Neuberechnung (bei Umzuweisung oder Prioritätsänderung, siehe Abschnitt 4) überschreibt sie wieder, es sei denn, die Werkstattleitung korrigiert danach erneut. Das ist eine bewusste Vereinfachung für den Start, kein eigenständiger "gesperrter" Zustand.
 
+**Weitere Regeln bei der Terminkorrektur:**
+- Die Bandbreite (`geschätzte_bandbreite_von/bis`) wird bei einer manuellen Terminkorrektur geleert, statt einen veralteten berechneten Zeitraum neben dem neuen Termin stehen zu lassen. Die nächste automatische Neuberechnung füllt sie wieder
+- Der korrigierte Termin darf nicht vor dem Auftragseingang (`erstellt_am`) liegen; ein Datum in der Vergangenheit ist ansonsten zulässig (z. B. bei einem bereits überfälligen Auftrag)
+- Der zuvor gültige Termin samt Bandbreite wird im neuen `schätzungs_log`-Eintrag mit festgehalten
+
 ---
 
 ## 5. Übergang zu Stufe 2 (ML-Modell)
@@ -766,7 +771,7 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 **Regeln:**
 
 1. **Ruhige Standardansicht:** Kopf, Eckdaten und Aktionsleiste. Keine Formularfelder sichtbar, solange keine Aktion gewählt ist.
-2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin). Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle (z. B. "Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern"), statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
+2. **Eine feste Aktionsleiste:** Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Auftragszustand ausführen darf (z. B. "Zuweisung & Priorität" nur für Werkstattleitung und Admin). Auf der Auftragsdetailseite gibt es vier Aktionen: "Status ändern" und "Schätzung korrigieren" (zugewiesener Mitarbeiter, Werkstattleitung, Admin), "Termin korrigieren" und "Zuweisung & Priorität" (nur Werkstattleitung und Admin). "Termin korrigieren" ist bewusst eine eigene Aktion statt Teil von "Schätzung korrigieren", damit kein Nutzer ein Formular mit einem für ihn gesperrten Feld sieht. Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle (z. B. "Status und Schätzung kann nur der zugewiesene Mitarbeiter oder die Werkstattleitung ändern"), statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
 3. **Eingebettet, kein Popup:** Das Formular öffnet sich direkt unter der Aktionsleiste (konform mit 9.1). Der aktive Button ist markiert.
 4. **Nur ein Formular gleichzeitig:** Wählt der Nutzer eine andere Aktion, während im offenen Formular ungespeicherte Änderungen stehen, erscheint die Rückfrage "Änderungen verwerfen?" als eingebetteter Hinweis, nicht als Popup.
 5. **Nach dem Speichern schließt sich das Formular automatisch.** Die Erfolgsbestätigung folgt 9.1, der geänderte Wert wird kurz hervorgehoben. "Abbrechen" schließt ohne Speichern.
@@ -851,6 +856,9 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Mitarbeiter-Verwaltung im Frontend: Liste, Rollen-/Status-Aktionen, Wochenstunden mit Verlauf (Teil 4c)
 - Gemeinsamer Listen-Baustein nach 9.11 (Backend und Frontend), inzwischen in allen sechs Listen im Einsatz: Kunden, Instrumentenklassen, Reparaturarten, Vorgabewerte, Mitarbeiter, Aufträge
 - Wiederverwendbarer Aufklappbereich für zugeklappte Lese-Bereiche (Verlauf, Schätzungen)
+- Auftragsdetailseite nach Regel 9.10 umgebaut (Aktionsleiste, Formulare nur auf Wunsch, vier Aktionen)
+- Manuelle Terminkorrektur (Abschnitt 4.2), nur Werkstattleitung und Admin
+- Namen in Verläufen/Protokollen kommen direkt vom Backend, unabhängig vom Aktivstatus des Betrachters oder des Handelnden
 - Archivieren und Reaktivieren von Vorgabewerten (Backend und Oberfläche, siehe 2.6a)
 - Externe Kundennummer am Kunden (siehe 2.1)
 - Zentrale Behandlung von Datenbankkonflikten (Baustein `sicher_speichern`, verständliche Meldungen für alle Eindeutigkeitsregeln)
@@ -858,8 +866,6 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
-1. **Auftragsdetailseite nach Regel 9.10 umbauen** (Aktionsleiste, Formulare nur auf Wunsch) — erledigt, siehe 10.1
-1a. **Manuelle Terminkorrektur nachrüsten** (Abschnitt 4.2): Die Berechtigung dafür steht schon länger in der Matrix (7.2), der Endpunkt fehlt noch. `schätzungs_log` (2.10) ist dafür bereits vorbereitet. Nur Werkstattleitung und Admin, mit Pflichtbegründung, analog zur bestehenden Stunden-/Kosten-Korrektur. Gehört in die gerade umgebaute Aktionsleiste der Auftragsdetailseite (z. B. als Teil von "Schätzung korrigieren" oder als eigener Punkt).
 2. **Abwesenheiten pflegen** (2.3): Urlaub, Krankheit, Schulung, Betriebsschließung. Ohne diese Eingabe ignoriert die Terminschätzung Abwesenheiten. Feiertage möglichst automatisch aus einer Feiertagsbibliothek des Bundeslands erzeugen statt manuell zu pflegen
 3. **Mitarbeiter-Konten über die Oberfläche anlegen** (bisher nur per Kommandozeile) inkl. Passwort ändern und zurücksetzen
 4. **Login-Schutz:** Begrenzung der Fehlversuche
