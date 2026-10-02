@@ -401,7 +401,7 @@ class AbwesenheitNeu(BaseModel):
     typ: Abwesenheitstyp
     von_datum: date
     bis_datum: date
-    # Nur beim Typ "reduzierte_stunden": in diesem Zeitraum verfügbare Wochenstunden
+    # Verfügbare Wochenstunden im Zeitraum (None = ganztägig abwesend); bei jedem persönlichen Typ möglich
     reduzierte_stunden: VerfuegbareStunden | None = None
     notiz: Notiz = None
 
@@ -427,6 +427,22 @@ class AbwesenheitEintrag(BaseModel):
     reduzierte_stunden: Stunden | None
     notiz: str | None
     storniert_am: datetime | None  # None = gilt
+
+
+class RasterZeile(BaseModel):
+    mitarbeiter_id: uuid.UUID
+    name: str
+    normalstunden: list[Stunden]  # je Tag des Ausschnitts: Wochenstunden / 5, am Wochenende 0
+
+
+class AbwesenheitsRaster(BaseModel):
+    """Ausschnitt für das Abwesenheits-Raster (9.13)."""
+
+    von: date
+    bis: date
+    tage: list[date]
+    zeilen: list[RasterZeile]  # aktive Mitarbeiter; die Zeile "Ganze Werkstatt" ergänzt die Oberfläche
+    abwesenheiten: list[AbwesenheitEintrag]  # alle, die den Ausschnitt berühren (auch werkstattweite)
 
 
 # --- Werkstatt-Einstellungen (Datenmodell 7.5) ---------------------------------

@@ -74,6 +74,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/abwesenheiten?suche=…&mitarbeiter=…&typ=…&zeitraum=…&status=…` | Abwesenheiten-Liste nach 9.11 (nur Werkstattleitung/Admin; Standard: laufende und künftige, nicht stornierte; `mitarbeiter` = ID oder `werkstatt`) |
 | POST, PATCH | `/abwesenheiten`, `/abwesenheiten/{id}` | Abwesenheit eintragen/bearbeiten (Urlaub, Krankheit, Schulung, reduzierte Stunden je Mitarbeiter; Feiertag, Betriebsschließung für die ganze Werkstatt; optionale Notiz; kein Doppeleintrag gleichen Typs im selben Zeitraum) |
 | POST | `/abwesenheiten/{id}/stornieren`, `/…/wiederherstellen` | Stornieren statt Löschen (zählt dann nicht mehr für die Terminschätzung) und Zurückholen |
+| GET | `/abwesenheiten/raster?von=…&tage=7&stornierte=…` | Daten für das Abwesenheits-Raster (9.13): aktive Mitarbeiter mit normalen Tagesstunden und alle Abwesenheiten im Ausschnitt |
 | GET, PUT | `/admin/einstellungen`, `/admin/einstellungen/{schluessel}` | Werkstatt-Einstellungen lesen/setzen (nur Admin; bisher `bundesland`, Auswahl aus den 16 Bundesländern) |
 
 Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.

@@ -138,6 +138,7 @@ export const api = {
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
   // Abwesenheiten (nur Werkstattleitung/Admin)
   abwesenheiten: (filter = {}) => anfrage('/abwesenheiten?' + new URLSearchParams(filter)),
+  abwesenheitenRaster: (parameter) => anfrage('/abwesenheiten/raster?' + new URLSearchParams(parameter)),
   abwesenheitAnlegen: (daten) => anfrage('/abwesenheiten', { methode: 'POST', daten }),
   abwesenheitAendern: (id, daten) => anfrage(`/abwesenheiten/${id}`, { methode: 'PATCH', daten }),
   abwesenheitStornieren: (id) => anfrage(`/abwesenheiten/${id}/stornieren`, { methode: 'POST' }),

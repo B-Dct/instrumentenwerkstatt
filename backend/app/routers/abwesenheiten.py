@@ -1,7 +1,8 @@
 """Abwesenheiten pflegen (Datenmodell 2.3) – nur Werkstattleitung und Admin (7.2).
 
-Urlaub, Krankheit, Schulung und reduzierte Stunden gehören zu einem Mitarbeiter; Feiertag und
-Betriebsschließung gelten für die ganze Werkstatt (mitarbeiter_id = NULL). Die Terminschätzung
+Urlaub, Krankheit, Schulung und reduzierte Stunden gehören zu einem Mitarbeiter (jeweils ganztägig
+oder mit verfügbaren Stunden, z. B. halber Urlaubstag); Feiertag und Betriebsschließung gelten
+ganztägig für die ganze Werkstatt (mitarbeiter_id = NULL). Die Terminschätzung
 (app/terminschaetzung.py) überspringt diese Tage bzw. rechnet mit den reduzierten Stunden.
 
 Kein Löschen: Eine falsch eingetragene oder abgesagte Abwesenheit wird storniert (storniert_am)
@@ -11,7 +12,8 @@ Aufträge werden bei Änderungen NICHT automatisch neu berechnet (4.0a) – daf�
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,8 +25,9 @@ from app.db import get_db
 from app.eingabe import feldfehler
 from app.ereignisse import protokollieren, werte
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
-from app.models import Abwesenheit, Abwesenheitstyp, Mitarbeiter, Systemrolle
-from app.schemas import AbwesenheitAenderung, AbwesenheitEintrag, AbwesenheitNeu
+from app.models import Abwesenheit, Abwesenheitstyp, Mitarbeiter, MitarbeiterArbeitszeit, Systemrolle
+from app.schemas import AbwesenheitAenderung, AbwesenheitEintrag, AbwesenheitNeu, AbwesenheitsRaster, RasterZeile
+from app.terminschaetzung import ARBEITSTAGE_PRO_WOCHE, STANDARD_WOCHENSTUNDEN
 
 router = APIRouter(prefix="/abwesenheiten", tags=["Abwesenheiten"],
                    dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
@@ -71,17 +74,18 @@ def _pruefen(db: Session, a: Abwesenheit, mitarbeiter_neu_gewaehlt: bool) -> Non
     if a.typ in BETRIEBSWEIT:
         if a.mitarbeiter_id is not None:
             raise feldfehler(mitarbeiter_id="Feiertag und Betriebsschließung gelten für die ganze Werkstatt")
+        if a.reduzierte_stunden is not None:
+            raise feldfehler(reduzierte_stunden="Feiertag und Betriebsschließung gelten immer ganztägig")
     elif a.mitarbeiter_id is None:
         raise feldfehler(mitarbeiter_id="Bitte einen Mitarbeiter wählen")
     elif mitarbeiter_neu_gewaehlt:
         m = db.get(Mitarbeiter, a.mitarbeiter_id)
         if m is None or not m.aktiv:
             raise feldfehler(mitarbeiter_id="Mitarbeiter existiert nicht oder ist deaktiviert")
-    if a.typ == Abwesenheitstyp.reduzierte_stunden:
-        if a.reduzierte_stunden is None:
-            raise feldfehler(reduzierte_stunden="Bitte die verfügbaren Wochenstunden angeben")
-    elif a.reduzierte_stunden is not None:
-        raise feldfehler(reduzierte_stunden="Nur beim Typ „Reduzierte Stunden“ möglich")
+    # Verfügbare Stunden sind bei jedem persönlichen Typ möglich (z. B. halber Urlaubstag);
+    # der Typ "Reduzierte Stunden" ergibt nur mit einem Wert Sinn
+    if a.typ == Abwesenheitstyp.reduzierte_stunden and a.reduzierte_stunden is None:
+        raise feldfehler(reduzierte_stunden="Bitte die verfügbaren Stunden angeben (bei 0 einen anderen Typ wählen)")
 
     # Schutz gegen versehentliche Doppeleinträge: gleicher Typ, gleiche Person, überschneidender Zeitraum
     wer = Abwesenheit.mitarbeiter_id.is_(None) if a.mitarbeiter_id is None else Abwesenheit.mitarbeiter_id == a.mitarbeiter_id
@@ -138,6 +142,52 @@ def abwesenheiten_auflisten(
     elif status_ == "storniert":
         gefiltert = gefiltert.where(Abwesenheit.storniert_am.is_not(None))
     return seite_abfragen(db, basis, gefiltert, liste, SORTIERUNG, umwandeln=_antwort, eindeutig=Abwesenheit.id)
+
+
+RASTER_MAX_TAGE = 42
+
+
+@router.get("/raster", response_model=AbwesenheitsRaster)
+def abwesenheiten_raster(
+    von: date = Query(description="Erster Tag des Ausschnitts"),
+    tage: int = Query(7, ge=1, le=RASTER_MAX_TAGE),
+    stornierte: bool = Query(False, description="Auch stornierte Einträge mitliefern"),
+    db: Session = Depends(get_db),
+) -> AbwesenheitsRaster:
+    """Daten für das Abwesenheits-Raster (9.13): je aktivem Mitarbeiter die normalen Tagesstunden
+    (Wochenstunden / 5, sonst Standard) und alle Abwesenheiten, die den Ausschnitt berühren –
+    auch die werkstattweiten. Die Darstellung je Zelle übernimmt die Oberfläche."""
+    alle_tage = [von + timedelta(days=n) for n in range(tage)]
+    bis = alle_tage[-1]
+    mitarbeiter = db.scalars(select(Mitarbeiter).where(Mitarbeiter.aktiv).order_by(Mitarbeiter.name, Mitarbeiter.id)).all()
+    ids = [m.id for m in mitarbeiter]
+
+    arbeitszeiten: dict[uuid.UUID, list[MitarbeiterArbeitszeit]] = {}
+    for eintrag in db.scalars(select(MitarbeiterArbeitszeit).where(MitarbeiterArbeitszeit.mitarbeiter_id.in_(ids))):
+        arbeitszeiten.setdefault(eintrag.mitarbeiter_id, []).append(eintrag)
+
+    def tagesstunden(mitarbeiter_id: uuid.UUID, tag: date) -> Decimal:
+        if tag.weekday() >= 5:
+            return Decimal(0)
+        wochenstunden = next(
+            (e.wochenstunden for e in arbeitszeiten.get(mitarbeiter_id, [])
+             if e.gueltig_ab <= tag and (e.gueltig_bis is None or tag <= e.gueltig_bis)),
+            STANDARD_WOCHENSTUNDEN,
+        )
+        return wochenstunden / ARBEITSTAGE_PRO_WOCHE
+
+    abfrage = _abfrage().where(
+        Abwesenheit.von_datum <= bis, Abwesenheit.bis_datum >= von,
+        Abwesenheit.mitarbeiter_id.is_(None) | Abwesenheit.mitarbeiter_id.in_(ids),
+    ).order_by(Abwesenheit.von_datum, Abwesenheit.id)
+    if not stornierte:
+        abfrage = abfrage.where(Abwesenheit.storniert_am.is_(None))
+    return AbwesenheitsRaster(
+        von=von, bis=bis, tage=alle_tage,
+        zeilen=[RasterZeile(mitarbeiter_id=m.id, name=m.name, normalstunden=[tagesstunden(m.id, t) for t in alle_tage])
+                for m in mitarbeiter],
+        abwesenheiten=[_antwort(z) for z in db.execute(abfrage).all()],
+    )
 
 
 @router.post("", response_model=AbwesenheitEintrag, status_code=status.HTTP_201_CREATED)

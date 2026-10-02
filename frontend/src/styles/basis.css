@@ -306,3 +306,36 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .aufklappbereich__zeichen { font-size: var(--groesse-16); color: var(--farbe-text-leise); width: 1em; }
 .aufklappbereich__zusammenfassung { margin: 0; padding-left: calc(1em + var(--abstand-2)); }
 .marke--aktuell { color: var(--farbe-erfolg); border-color: var(--farbe-erfolg); margin-left: var(--abstand-2); }
+
+/* --- Abwesenheits-Raster (9.13): Mitarbeiter als Zeilen, Tage als Spalten --- */
+.raster__leiste { align-items: center; }
+.raster { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--groesse-14); user-select: none; }
+.raster th, .raster td { border: var(--randbreite) solid var(--farbe-rand); padding: 0; }
+.raster thead th { padding: var(--abstand-2) var(--abstand-1); font-weight: var(--gewicht-normal); text-align: center; }
+.raster__wochentag { display: block; font-weight: var(--gewicht-halbfett); }
+.raster thead th.raster__wochenende { width: var(--abstand-7); }
+.raster th[scope='row'], .raster thead th:first-child { text-align: left; padding: var(--abstand-2) var(--abstand-3); width: var(--spalte-min-eng); font-weight: var(--gewicht-halbfett); }
+.raster__heute { box-shadow: inset 0 calc(-1 * var(--markierungsbreite)) 0 var(--farbe-primaer); }
+.raster__werkstatt th, .raster__werkstatt td { border-bottom-width: var(--fokusbreite); }
+.raster__zelle { height: var(--abstand-7); text-align: center; }
+.raster__zelle button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  width: 100%; height: 100%; min-height: var(--abstand-7); padding: var(--abstand-1);
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+}
+.raster__zelle button:hover { background: var(--farbe-flaeche-leise); }
+.raster__wert { font-variant-numeric: tabular-nums; }
+.raster__typ { font-size: var(--groesse-12); overflow-wrap: anywhere; hyphens: auto; line-height: var(--zeilenhoehe-titel); }
+.raster__zelle--normal .raster__wert, .raster__zelle--frei .raster__wert { color: var(--farbe-text-leise); }
+.raster__zelle--wochenende, .raster__wochenende { background: var(--farbe-flaeche-leise); color: var(--farbe-text-leise); }
+.raster__zelle--geschlossen { background: var(--farbe-flaeche-leise); color: var(--farbe-text-leise); padding: var(--abstand-1); }
+.raster__zelle--abwesend, .raster__zelle--werkstatt {
+  background: color-mix(in srgb, var(--farbe-primaer) 14%, var(--farbe-hintergrund));
+  box-shadow: inset var(--markierungsbreite) 0 0 var(--farbe-primaer);
+}
+.raster__zelle--abwesend .raster__wert, .raster__zelle--werkstatt .raster__typ { font-weight: var(--gewicht-halbfett); }
+.raster__zelle--markiert { outline: var(--fokusbreite) solid var(--farbe-primaer); outline-offset: calc(-1 * var(--fokusbreite)); }
+.raster__storno { font-size: var(--groesse-12); color: var(--farbe-text-leise); text-decoration: line-through; }
+.raster__eingabe td { padding: var(--abstand-3); background: var(--farbe-flaeche-leise); user-select: text; }
+.raster__eingabe .fokus-formular { margin: 0; max-width: none; }
+.raster__storniert { margin: var(--abstand-3) 0 0; padding-left: var(--abstand-4); color: var(--farbe-text-leise); }

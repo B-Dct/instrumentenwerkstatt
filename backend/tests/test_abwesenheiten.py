@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from app.models import Abwesenheit, Systemrolle, SystemEreignisLog
+from app.models import Abwesenheit, MitarbeiterArbeitszeit, Systemrolle, SystemEreignisLog
 from app.terminschaetzung import schaetze_fertigstellung
 from tests.beispieldaten import Werkstatt
 from tests.conftest import OHNE_ANMELDUNG, angemeldet_als, konto_anlegen
@@ -83,7 +83,15 @@ def test_reduzierte_stunden(client, leitung, m):
     a = client.post(URL, json=urlaub(m, typ="reduzierte_stunden", reduzierte_stunden=20))
     assert a.status_code == 201 and a.json()["reduzierte_stunden"] == 20.0
     assert "reduzierte_stunden" in _felder(client.post(URL, json=urlaub(m, 30, 31, typ="reduzierte_stunden")))
-    assert "reduzierte_stunden" in _felder(client.post(URL, json=urlaub(m, 30, 31, reduzierte_stunden=20)))
+
+
+def test_halber_urlaubstag_bleibt_urlaub(client, leitung, m):
+    """Verfügbare Stunden sind bei jedem persönlichen Typ erlaubt, betriebsweit nie."""
+    for n, typ in enumerate(["urlaub", "krankheit", "schulung"]):
+        a = client.post(URL, json=urlaub(m, 30 + n, 30 + n, typ=typ, reduzierte_stunden=20))
+        assert a.status_code == 201 and (a.json()["typ"], a.json()["reduzierte_stunden"]) == (typ, 20.0)
+    betrieb = {"typ": "feiertag", "von_datum": tag(300), "bis_datum": tag(300), "reduzierte_stunden": 20}
+    assert "reduzierte_stunden" in _felder(client.post(URL, json=betrieb))
 
 
 @pytest.mark.parametrize("aenderung, feld", [
@@ -232,3 +240,58 @@ def test_liste_filter_werkstatt(client, leitung, m):
     assert b["id"] in ids
     assert all(a["mitarbeiter_id"] is None
                for a in client.get(URL, params={"mitarbeiter": "werkstatt"}).json()["eintraege"])
+
+
+# --- Raster (9.13) -----------------------------------------------------------------
+
+MONTAG = HEUTE - timedelta(days=HEUTE.weekday()) + timedelta(days=700)  # ein Montag weit in der Zukunft
+
+
+def _raster(client, **params):
+    antwort = client.get(f"{URL}/raster", params={"von": MONTAG.isoformat(), **params})
+    assert antwort.status_code == 200, antwort.text
+    return antwort.json()
+
+
+def test_raster_zeilen_und_normalstunden(client, db, leitung, m):
+    db.add(MitarbeiterArbeitszeit(mitarbeiter_id=m.id, wochenstunden=20, gueltig_ab=MONTAG + timedelta(days=2)))
+    deaktiviert = konto_anlegen(db, name="Ehemalig", aktiv=False, deaktiviert_am=datetime.now(timezone.utc))
+    db.flush()
+
+    raster = _raster(client)
+    assert (raster["von"], raster["bis"], len(raster["tage"])) == (MONTAG.isoformat(), (MONTAG + timedelta(days=6)).isoformat(), 7)
+    zeilen = {z["mitarbeiter_id"]: z for z in raster["zeilen"]}
+    # Mo/Di Standard (40/5), ab Mi hinterlegte 20 Std. (20/5), Wochenende 0
+    assert zeilen[str(m.id)]["normalstunden"] == [8, 8, 4, 4, 4, 0, 0]
+    assert zeilen[str(leitung.id)]["normalstunden"] == [8, 8, 8, 8, 8, 0, 0]
+    assert str(deaktiviert.id) not in zeilen
+    assert [z["name"] for z in raster["zeilen"]] == sorted(z["name"] for z in raster["zeilen"])
+
+
+def test_raster_liefert_beruehrende_abwesenheiten(client, db, leitung, m):
+    def an(von, bis, **extra):
+        return client.post(URL, json={"mitarbeiter_id": str(m.id), "typ": "urlaub", **extra,
+                                      "von_datum": (MONTAG + timedelta(days=von)).isoformat(),
+                                      "bis_datum": (MONTAG + timedelta(days=bis)).isoformat()}).json()["id"]
+
+    ragt_hinein = an(-3, 0)
+    halbtags = an(2, 2, typ="schulung", reduzierte_stunden=20, notiz="Vormittags")
+    davor, danach = an(-10, -1, typ="krankheit"), an(7, 9, typ="krankheit")
+    feiertag = client.post(URL, json={"typ": "feiertag", "von_datum": (MONTAG + timedelta(days=4)).isoformat(),
+                                      "bis_datum": (MONTAG + timedelta(days=4)).isoformat()}).json()["id"]
+    storniert = an(3, 3, typ="krankheit")
+    client.post(f"{URL}/{storniert}/stornieren")
+
+    eintraege = {a["id"]: a for a in _raster(client)["abwesenheiten"]}
+    assert {ragt_hinein, halbtags, feiertag} <= set(eintraege) and not {davor, danach, storniert} & set(eintraege)
+    assert (eintraege[halbtags]["reduzierte_stunden"], eintraege[halbtags]["notiz"]) == (20.0, "Vormittags")
+    assert eintraege[feiertag]["mitarbeiter_id"] is None
+    assert storniert in {a["id"] for a in _raster(client, stornierte=True)["abwesenheiten"]}
+
+
+def test_raster_parameter_und_berechtigung(client, db, leitung):
+    assert client.get(f"{URL}/raster").status_code == 422                       # von fehlt
+    assert client.get(f"{URL}/raster", params={"von": "2026-10-05", "tage": 43}).status_code == 422
+    assert len(_raster(client, tage=14)["tage"]) == 14
+    mitarbeiter = angemeldet_als(konto_anlegen(db, Systemrolle.mitarbeiter))
+    assert client.get(f"{URL}/raster", params={"von": "2026-10-05"}, headers=mitarbeiter).status_code == 403

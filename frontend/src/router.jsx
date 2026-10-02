@@ -1,6 +1,7 @@
 // Seitenadressen der Anwendung (Daten-Router: nötig für die Rückfrage bei ungespeicherten Änderungen, 9.1/9.10)
 import { createBrowserRouter, Navigate } from 'react-router'
 import Intern from './Layout.jsx'
+import Abwesenheiten from './seiten/Abwesenheiten.jsx'
 import AuftragDetail from './seiten/AuftragDetail.jsx'
 import AuftragListe from './seiten/AuftragListe.jsx'
 import AuftragNeu from './seiten/AuftragNeu.jsx'
@@ -25,6 +26,8 @@ export const router = createBrowserRouter([
       { path: '/auftrag/:id', element: <AuftragDetail /> },
       { path: '/kunden', element: <Kunden /> },
       { path: '/kunden/:id', element: <KundeDetail /> },
+      // Abwesenheiten: Werkstattleitung und Admin (7.2)
+      { path: '/abwesenheiten', element: <NurRolle rolle="werkstattleiter"><Abwesenheiten /></NurRolle> },
       // Verwaltung: nur Admin (7.2)
       { path: '/verwaltung/instrumentenklassen', element: <NurRolle rolle="admin"><Instrumentenklassen /></NurRolle> },
       { path: '/verwaltung/reparaturarten', element: <NurRolle rolle="admin"><Reparaturarten /></NurRolle> },

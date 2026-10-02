@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 02.10.2026 | Abwesenheits-Raster (9.13) statt Liste: Mitarbeiter als Zeilen, Tage einer Woche als Spalten, Eingabe direkt unter der Zeile, mehrere Tage per Ziehen; verfügbare Stunden bei jedem persönlichen Typ (halber Urlaubstag); Endpunkt `/abwesenheiten/raster` |
 | 02.10.2026 | Werkstatt-Einstellungen (7.5): Tabelle `einstellung`, Admin-Endpunkt und Seite „Einstellungen“ (erster Schlüssel: Bundesland); Notizfeld an Abwesenheiten |
 | 02.10.2026 | Abwesenheiten pflegen (2.3): Endpunkte für Werkstattleitung/Admin, Stornieren statt Löschen (neues Feld `storniert_am`), Listen-Baustein; Helfer `app/eingabe.py` für fachliche Fehler direkt am Feld |
 | 02.10.2026 | Manuelle Terminkorrektur (4.2): Endpunkt `termin-korrektur` nur für Werkstattleitung/Admin mit Pflichtbegründung und Protokolleintrag; Aktion „Termin korrigieren“ auf der Auftragsdetailseite |
