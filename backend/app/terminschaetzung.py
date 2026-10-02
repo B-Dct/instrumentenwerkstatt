@@ -134,7 +134,8 @@ def _kalender(db: Session, mitarbeiter_id, start: date) -> _Kalender:
     wer = (Abwesenheit.mitarbeiter_id.is_(None) if mitarbeiter_id is None
            else or_(Abwesenheit.mitarbeiter_id.is_(None), Abwesenheit.mitarbeiter_id == mitarbeiter_id))
     abwesenheiten = list(db.scalars(select(Abwesenheit).where(
-        wer, Abwesenheit.bis_datum >= start, Abwesenheit.von_datum <= ende
+        wer, Abwesenheit.bis_datum >= start, Abwesenheit.von_datum <= ende,
+        Abwesenheit.storniert_am.is_(None),  # stornierte Abwesenheiten zählen nicht
     )))
     if mitarbeiter_id is not None:
         wochenstunden = list(db.scalars(select(MitarbeiterArbeitszeit).where(

@@ -71,6 +71,9 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) |
 | POST | `/auftraege/{id}/schaetzung-korrektur` | Geschätzte Stunden/Kosten manuell korrigieren (Pflicht: `grund`) |
 | POST | `/auftraege/{id}/termin-korrektur` | Fertigstellungstermin manuell festlegen (nur Werkstattleitung/Admin, Begründung Pflicht; eigener Eintrag im Schätzprotokoll; die nächste automatische Neuberechnung überschreibt ihn wieder) |
+| GET | `/abwesenheiten?suche=…&mitarbeiter=…&typ=…&zeitraum=…&status=…` | Abwesenheiten-Liste nach 9.11 (nur Werkstattleitung/Admin; Standard: laufende und künftige, nicht stornierte; `mitarbeiter` = ID oder `werkstatt`) |
+| POST, PATCH | `/abwesenheiten`, `/abwesenheiten/{id}` | Abwesenheit eintragen/bearbeiten (Urlaub, Krankheit, Schulung, reduzierte Stunden je Mitarbeiter; Feiertag, Betriebsschließung für die ganze Werkstatt; kein Doppeleintrag gleichen Typs im selben Zeitraum) |
+| POST | `/abwesenheiten/{id}/stornieren`, `/…/wiederherstellen` | Stornieren statt Löschen (zählt dann nicht mehr für die Terminschätzung) und Zurückholen |
 
 Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.
 

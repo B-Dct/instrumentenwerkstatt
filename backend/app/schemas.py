@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, PlainSerializer, StringConstraints
 
-from app.models import Prioritaet, Systemrolle
+from app.models import Abwesenheitstyp, Prioritaet, Systemrolle
 
 # Dezimalwerte als JSON-Zahl ausgeben (statt als Text "12.50")
 Stunden = Annotated[
@@ -385,3 +385,38 @@ class WochenstundenEintrag(BaseModel):
 class WochenstundenVerlauf(BaseModel):
     aktuell: AktuelleWochenstunden
     eintraege: list[WochenstundenEintrag]  # neueste zuerst
+
+
+# --- Abwesenheiten (Datenmodell 2.3) -------------------------------------------
+
+VerfuegbareStunden = Annotated[Decimal, Field(gt=0, le=80, max_digits=5, decimal_places=2)]
+
+
+class AbwesenheitNeu(BaseModel):
+    mitarbeiter_id: uuid.UUID | None = None  # None = ganze Werkstatt (Feiertag, Betriebsschließung)
+    typ: Abwesenheitstyp
+    von_datum: date
+    bis_datum: date
+    # Nur beim Typ "reduzierte_stunden": in diesem Zeitraum verfügbare Wochenstunden
+    reduzierte_stunden: VerfuegbareStunden | None = None
+
+
+class AbwesenheitAenderung(BaseModel):
+    """Nur mitgeschickte Felder werden geändert."""
+
+    mitarbeiter_id: uuid.UUID | None = None
+    typ: Abwesenheitstyp | None = None
+    von_datum: date | None = None
+    bis_datum: date | None = None
+    reduzierte_stunden: VerfuegbareStunden | None = None
+
+
+class AbwesenheitEintrag(BaseModel):
+    id: uuid.UUID
+    mitarbeiter_id: uuid.UUID | None
+    mitarbeiter_name: str | None  # None = ganze Werkstatt
+    typ: Abwesenheitstyp
+    von_datum: date
+    bis_datum: date
+    reduzierte_stunden: Stunden | None
+    storniert_am: datetime | None  # None = gilt

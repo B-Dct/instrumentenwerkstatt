@@ -142,6 +142,8 @@ class Abwesenheit(Base):
     bis_datum: Mapped[date] = mapped_column(Date)
     typ: Mapped[Abwesenheitstyp] = mapped_column(pg_enum(Abwesenheitstyp, "abwesenheitstyp"))
     reduzierte_stunden: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))  # NULL = ganztägig
+    # Stornieren statt Löschen: gesetzt = zählt nicht mehr für die Terminschätzung, bleibt aber erhalten
+    storniert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # --- 2.4 Instrumentenklasse / 2.6 Reparaturart / Auftragsstatus (Stammdaten) -

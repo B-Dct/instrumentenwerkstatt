@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.routers import admin, auftraege, auswahllisten, auth, kunden
+from app.routers import abwesenheiten, admin, auftraege, auswahllisten, auth, kunden
 from app.speichern import konflikt_meldung
 
 app = FastAPI(title="Werkstatt-Auftragsmanagement")
@@ -31,6 +31,7 @@ async def datenregel_verletzt(request: Request, fehler: IntegrityError) -> JSONR
 
 
 app.include_router(auth.router)
+app.include_router(abwesenheiten.router)
 app.include_router(admin.router)
 app.include_router(auftraege.router)
 app.include_router(auswahllisten.router)
