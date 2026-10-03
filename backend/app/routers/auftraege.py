@@ -453,12 +453,26 @@ def status_wechseln(
     if neu.id == auftrag.status_aktuell_id:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Auftrag ist bereits im Status \"{neu.bezeichnung}\"")
 
+    # Ein Abschluss-Status ohne eigene Pflichtabfrage (derzeit "Abgeholt") ist nur aus einem bereits
+    # abgeschlossenen Status erreichbar (derzeit "Fertig") – sonst ließe sich die Abfrage von
+    # Arbeitszeit und Betrag umgehen (Datenmodell 2.7a, 9.8)
+    if neu.ist_abgeschlossen and not neu.erfordert_abschlussdaten:
+        aktuell = db.get(Auftragsstatus, auftrag.status_aktuell_id)
+        if not aktuell.ist_abgeschlossen:
+            vorher = db.scalars(select(Auftragsstatus.bezeichnung).where(
+                Auftragsstatus.erfordert_abschlussdaten, Auftragsstatus.aktiv).order_by(Auftragsstatus.reihenfolge)).all()
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"„{neu.bezeichnung}“ ist erst nach „{'“ oder „'.join(vorher)}“ möglich – "
+                "dort werden Arbeitszeit und abgerechneter Betrag erfasst",
+            )
+
     if daten.unterbrechungsgrund and neu.unterbrechungsgrund is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             f"Der Status \"{neu.bezeichnung}\" ist keine Unterbrechung – Grund nicht möglich")
 
     # Pflichtangaben beim Abschluss (Datenmodell 9.8): Arbeitszeit und abgerechneter Betrag
-    if neu.erfordert_zeiterfassung:
+    if neu.erfordert_abschlussdaten:
         fehlend = {
             feld: f"Pflichtangabe für den Status „{neu.bezeichnung}“"
             for feld in ("arbeitszeit_minuten", "abgerechneter_betrag") if getattr(daten, feld) is None

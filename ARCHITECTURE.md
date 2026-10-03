@@ -25,7 +25,7 @@ Umsetzung in der Datenbank (Stand 27.09.2026):
 - **Tabellen-Definitionen** in `backend/app/models.py` (SQLAlchemy), Änderungen am Schema ausschließlich über **Alembic-Migrationen** (`backend/migrations/`), nie direkt in Supabase
 - **Primärschlüssel sind UUIDs** (von PostgreSQL per `gen_random_uuid()` erzeugt) — nicht erratbar, einheitlich in allen Tabellen
 - **Keine Umlaute in Tabellen-/Spaltennamen:** Umschreibung (z. B. `prioritaet`, `schaetzungs_log`, `geschaetztes_fertigstellungsdatum`)
-- **Auftragsstatus als eigene, pflegbare Tabelle** `auftragsstatus` (statt fester Liste): mit stabilem `schluessel` für den Code, Anzeigename, Reihenfolge, Farbe sowie den Schaltern `erfordert_zeiterfassung` (z. B. „Fertig“) und `ist_abgeschlossen`. `auftrag.status_aktuell_id` und `auftrag_statusverlauf.status_id` verweisen darauf. Die UI darf Status/Farben daher nicht hart kodieren
+- **Auftragsstatus als eigene, pflegbare Tabelle** `auftragsstatus` (statt fester Liste): mit stabilem `schluessel` für den Code, Anzeigename, Reihenfolge, Farbe sowie den Schaltern `erfordert_abschlussdaten` (z. B. „Fertig“) und `ist_abgeschlossen`. `auftrag.status_aktuell_id` und `auftrag_statusverlauf.status_id` verweisen darauf. Die UI darf Status/Farben daher nicht hart kodieren
 - **Feste Auswahllisten** (PostgreSQL-Enums) nur für `systemrolle`, `prioritaet` und Abwesenheits-`typ`, weil daran Programmlogik hängt
 - **Unterbrechungen automatisch aus dem Status:** Status mit gesetztem `auftragsstatus.unterbrechungsgrund` (derzeit „Wartet auf Ersatzteil“) öffnen beim Wechsel hinein einen `unterbrechung`-Eintrag und schließen ihn beim Wechsel heraus. Höchstens eine offene Unterbrechung je Auftrag (Datenbank-Index). Grundlage, um Wartezeiten später aus der Bearbeitungsdauer herauszurechnen
 - **Archivieren statt Löschen:** Stammdaten bekommen `archiviert_am` (NULL = aktiv); archivierte Einträge fehlen in Standardlisten und sind für neue Aufträge gesperrt, bleiben aber erhalten und lassen sich reaktivieren. Kunden/Instrumente mit offenen Aufträgen können nicht archiviert werden
@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 03.10.2026 | Status-Merkmal `erfordert_zeiterfassung` heißt jetzt `erfordert_abschlussdaten` (Arbeitszeit und Betrag, 2.7a); „Abgeholt“ ist nur aus einem abgeschlossenen Status („Fertig“) erreichbar |
 | 03.10.2026 | Auftragsabschluss (9.8): Beim Wechsel auf „Fertig“ ist neben der Arbeitszeit der abgerechnete Betrag Pflicht (vorbelegt mit der Kostenschätzung), gespeichert als `tatsaechliche_kosten`; eine Wiederaufnahme leert ihn wieder. Diagramme zeigen den Wert über jedem Punkt |
 | 03.10.2026 | Auswertungen (9.14), Teil 3 „Geld“: Umsatz, Ø Auftragswert, Umsatz pro Monat; Diagramme werden in echter Größe gezeichnet (feine Linien, kleine Schrift wie im Rest der Seite) |
 | 03.10.2026 | Auswertungen (9.14), Teil 2 „Zeit“: Ø Bearbeitungsdauer (Kalendertage), Ø reine Arbeitszeit, Verlauf pro Monat, Pünktlichkeitsquote gemessen an der ersten automatischen Terminschätzung im Schätzprotokoll |

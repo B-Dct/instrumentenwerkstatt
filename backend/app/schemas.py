@@ -212,7 +212,7 @@ class StatusEintrag(BaseModel):
     reihenfolge: int
     farbe: str
     symbol: str
-    erfordert_zeiterfassung: bool
+    erfordert_abschlussdaten: bool
     unterbrechungsgrund: str | None
     ist_abgeschlossen: bool
 

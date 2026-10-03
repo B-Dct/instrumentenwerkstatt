@@ -271,6 +271,29 @@ def test_abschluss_mit_abweichendem_betrag(client, w, db):
     assert db.get(Auftrag, uuid.UUID(a["id"])).tatsaechliche_kosten == Decimal("84.50")
 
 
+@pytest.mark.parametrize("ausgangsstatus", ["angenommen", "in_bearbeitung", "wartet_auf_ersatzteil", "qualitaetspruefung"])
+def test_abgeholt_nur_aus_fertig(client, w, db, ausgangsstatus):
+    """Direkter Wechsel auf "Abgeholt" aus einem offenen Status wird abgelehnt (2.7a) – sonst
+    ließe sich die Pflichtabfrage von Arbeitszeit und Betrag umgehen."""
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    pfad = f"{URL}/{a['id']}/status"
+    if ausgangsstatus != "angenommen":
+        assert client.post(pfad, json={"status_id": str(w.status[ausgangsstatus])}).status_code == 200
+
+    antwort = client.post(pfad, json={"status_id": str(w.abgeholt)})
+    assert antwort.status_code == 409 and "Fertig" in antwort.json()["detail"]
+    # Auch mit mitgeschickten Abschlussdaten nicht – die gehören zu "Fertig"
+    assert client.post(pfad, json={"status_id": str(w.abgeholt), "arbeitszeit_minuten": 60,
+                                   "abgerechneter_betrag": 50}).status_code in (409, 422)
+    db.expire_all()
+    auftrag = db.get(Auftrag, uuid.UUID(a["id"]))
+    assert auftrag.status_aktuell_id == w.status[ausgangsstatus] and auftrag.tatsaechliches_fertigstellungsdatum is None
+
+    # Über "Fertig" geht es
+    assert client.post(pfad, json={"status_id": str(w.fertig), "arbeitszeit_minuten": 60, "abgerechneter_betrag": 50}).status_code == 200
+    assert client.post(pfad, json={"status_id": str(w.abgeholt)}).status_code == 200
+
+
 def test_betrag_nur_beim_abschluss_und_wiederaufnahme_leert_ihn(client, w, db):
     a = client.post(URL, json=neuer_auftrag(w)).json()
     pfad = f"{URL}/{a['id']}/status"

@@ -61,17 +61,21 @@ function StatusFormular({ formular, auftrag, alleStatus, onGespeichert }) {
     abgerechneter_betrag: auftrag.geschaetzte_kosten ?? '',
   })
   const ziel = alleStatus.find((s) => s.id === werte.status_id)
+  // Ein Abschluss-Status ohne eigene Pflichtabfrage ("Abgeholt") ist nur aus einem abgeschlossenen
+  // Status ("Fertig") erreichbar – dort werden Arbeitszeit und Betrag erfasst (2.7a, 9.8)
+  const gesperrt = (s) => s.ist_abgeschlossen && !s.erfordert_abschlussdaten && !auftrag.status.ist_abgeschlossen
+  const abschluss = alleStatus.filter((s) => s.erfordert_abschlussdaten).map((s) => s.bezeichnung).join(' / ')
   const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
     vorabPruefen({
       status_id: !werte.status_id && 'Bitte auswählen',
-      arbeitszeit_minuten: ziel?.erfordert_zeiterfassung && !werte.arbeitszeit_minuten && 'Pflichtangabe beim Abschluss',
-      abgerechneter_betrag: ziel?.erfordert_zeiterfassung && werte.abgerechneter_betrag === '' && 'Pflichtangabe beim Abschluss',
+      arbeitszeit_minuten: ziel?.erfordert_abschlussdaten && !werte.arbeitszeit_minuten && 'Pflichtangabe beim Abschluss',
+      abgerechneter_betrag: ziel?.erfordert_abschlussdaten && werte.abgerechneter_betrag === '' && 'Pflichtangabe beim Abschluss',
     })
     return api.statusWechseln(auftrag.id, {
       status_id: werte.status_id,
       kommentar: leerZuNull(werte.kommentar),
-      arbeitszeit_minuten: ziel?.erfordert_zeiterfassung ? Number(werte.arbeitszeit_minuten) : null,
-      abgerechneter_betrag: ziel?.erfordert_zeiterfassung ? Number(werte.abgerechneter_betrag) : null,
+      arbeitszeit_minuten: ziel?.erfordert_abschlussdaten ? Number(werte.arbeitszeit_minuten) : null,
+      abgerechneter_betrag: ziel?.erfordert_abschlussdaten ? Number(werte.abgerechneter_betrag) : null,
       unterbrechungsgrund: ziel?.unterbrechungsgrund ? leerZuNull(werte.unterbrechungsgrund) : null,
     })
   }, onGespeichert)
@@ -85,16 +89,18 @@ function StatusFormular({ formular, auftrag, alleStatus, onGespeichert }) {
           <select value={werte.status_id} onChange={setze('status_id')} required>
             <option value="">Bitte wählen</option>
             {alleStatus.filter((s) => s.id !== auftrag.status.id).map((s) => (
-              <option key={s.id} value={s.id}>{s.symbol} {s.bezeichnung}</option>
+              <option key={s.id} value={s.id} disabled={gesperrt(s)}>
+                {s.symbol} {s.bezeichnung}{gesperrt(s) && ` (erst nach „${abschluss}“)`}
+              </option>
             ))}
           </select>
         </Feld>
-        {ziel?.erfordert_zeiterfassung && (
+        {ziel?.erfordert_abschlussdaten && (
           <Feld label="Aufgewendete Arbeitszeit in Minuten" fehler={felder.arbeitszeit_minuten} hinweis="Pflichtangabe beim Abschluss">
             <input type="number" min="1" step="1" value={werte.arbeitszeit_minuten} onChange={setze('arbeitszeit_minuten')} required />
           </Feld>
         )}
-        {ziel?.erfordert_zeiterfassung && (
+        {ziel?.erfordert_abschlussdaten && (
           <Feld label="Abgerechneter Betrag in Euro" fehler={felder.abgerechneter_betrag}
                 hinweis={auftrag.geschaetzte_kosten == null
                   ? 'Pflichtangabe beim Abschluss – es gibt keine Kostenschätzung als Vorschlag'
@@ -410,7 +416,7 @@ export default function AuftragDetail() {
         {formular.offen === STATUS && (
           <StatusFormular key={STATUS} formular={formular} auftrag={a} alleStatus={alleStatus}
                           onGespeichert={(neu) => gespeichert(neu,
-                            alleStatus.find((s) => s.id === neu.status.id)?.erfordert_zeiterfassung
+                            alleStatus.find((s) => s.id === neu.status.id)?.erfordert_abschlussdaten
                               ? `Auftrag abgeschlossen (${neu.status.bezeichnung}), Arbeitszeit und Betrag erfasst`
                               : `Status geändert: ${neu.status.bezeichnung}`)} />
         )}

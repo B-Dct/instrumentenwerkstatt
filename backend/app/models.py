@@ -213,8 +213,8 @@ class Auftragsstatus(Base):
     reihenfolge: Mapped[int] = mapped_column(SmallInteger)
     farbe: Mapped[str] = mapped_column(String(7))  # Hex, z. B. #4B6B4F (Design-System 9.6)
     symbol: Mapped[str] = mapped_column(String(4), server_default="○")  # Farbe nie allein (9.3)
-    # Beim Wechsel in diesen Status muss Arbeitszeit erfasst werden (Datenmodell 9.8)
-    erfordert_zeiterfassung: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Beim Wechsel in diesen Status sind Arbeitszeit und abgerechneter Betrag Pflicht (Datenmodell 2.7a, 9.8)
+    erfordert_abschlussdaten: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Auftrag gilt in diesem Status als abgeschlossen (zählt nicht mehr zur Auslastung)
     ist_abgeschlossen: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Gesetzt = dieser Status pausiert den Auftrag (z. B. "Wartet auf Ersatzteil"): Beim Wechsel

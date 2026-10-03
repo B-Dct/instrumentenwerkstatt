@@ -47,4 +47,4 @@ def test_status_in_reihenfolge_mit_schaltern(client, w):
     status = client.get("/auftragsstatus").json()
     assert [s["schluessel"] for s in status][:2] == ["angenommen", "in_bearbeitung"]
     fertig = next(s for s in status if s["schluessel"] == "fertig")
-    assert fertig["erfordert_zeiterfassung"] and fertig["ist_abgeschlossen"]
+    assert fertig["erfordert_abschlussdaten"] and fertig["ist_abgeschlossen"]
