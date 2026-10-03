@@ -118,6 +118,7 @@ export async function alleEintraege(laden, filter = {}) {
 
 export const api = {
   dashboard: () => anfrage('/dashboard'),
+  auswertungen: (parameter = {}) => anfrage('/auswertungen?' + new URLSearchParams(parameter)),
   auftraege: (filter = {}) => anfrage('/auftraege?' + new URLSearchParams(filter)),
   auftrag: (id) => anfrage(`/auftraege/${id}`),
   auftragAnlegen: (daten) => anfrage('/auftraege', { methode: 'POST', daten }),

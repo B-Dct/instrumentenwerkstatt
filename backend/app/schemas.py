@@ -534,3 +534,26 @@ class Dashboard(BaseModel):
     woche_von: date  # Montag der Woche, für die die Auslastung gilt
     auslastung: list[Auslastung]  # je aktivem Mitarbeiter
     heute_abwesend: list[HeuteAbwesend]  # werkstattweite Einträge zuerst
+
+
+# --- Auswertungen / Jahresstatistik (Datenmodell 9.14) --------------------------
+
+class Verteilung(BaseModel):
+    bezeichnung: str
+    anzahl: int
+    sonstige: bool = False  # Sammelzeile für alles außerhalb der Top 5
+
+
+class AuswertungMenge(BaseModel):
+    """9.14.1 – im Jahr abgeschlossene Aufträge."""
+
+    abgeschlossen: int
+    pro_monat: list[int]  # 12 Werte, Januar bis Dezember
+    nach_reparaturart: list[Verteilung]  # Top 5 + ggf. "Sonstige"
+    nach_instrumentenklasse: list[Verteilung]
+
+
+class Auswertung(BaseModel):
+    jahr: int
+    jahre: list[int]  # wählbare Jahre, neuestes zuerst
+    menge: AuswertungMenge

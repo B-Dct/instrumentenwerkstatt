@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 02.10.2026 | Auswertungen (9.14), Teil 1 „Menge“: neue Seite mit Jahresfilter, Endpunkt `/auswertungen`, eigene Diagramm-Bausteine (`komponenten/Diagramme.jsx`: Monatsverlauf als SVG, Balkenverteilung) ohne Bibliothek |
 | 02.10.2026 | Werkstattleiter-Startseite (9.5), Teil 3: Hinweis auf heutige Abwesenheiten (werkstattweite Schließung und abwesende Mitarbeiter) – Startseite damit vollständig |
 | 02.10.2026 | Werkstattleiter-Startseite (9.5), Teil 2: „Nächste fällige Aufträge“ und „Auslastung“ je Mitarbeiter (8.2: Abwesenheit der Woche + Stunden offener Aufträge, gemessen an den Wochenstunden; derselbe Kalender wie die Terminschätzung) |
 | 02.10.2026 | Werkstattleiter-Startseite (9.5), Teil 1: vier Kennzahl-Kacheln mit Sprung in die gefilterte Auftragsliste; Auftragsliste jetzt unter `/auftraege`, neuer Listenfilter „Pausiert“ |

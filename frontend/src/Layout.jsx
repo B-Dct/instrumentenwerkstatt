@@ -20,6 +20,7 @@ function Seitenleiste({ nutzer }) {
         <NavLink to="/neu" className="seitenleiste__link">Neuer Auftrag</NavLink>
         <NavLink to="/kunden" className="seitenleiste__link">Kunden</NavLink>
         {hatRolle('werkstattleiter') && <NavLink to="/abwesenheiten" className="seitenleiste__link">Abwesenheiten</NavLink>}
+        {hatRolle('werkstattleiter') && <NavLink to="/auswertungen" className="seitenleiste__link">Auswertungen</NavLink>}
       </nav>
       {hatRolle('admin') && (
         <nav className="seitenleiste__nav seitenleiste__gruppe" aria-label="Verwaltung">
