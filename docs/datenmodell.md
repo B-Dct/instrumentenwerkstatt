@@ -961,13 +961,15 @@ Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand 
 
 **Technische Umsetzung:** Liniendiagramme und Balken werden als eigene, einfache Grafiken gezeichnet statt über eine Diagramm-Bibliothek eingebunden — passend zum eigenständigen Design-System (9.6), ohne zusätzliche Abhängigkeit. Reicht für die hier benötigten einfachen Verläufe und Verteilungen ohne Zoom oder aufwendige Interaktivität.
 
-**Filter:** Jahr, Standard das laufende Kalenderjahr, wählbar auch vergangene Jahre. "Abgeschlossen im Jahr X" heißt: `tatsächliches_fertigstellungsdatum` liegt in Jahr X (nicht der Auftragseingang).
+**Filter:** Jahr, Standard das laufende Kalenderjahr, wählbar von 2000 bis zum laufenden Jahr, steht in der Adresse. "Abgeschlossen im Jahr X" heißt: `tatsächliches_fertigstellungsdatum` liegt in Jahr X (nicht der Auftragseingang) — ein wieder aufgenommener Auftrag fällt dadurch automatisch aus der Statistik, da sein Fertigstellungsdatum dabei geleert wird (siehe 2.7). Ein Jahr ohne Abschlüsse zeigt 0 mit dem Hinweis "Im Jahr X wurde noch kein Auftrag abgeschlossen". Ein Einleitungssatz unter der Überschrift erklärt die Zählregel. Archivierte Reparaturarten/Instrumentenklassen (2.4, 2.6) zählen in der Statistik weiterhin mit, da die zugehörigen Aufträge tatsächlich stattfanden.
+
+**Technische Umsetzung der Diagramme:** Zahlen erscheinen beim Hover als Text (z. B. "Juni: 2"), zusätzlich stehen alle Werte als Tabelle für Screenreader bereit; die Achse rundet automatisch auf glatte Werte. Monate ohne vergangenen Zeitpunkt im laufenden Jahr zeigen keinen Punkt (nicht 0), damit kein irreführender Einbruch entsteht. Bei Gleichstand in einer Verteilung wird alphabetisch geordnet.
 
 **9.14.1 Menge**
 - Kennzahl: Anzahl abgeschlossener Aufträge im gewählten Jahr
-- Liniendiagramm: abgeschlossene Aufträge pro Monat
-- Balkendiagramm: Verteilung nach Reparaturart (Top 5, Rest als "Sonstige")
-- Balkendiagramm: Verteilung nach Instrumentenklasse (Top 5, Rest als "Sonstige")
+- Liniendiagramm: abgeschlossene Aufträge pro Monat (Januar bis Dezember)
+- Balkendiagramm: Verteilung nach Reparaturart (Top 5, Rest als "Sonstige" in Grau), mit Anzahl und Anteil in Prozent neben jedem Balken
+- Balkendiagramm: Verteilung nach Instrumentenklasse (Top 5, Rest als "Sonstige"), gleiche Darstellung
 
 **9.14.2 Zeit**
 - Kennzahl: Ø Bearbeitungsdauer in Kalendertagen (`erstellt_am` bis `tatsächliches_fertigstellungsdatum`)
