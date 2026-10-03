@@ -223,13 +223,61 @@ def test_statuswechsel_in_gleichen_status_abgelehnt(client, w):
     assert antwort.status_code == 409
 
 
-def test_fertig_erfordert_arbeitszeit(client, w, db):
+def _fehlende_felder(antwort):
+    assert antwort.status_code == 422, antwort.text
+    return sorted(f["loc"][-1] for f in antwort.json()["detail"])
+
+
+def test_fertig_erfordert_arbeitszeit_und_betrag(client, w, db):
+    """Abschluss (9.8): ohne Arbeitszeit oder ohne abgerechneten Betrag wird abgelehnt – am jeweiligen Feld."""
     a = client.post(URL, json=neuer_auftrag(w)).json()
     pfad = f"{URL}/{a['id']}/status"
+    fertig = {"status_id": str(w.fertig)}
 
-    assert client.post(pfad, json={"status_id": str(w.fertig)}).status_code == 422
+    assert _fehlende_felder(client.post(pfad, json=fertig)) == ["abgerechneter_betrag", "arbeitszeit_minuten"]
+    assert _fehlende_felder(client.post(pfad, json={**fertig, "arbeitszeit_minuten": 90})) == ["abgerechneter_betrag"]
+    assert _fehlende_felder(client.post(pfad, json={**fertig, "abgerechneter_betrag": 20})) == ["arbeitszeit_minuten"]
+    assert _fehlende_felder(client.post(pfad, json={**fertig, "arbeitszeit_minuten": 90, "abgerechneter_betrag": -1})) == \
+        ["abgerechneter_betrag"]
+    # Nach den Ablehnungen ist nichts gespeichert
+    db.expire_all()
+    auftrag = db.get(Auftrag, uuid.UUID(a["id"]))
+    assert (auftrag.tatsaechliche_kosten, auftrag.status_aktuell_id) == (None, uuid.UUID(a["status"]["id"]))
+    assert db.scalars(select(Arbeitszeiterfassung).where(Arbeitszeiterfassung.auftrag_id == auftrag.id)).all() == []
 
-    antwort = client.post(pfad, json={"status_id": str(w.fertig), "arbeitszeit_minuten": 90})
+
+def test_abschluss_mit_unveraendert_uebernommenem_vorschlag(client, w, db):
+    """Die Oberfläche belegt den Betrag mit der aktuellen Kostenschätzung vor; wird er so bestätigt, steht er als Ist-Wert."""
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    assert a["geschaetzte_kosten"] == 60.0  # Vorgabewert Kontrabass
+    antwort = client.post(f"{URL}/{a['id']}/status", json={
+        "status_id": str(w.fertig), "arbeitszeit_minuten": 90, "abgerechneter_betrag": a["geschaetzte_kosten"]})
+    assert antwort.status_code == 200
+    assert (antwort.json()["tatsaechliche_kosten"], antwort.json()["geschaetzte_kosten"]) == (60.0, 60.0)
+    assert db.get(Auftrag, uuid.UUID(a["id"])).tatsaechliche_kosten == Decimal("60.00")
+
+
+def test_abschluss_mit_abweichendem_betrag(client, w, db):
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    antwort = client.post(f"{URL}/{a['id']}/status", json={
+        "status_id": str(w.fertig), "arbeitszeit_minuten": 120, "abgerechneter_betrag": 84.5})
+    assert antwort.status_code == 200
+    detail = antwort.json()
+    assert (detail["tatsaechliche_kosten"], detail["geschaetzte_kosten"]) == (84.5, 60.0)  # die Schätzung bleibt unverändert
+    # Weiter zu "Abgeholt": braucht keinen Betrag mehr und behält ihn
+    abgeholt = client.post(f"{URL}/{a['id']}/status", json={"status_id": str(w.abgeholt)})
+    assert abgeholt.status_code == 200 and abgeholt.json()["tatsaechliche_kosten"] == 84.5
+    # Der Ist-Wert fließt in die Kostenschätzung vergleichbarer Aufträge ein (4.1)
+    assert db.get(Auftrag, uuid.UUID(a["id"])).tatsaechliche_kosten == Decimal("84.50")
+
+
+def test_betrag_nur_beim_abschluss_und_wiederaufnahme_leert_ihn(client, w, db):
+    a = client.post(URL, json=neuer_auftrag(w)).json()
+    pfad = f"{URL}/{a['id']}/status"
+    assert _fehlende_felder(client.post(pfad, json={"status_id": str(w.in_bearbeitung), "abgerechneter_betrag": 10})) == \
+        ["abgerechneter_betrag"]
+
+    antwort = client.post(pfad, json={"status_id": str(w.fertig), "arbeitszeit_minuten": 90, "abgerechneter_betrag": 70})
     assert antwort.status_code == 200
     assert antwort.json()["tatsaechliches_fertigstellungsdatum"] == date.today().isoformat()
     [zeit] = db.scalars(select(Arbeitszeiterfassung).where(
@@ -239,7 +287,7 @@ def test_fertig_erfordert_arbeitszeit(client, w, db):
 
     # Wiederaufnahme leert das Fertigstellungsdatum wieder
     zurueck = client.post(pfad, json={"status_id": str(w.in_bearbeitung)}).json()
-    assert zurueck["tatsaechliches_fertigstellungsdatum"] is None
+    assert (zurueck["tatsaechliches_fertigstellungsdatum"], zurueck["tatsaechliche_kosten"]) == (None, None)
     assert len(zurueck["statusverlauf"]) == 3
 
 

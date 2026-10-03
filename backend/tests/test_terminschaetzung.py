@@ -245,7 +245,7 @@ def test_ueberfaellig_nur_offen_und_termin_vorbei(client, w, leitung, db):
     liste = client.get("/auftraege", params={"kunde_id": str(w.kunde.id)}).json()["eintraege"]
     assert [x["ist_ueberfaellig"] for x in liste] == [True]
 
-    client.post(f"/auftraege/{a['id']}/status", json={"status_id": str(w.fertig), "arbeitszeit_minuten": 60})
+    client.post(f"/auftraege/{a['id']}/status", json={"status_id": str(w.fertig), "arbeitszeit_minuten": 60, "abgerechneter_betrag": 50})
     assert client.get(f"/auftraege/{a['id']}").json()["ist_ueberfaellig"] is False
 
 

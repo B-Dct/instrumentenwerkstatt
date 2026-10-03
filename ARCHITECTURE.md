@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 03.10.2026 | Auftragsabschluss (9.8): Beim Wechsel auf „Fertig“ ist neben der Arbeitszeit der abgerechnete Betrag Pflicht (vorbelegt mit der Kostenschätzung), gespeichert als `tatsaechliche_kosten`; eine Wiederaufnahme leert ihn wieder. Diagramme zeigen den Wert über jedem Punkt |
 | 03.10.2026 | Auswertungen (9.14), Teil 3 „Geld“: Umsatz, Ø Auftragswert, Umsatz pro Monat; Diagramme werden in echter Größe gezeichnet (feine Linien, kleine Schrift wie im Rest der Seite) |
 | 03.10.2026 | Auswertungen (9.14), Teil 2 „Zeit“: Ø Bearbeitungsdauer (Kalendertage), Ø reine Arbeitszeit, Verlauf pro Monat, Pünktlichkeitsquote gemessen an der ersten automatischen Terminschätzung im Schätzprotokoll |
 | 02.10.2026 | Auswertungen (9.14), Teil 1 „Menge“: neue Seite mit Jahresfilter, Endpunkt `/auswertungen`, eigene Diagramm-Bausteine (`komponenten/Diagramme.jsx`: Monatsverlauf als SVG, Balkenverteilung) ohne Bibliothek |

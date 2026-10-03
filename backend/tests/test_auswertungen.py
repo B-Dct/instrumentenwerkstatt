@@ -89,7 +89,7 @@ def test_wiederaufgenommener_auftrag_zaehlt_nicht(client, db, leitung, w):
     db.flush()
     jahr = date.today().year
     vorher = auswertung(client, jahr)["menge"]["abgeschlossen"]
-    client.post(f"/auftraege/{a.id}/status", json={"status_id": str(w.fertig), "arbeitszeit_minuten": 30})
+    client.post(f"/auftraege/{a.id}/status", json={"status_id": str(w.fertig), "arbeitszeit_minuten": 30, "abgerechneter_betrag": 40})
     assert auswertung(client, jahr)["menge"]["abgeschlossen"] == vorher + 1
     client.post(f"/auftraege/{a.id}/status", json={"status_id": str(w.in_bearbeitung)})
     assert auswertung(client, jahr)["menge"]["abgeschlossen"] == vorher

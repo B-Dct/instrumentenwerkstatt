@@ -55,17 +55,23 @@ const von = (name) => name ?? '–'
 // --- Formulare ---------------------------------------------------------------------
 
 function StatusFormular({ formular, auftrag, alleStatus, onGespeichert }) {
-  const [werte, setWerte] = useState({ status_id: '', arbeitszeit_minuten: '', unterbrechungsgrund: '', kommentar: '' })
+  // Der abgerechnete Betrag ist mit der aktuellen Kostenschätzung vorbelegt (9.8)
+  const [werte, setWerte] = useState({
+    status_id: '', arbeitszeit_minuten: '', unterbrechungsgrund: '', kommentar: '',
+    abgerechneter_betrag: auftrag.geschaetzte_kosten ?? '',
+  })
   const ziel = alleStatus.find((s) => s.id === werte.status_id)
   const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
     vorabPruefen({
       status_id: !werte.status_id && 'Bitte auswählen',
       arbeitszeit_minuten: ziel?.erfordert_zeiterfassung && !werte.arbeitszeit_minuten && 'Pflichtangabe beim Abschluss',
+      abgerechneter_betrag: ziel?.erfordert_zeiterfassung && werte.abgerechneter_betrag === '' && 'Pflichtangabe beim Abschluss',
     })
     return api.statusWechseln(auftrag.id, {
       status_id: werte.status_id,
       kommentar: leerZuNull(werte.kommentar),
       arbeitszeit_minuten: ziel?.erfordert_zeiterfassung ? Number(werte.arbeitszeit_minuten) : null,
+      abgerechneter_betrag: ziel?.erfordert_zeiterfassung ? Number(werte.abgerechneter_betrag) : null,
       unterbrechungsgrund: ziel?.unterbrechungsgrund ? leerZuNull(werte.unterbrechungsgrund) : null,
     })
   }, onGespeichert)
@@ -86,6 +92,14 @@ function StatusFormular({ formular, auftrag, alleStatus, onGespeichert }) {
         {ziel?.erfordert_zeiterfassung && (
           <Feld label="Aufgewendete Arbeitszeit in Minuten" fehler={felder.arbeitszeit_minuten} hinweis="Pflichtangabe beim Abschluss">
             <input type="number" min="1" step="1" value={werte.arbeitszeit_minuten} onChange={setze('arbeitszeit_minuten')} required />
+          </Feld>
+        )}
+        {ziel?.erfordert_zeiterfassung && (
+          <Feld label="Abgerechneter Betrag in Euro" fehler={felder.abgerechneter_betrag}
+                hinweis={auftrag.geschaetzte_kosten == null
+                  ? 'Pflichtangabe beim Abschluss – es gibt keine Kostenschätzung als Vorschlag'
+                  : `Vorbelegt mit der Schätzung (${euro(auftrag.geschaetzte_kosten)}) – bei abweichender Rechnung den echten Betrag eintragen`}>
+            <input type="number" min="0" step="0.01" value={werte.abgerechneter_betrag} onChange={setze('abgerechneter_betrag')} required />
           </Feld>
         )}
         {ziel?.unterbrechungsgrund && (
@@ -372,6 +386,7 @@ export default function AuftragDetail() {
         </dd>
         <dt>Eingang</dt><dd>{zeit(a.erstellt_am)}</dd>
         {a.tatsaechliches_fertigstellungsdatum && <><dt>Fertiggestellt am</dt><dd>{datum(a.tatsaechliches_fertigstellungsdatum)}</dd></>}
+        {a.tatsaechliche_kosten != null && <><dt>Abgerechnet</dt><dd>{euro(a.tatsaechliche_kosten)}</dd></>}
         <dt>Zugangscode Kunde</dt><dd><code>{a.zugriffstoken}</code></dd>
         {a.notizen && <><dt>Notizen</dt><dd>{a.notizen}</dd></>}
       </dl>
@@ -394,7 +409,10 @@ export default function AuftragDetail() {
       <FormularBereich formular={formular}>
         {formular.offen === STATUS && (
           <StatusFormular key={STATUS} formular={formular} auftrag={a} alleStatus={alleStatus}
-                          onGespeichert={(neu) => gespeichert(neu, `Status geändert: ${neu.status.bezeichnung}`)} />
+                          onGespeichert={(neu) => gespeichert(neu,
+                            alleStatus.find((s) => s.id === neu.status.id)?.erfordert_zeiterfassung
+                              ? `Auftrag abgeschlossen (${neu.status.bezeichnung}), Arbeitszeit und Betrag erfasst`
+                              : `Status geändert: ${neu.status.bezeichnung}`)} />
         )}
         {formular.offen === KORREKTUR && (
           <KorrekturFormular key={KORREKTUR} formular={formular} auftrag={a}

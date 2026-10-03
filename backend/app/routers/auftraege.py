@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten, rolle_mindestens
 from app.db import get_db
+from app.eingabe import feldfehler
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.models import (
     Arbeitszeiterfassung,
@@ -456,10 +457,18 @@ def status_wechseln(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             f"Der Status \"{neu.bezeichnung}\" ist keine Unterbrechung – Grund nicht möglich")
 
-    # Pflicht-Zeiterfassung beim Abschluss (Datenmodell 9.8)
-    if neu.erfordert_zeiterfassung and daten.arbeitszeit_minuten is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
-                            f"Für den Status \"{neu.bezeichnung}\" muss die Arbeitszeit angegeben werden")
+    # Pflichtangaben beim Abschluss (Datenmodell 9.8): Arbeitszeit und abgerechneter Betrag
+    if neu.erfordert_zeiterfassung:
+        fehlend = {
+            feld: f"Pflichtangabe für den Status „{neu.bezeichnung}“"
+            for feld in ("arbeitszeit_minuten", "abgerechneter_betrag") if getattr(daten, feld) is None
+        }
+        if fehlend:
+            raise feldfehler(**fehlend)
+        # Ohne diesen Wert bliebe die historische Kostenschätzung (4.1) und der Umsatz (9.14.3) leer
+        auftrag.tatsaechliche_kosten = daten.abgerechneter_betrag
+    elif daten.abgerechneter_betrag is not None:
+        raise feldfehler(abgerechneter_betrag=f"Der Betrag wird beim Abschluss erfasst, nicht im Status „{neu.bezeichnung}“")
     if daten.arbeitszeit_minuten is not None:
         db.add(Arbeitszeiterfassung(
             auftrag_id=auftrag.id,
@@ -477,6 +486,7 @@ def status_wechseln(
             auftrag.tatsaechliches_fertigstellungsdatum = date.today()
     else:
         auftrag.tatsaechliches_fertigstellungsdatum = None
+        auftrag.tatsaechliche_kosten = None  # wird beim erneuten Abschluss neu erfasst
 
     db.add(AuftragStatusverlauf(
         auftrag_id=auftrag.id,

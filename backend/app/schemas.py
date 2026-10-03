@@ -155,8 +155,10 @@ class AuftragAenderung(BaseModel):
 class Statuswechsel(BaseModel):
     status_id: uuid.UUID
     kommentar: str | None = None
-    # Pflicht, wenn der Zielstatus Zeiterfassung erfordert (z. B. "Fertig", Datenmodell 9.8)
+    # Beides Pflicht, wenn der Zielstatus den Abschluss erfasst (z. B. "Fertig", Datenmodell 9.8):
+    # die aufgewendete Arbeitszeit und der tatsächlich abgerechnete Betrag
     arbeitszeit_minuten: int | None = Field(None, gt=0)
+    abgerechneter_betrag: Euro | None = None
     # Nur bei pausierenden Status (z. B. "Wartet auf Ersatzteil"); leer = Standardgrund des Status
     unterbrechungsgrund: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
 

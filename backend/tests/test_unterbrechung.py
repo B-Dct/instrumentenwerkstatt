@@ -83,7 +83,7 @@ def test_mehrere_unterbrechungen_nacheinander(client, db, w):
     wechseln(client, auftrag_id, w.wartet)
     wechseln(client, auftrag_id, w.in_bearbeitung)
     wechseln(client, auftrag_id, w.wartet, unterbrechungsgrund="Zweites Teil fehlt")
-    wechseln(client, auftrag_id, w.fertig, arbeitszeit_minuten=45)  # Abschluss schließt ebenfalls
+    wechseln(client, auftrag_id, w.fertig, arbeitszeit_minuten=45, abgerechneter_betrag=30)  # Abschluss schließt ebenfalls
 
     liste = unterbrechungen(db, auftrag_id)
     for u in liste:

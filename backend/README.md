@@ -70,7 +70,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/auftraege/{id}` | Auftrag mit Statusverlauf und allen Schätzungen |
 | POST | `/auftraege` | Auftrag anlegen – schätzt Stunden, Kosten und Fertigstellungstermin automatisch und protokolliert die Schätzung |
 | PATCH | `/auftraege/{id}` | Zuweisung/Priorität ändern (Werkstattleitung/Admin) – berechnet den Termin neu |
-| POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) |
+| POST | `/auftraege/{id}/status` | Statuswechsel (neuer Eintrag im Statusverlauf; bei „Fertig“ Pflicht: `arbeitszeit_minuten`) Beim Abschluss („Fertig“) sind Arbeitszeit (`arbeitszeit_minuten`) und abgerechneter Betrag (`abgerechneter_betrag` → `tatsaechliche_kosten`) Pflicht |
 | POST | `/auftraege/{id}/schaetzung-korrektur` | Geschätzte Stunden/Kosten manuell korrigieren (Pflicht: `grund`) |
 | POST | `/auftraege/{id}/termin-korrektur` | Fertigstellungstermin manuell festlegen (nur Werkstattleitung/Admin, Begründung Pflicht; eigener Eintrag im Schätzprotokoll; die nächste automatische Neuberechnung überschreibt ihn wieder) |
 | GET | `/abwesenheiten?suche=…&mitarbeiter=…&typ=…&zeitraum=…&status=…` | Abwesenheiten-Liste nach 9.11 (nur Werkstattleitung/Admin; Standard: laufende und künftige, nicht stornierte; `mitarbeiter` = ID oder `werkstatt`) |
