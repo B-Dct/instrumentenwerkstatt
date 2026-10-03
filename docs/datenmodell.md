@@ -788,12 +788,14 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - **Suchen/Filtern** in allen Listenansichten, insbesondere der Auftragsliste, sobald diese im echten Betrieb wächst: Filter nach Status, Mitarbeiter, Instrumentenklasse, Priorität, plus eine Freitext-Suche über Kundenname und Auftragsnummer (Regeln in 9.11, Fahrplan in 10.4, Punkt 5)
 - **Barrierefreiheit (Kontrast, Tastaturbedienbarkeit):** insbesondere für den internen Bereich sinnvoll, falls künftig auch weniger technikaffine oder ältere Mitarbeiter damit arbeiten
 
-### 9.8 Auftragsabschluss (Pflicht-Zeiterfassung)
+### 9.8 Auftragsabschluss (Pflicht-Zeiterfassung und Pflicht-Betrag)
 
-- Setzt ein Mitarbeiter den Status eines Auftrags auf "Fertig", öffnet sich kein Popup, sondern ein fest eingebettetes Eingabefeld im selben Ablauf, das die aufgewendete Arbeitszeit (`arbeitszeiterfassung.dauer_minuten`, siehe 2.11) abfragt
-- Der Abschluss lässt sich erst bestätigen, wenn die Arbeitszeit eingetragen ist — passend zur allgemeinen Regel "Seite nicht verlassen ohne vollständige/gespeicherte Daten" (9.1)
+- Setzt ein Mitarbeiter den Status eines Auftrags auf "Fertig", öffnet sich kein Popup, sondern ein fest eingebettetes Eingabefeld im selben Ablauf, das die aufgewendete Arbeitszeit (`arbeitszeiterfassung.dauer_minuten`, siehe 2.11) **und** den abgerechneten Betrag (`auftrag.tatsächliche_kosten`, siehe 2.7) abfragt
+- Der abgerechnete Betrag ist mit der zu diesem Zeitpunkt aktuellen `geschätzte_kosten` vorbelegt — stimmt der Betrag, bestätigt der Mitarbeiter einfach; weicht die tatsächliche Rechnung ab (z. B. zusätzliches Material), trägt er den echten Wert ein
+- Der Abschluss lässt sich erst bestätigen, wenn beides eingetragen ist — passend zur allgemeinen Regel "Seite nicht verlassen ohne vollständige/gespeicherte Daten" (9.1)
 - Eingabe möglichst einfach halten (z. B. Stunden **und/oder** Minuten, keine Pflicht zu sekundengenauer Erfassung)
-- Nach dem Speichern erscheint dieselbe nicht-blockierende Erfolgsbestätigung wie bei anderen Speichervorgängen (9.1), z. B. "Auftrag abgeschlossen, Arbeitszeit erfasst"
+- Nach dem Speichern erscheint dieselbe nicht-blockierende Erfolgsbestätigung wie bei anderen Speichervorgängen (9.1), z. B. "Auftrag abgeschlossen, Arbeitszeit und Betrag erfasst"
+- **Hintergrund:** Ohne erfassten Betrag bliebe `tatsächliche_kosten` dauerhaft leer — das hätte zwei Folgen: Die historische Kostenschätzung (4.1) käme nie über die Vorgabewerte (2.6a) hinaus, da ihr die Vergleichsbasis fehlt, und der Umsatz in den Auswertungen (9.14.3) sowie die dortige Schätzgenauigkeit (9.14.4) blieben dauerhaft bei "–". Diese Lücke wurde beim Bau der Auswertungen entdeckt und hier nachgetragen
 
 ### 9.9 Kapazitäts-Dashboard, ausführliche Ansicht (spätere Erweiterung)
 
@@ -980,9 +982,9 @@ Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand 
 - Dieselbe Hilfsfunktion zur Ermittlung der ersten automatischen Schätzung wird in 9.14.4 (Schätzgenauigkeit) wiederverwendet
 
 **9.14.3 Geld**
-- Kennzahl: Umsatz im gewählten Jahr (Summe `auftrag.tatsächliche_kosten` aller im Jahr abgeschlossenen Aufträge)
-- Kennzahl: Ø Auftragswert (Umsatz ÷ Anzahl abgeschlossener Aufträge)
-- Liniendiagramm: Umsatz pro Monat
+- Kennzahl: Umsatz im gewählten Jahr (Summe `auftrag.tatsächliche_kosten` aller im Jahr abgeschlossenen Aufträge mit eingetragenen Kosten)
+- Kennzahl: Ø Auftragswert (Umsatz ÷ Anzahl der Aufträge **mit eingetragenen Kosten**, nicht aller abgeschlossenen — dieselbe Logik wie bei der Arbeitszeit in 9.14.2: unbekannt ist nicht null). Beide Kacheln nennen, wie viele Aufträge ohne Kosten nicht eingerechnet sind, und zeigen "–", wenn gar kein Betrag vorliegt
+- Liniendiagramm: Umsatz pro Monat, nach Monat der Fertigstellung; anders als bei der Bearbeitungsdauer (9.14.2) zeigen Monate ohne Umsatz 0 und die Linie läuft durch (der Umsatz *war* tatsächlich 0, das ist kein Fehlen von Daten) — künftige Monate des laufenden Jahres bleiben leer. Achse in ganzen Zahlen ohne Währungszeichen, der genaue Wert erscheint beim Zeigen auf einen Punkt
 
 **9.14.4 Schätzgenauigkeit**
 - Kennzahl: Ø Abweichung zwischen geschätzten und tatsächlichen Stunden (in %), Kennzahl: dasselbe für Kosten
@@ -1024,7 +1026,8 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- **Auswertungen/Jahresstatistik** (9.14): Konzept steht, Umsetzung beginnt mit Teilschritt 1 (Menge)
+- **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1 (Menge) und 2 (Zeit) fertig, Teilschritt 3 (Geld) fertig, Teilschritt 4 (Schätzgenauigkeit) und 5 (Betrieb) stehen aus
+- **Vorgezogen, vor Teilschritt 4:** Pflicht-Betrag beim Auftragsabschluss (9.8) — Lücke, entdeckt beim Bau von Teilschritt 3, da `tatsächliche_kosten` bisher nirgends erfasst wurde
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
