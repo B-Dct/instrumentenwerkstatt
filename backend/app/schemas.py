@@ -553,7 +553,21 @@ class AuswertungMenge(BaseModel):
     nach_instrumentenklasse: list[Verteilung]
 
 
+class AuswertungZeit(BaseModel):
+    """9.14.2 – None bedeutet jeweils: keine Grundlage im gewählten Jahr."""
+
+    bearbeitungsdauer_tage: float | None  # Ø Kalendertage von Eingang bis Fertigstellung
+    bearbeitungsdauer_pro_monat: list[float | None]  # 12 Werte nach Monat der Fertigstellung
+    arbeitszeit_stunden: float | None  # Ø erfasste Arbeitszeit je Auftrag mit Zeiterfassung
+    auftraege_mit_zeiterfassung: int
+    # Pünktlich = nicht später fertig als die ERSTE automatische Terminschätzung (nicht Korrekturen)
+    puenktlich: int
+    auftraege_mit_terminprognose: int
+    puenktlichkeit_prozent: int | None
+
+
 class Auswertung(BaseModel):
     jahr: int
     jahre: list[int]  # wählbare Jahre, neuestes zuerst
     menge: AuswertungMenge
+    zeit: AuswertungZeit

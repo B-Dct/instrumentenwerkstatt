@@ -3,7 +3,7 @@
 // Grundlage sind die im Jahr abgeschlossenen Aufträge (Fertigstellungsdatum im Jahr).
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { api } from '../api.js'
+import { api, zahl } from '../api.js'
 import { Balkenverteilung, Monatsverlauf } from '../komponenten/Diagramme.jsx'
 
 // Monate, die im laufenden Jahr noch in der Zukunft liegen, zeigen keinen Wert statt einer irreführenden 0
@@ -12,11 +12,21 @@ function ohneZukunft(werte, jahr) {
   return jahr < heute.getFullYear() ? werte : werte.map((w, i) => (i > heute.getMonth() ? null : w))
 }
 
-function Kennzahl({ zahl, titel }) {
+// wert = null: es gibt im gewählten Jahr keine Grundlage für diese Kennzahl
+function Kennzahl({ wert, titel, zusatz }) {
   return (
-    <li><div className="kachel"><span className="kachel__zahl">{zahl}</span><span className="kachel__titel">{titel}</span></div></li>
+    <li>
+      <div className="kachel">
+        <span className="kachel__zahl">{wert ?? '–'}</span>
+        <span className="kachel__titel">{titel}</span>
+        {zusatz && <small className="leise">{zusatz}</small>}
+      </div>
+    </li>
   )
 }
+
+const eineStelle = (w) => w.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const auftraege = (n) => `${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}`
 
 function Menge({ menge, jahr }) {
   const leer = `Im Jahr ${jahr} wurde noch kein Auftrag abgeschlossen.`
@@ -24,13 +34,37 @@ function Menge({ menge, jahr }) {
     <section className="abschnitt">
       <h2>Menge</h2>
       <ul className="kacheln" aria-label="Kennzahlen Menge">
-        <Kennzahl zahl={menge.abgeschlossen} titel={`Abgeschlossene Aufträge ${jahr}`} />
+        <Kennzahl wert={menge.abgeschlossen} titel={`Abgeschlossene Aufträge ${jahr}`} />
       </ul>
-      <Monatsverlauf titel="Abgeschlossene Aufträge pro Monat" werte={ohneZukunft(menge.pro_monat, jahr)} />
+      <Monatsverlauf titel="Abgeschlossene Aufträge pro Monat" werte={ohneZukunft(menge.pro_monat, jahr)} ganzzahlig />
       <div className="spalten">
         <Balkenverteilung titel="Nach Reparaturart" eintraege={menge.nach_reparaturart} leerText={leer} />
         <Balkenverteilung titel="Nach Instrumentenklasse" eintraege={menge.nach_instrumentenklasse} leerText={leer} />
       </div>
+    </section>
+  )
+}
+
+function Zeit({ zeit, abgeschlossen }) {
+  const ohneZeiterfassung = abgeschlossen - zeit.auftraege_mit_zeiterfassung
+  const ohnePrognose = abgeschlossen - zeit.auftraege_mit_terminprognose
+  return (
+    <section className="abschnitt">
+      <h2>Zeit</h2>
+      <ul className="kacheln" aria-label="Kennzahlen Zeit">
+        <Kennzahl wert={zeit.bearbeitungsdauer_tage === null ? null : `${eineStelle(zeit.bearbeitungsdauer_tage)} Tage`}
+                  titel="Ø Bearbeitungsdauer" zusatz="Kalendertage vom Eingang bis zur Fertigstellung, inklusive Wartezeiten" />
+        <Kennzahl wert={zeit.arbeitszeit_stunden === null ? null : `${zahl(zeit.arbeitszeit_stunden)} Std.`}
+                  titel="Ø reine Arbeitszeit"
+                  zusatz={`Erfasste Arbeitszeit je Auftrag, ohne Wartezeiten${ohneZeiterfassung > 0 ? ` · ${auftraege(ohneZeiterfassung)} ohne Zeiterfassung nicht eingerechnet` : ''}`} />
+        <Kennzahl wert={zeit.puenktlichkeit_prozent === null ? null : `${zeit.puenktlichkeit_prozent} %`}
+                  titel="Pünktlichkeitsquote"
+                  zusatz={zeit.auftraege_mit_terminprognose === 0
+                    ? 'Gemessen an der ersten automatischen Terminschätzung – dafür gibt es in diesem Jahr noch keine Grundlage'
+                    : `${zeit.puenktlich} von ${zeit.auftraege_mit_terminprognose} nicht später fertig als die erste automatische Terminschätzung (spätere Korrekturen zählen nicht)${ohnePrognose > 0 ? ` · ${auftraege(ohnePrognose)} ohne Terminschätzung nicht eingerechnet` : ''}`} />
+      </ul>
+      <Monatsverlauf titel="Ø Bearbeitungsdauer pro Monat (Kalendertage, nach Monat der Fertigstellung)"
+                     werte={zeit.bearbeitungsdauer_pro_monat} format={eineStelle} einheit=" Tage" />
     </section>
   )
 }
@@ -72,6 +106,7 @@ export default function Auswertungen() {
       </p>
 
       <Menge menge={daten.menge} jahr={daten.jahr} />
+      <Zeit zeit={daten.zeit} abgeschlossen={daten.menge.abgeschlossen} />
     </>
   )
 }

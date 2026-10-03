@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 from app.auth import rolle_mindestens
 from app.db import get_db
 from app.eingabe import feldfehler
-from app.models import Auftrag, Instrument, Instrumentenklasse, Reparaturart, Systemrolle
-from app.schemas import Auswertung, AuswertungMenge, Verteilung
+from app.models import (
+    Arbeitszeiterfassung, Auftrag, Instrument, Instrumentenklasse, Reparaturart, SchaetzungsLog, Systemrolle,
+)
+from app.schemas import Auswertung, AuswertungMenge, AuswertungZeit, Verteilung
 
 router = APIRouter(prefix="/auswertungen", tags=["Auswertungen"],
                    dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
@@ -59,6 +61,59 @@ def _menge(db: Session, jahr: int) -> AuswertungMenge:
     )
 
 
+def _durchschnitt(werte: list, stellen: int = 1) -> float | None:
+    return round(float(sum(werte)) / len(werte), stellen) if werte else None
+
+
+def erste_automatische_schaetzungen(db: Session, jahr: int) -> dict:
+    """Je im Jahr abgeschlossenem Auftrag der ERSTE automatische Eintrag im Schätzprotokoll
+    (methode = "regelbasiert", entsteht beim Anlegen) – bewusst nicht spätere Neuberechnungen
+    oder manuelle Korrekturen: gemessen wird die ursprüngliche Prognose (9.14.2, 9.14.4)."""
+    zeilen = db.scalars(
+        select(SchaetzungsLog)
+        .where(SchaetzungsLog.methode == "regelbasiert",
+               SchaetzungsLog.auftrag_id.in_(select(Auftrag.id).where(_im_jahr(jahr))))
+        .order_by(SchaetzungsLog.auftrag_id, SchaetzungsLog.berechnet_am, SchaetzungsLog.id)
+    )
+    erste: dict = {}
+    for eintrag in zeilen:
+        erste.setdefault(eintrag.auftrag_id, eintrag)  # der früheste je Auftrag bleibt stehen
+    return erste
+
+
+def _zeit(db: Session, jahr: int) -> AuswertungZeit:
+    auftraege = db.execute(
+        select(Auftrag.id, Auftrag.erstellt_am, Auftrag.tatsaechliches_fertigstellungsdatum).where(_im_jahr(jahr))
+    ).all()
+    # Bearbeitungsdauer in Kalendertagen: Eingang bis Fertigstellung
+    dauer = {a.id: (a.tatsaechliches_fertigstellungsdatum - a.erstellt_am.date()).days for a in auftraege}
+    je_monat: dict[int, list[int]] = {}
+    for a in auftraege:
+        je_monat.setdefault(a.tatsaechliches_fertigstellungsdatum.month, []).append(dauer[a.id])
+
+    # Reine Arbeitszeit: Summe der erfassten Minuten je Auftrag (nur Aufträge mit Zeiterfassung)
+    minuten = db.scalars(
+        select(func.sum(Arbeitszeiterfassung.dauer_minuten))
+        .where(Arbeitszeiterfassung.auftrag_id.in_(select(Auftrag.id).where(_im_jahr(jahr))))
+        .group_by(Arbeitszeiterfassung.auftrag_id)
+    ).all()
+
+    # Pünktlichkeit gegenüber der ersten automatischen Terminschätzung
+    erste = erste_automatische_schaetzungen(db, jahr)
+    mit_prognose = [a for a in auftraege if a.id in erste and erste[a.id].geschaetztes_datum is not None]
+    puenktlich = sum(a.tatsaechliches_fertigstellungsdatum <= erste[a.id].geschaetztes_datum for a in mit_prognose)
+
+    return AuswertungZeit(
+        bearbeitungsdauer_tage=_durchschnitt(list(dauer.values())),
+        bearbeitungsdauer_pro_monat=[_durchschnitt(je_monat.get(m, [])) for m in range(1, 13)],
+        arbeitszeit_stunden=_durchschnitt([m / 60 for m in minuten], stellen=2),
+        auftraege_mit_zeiterfassung=len(minuten),
+        puenktlich=puenktlich,
+        auftraege_mit_terminprognose=len(mit_prognose),
+        puenktlichkeit_prozent=round(puenktlich / len(mit_prognose) * 100) if mit_prognose else None,
+    )
+
+
 def _jahre(db: Session, heute: date) -> list[int]:
     """Wählbare Jahre: vom ersten Jahr mit einem abgeschlossenen Auftrag bis heute, neuestes zuerst."""
     erstes = db.scalar(select(func.min(Auftrag.tatsaechliches_fertigstellungsdatum)))
@@ -75,4 +130,4 @@ def auswertung(
     jahr = heute.year if jahr is None else jahr
     if not FRUEHESTES_JAHR <= jahr <= heute.year:
         raise feldfehler(jahr=f"Bitte ein Jahr zwischen {FRUEHESTES_JAHR} und {heute.year} wählen")
-    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr))
+    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr), zeit=_zeit(db, jahr))

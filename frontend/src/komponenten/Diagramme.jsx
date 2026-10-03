@@ -5,21 +5,29 @@
 const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 const MONATE_LANG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 
-// Obergrenze der Achse: nächste "runde" Zahl über dem größten Wert (1, 2, 5 × 10ⁿ, mindestens 4 Teilstriche sinnvoll)
-function achsenMaximum(groesster) {
-  if (groesster <= 0) return 4
-  const zehner = 10 ** Math.floor(Math.log10(groesster))
-  const stufe = [1, 2, 4, 5, 10].find((s) => s * zehner >= groesster)
-  return Math.max(4, stufe * zehner)
+const TEILSTRICHE = 4
+
+// Abstand der Teilstriche: der kleinste "glatte" Schritt (1, 2, 2,5, 5 × 10ⁿ), mit dem vier Schritte
+// den größten Wert erreichen – so stehen an der Achse nur runde Zahlen. Bei Anzahlen mindestens 1.
+function achsenSchritt(groesster, ganzzahlig) {
+  const mindestens = ganzzahlig ? 1 : 0
+  if (groesster <= 0) return Math.max(mindestens, 1)
+  const zehner = 10 ** Math.floor(Math.log10(groesster / TEILSTRICHE))
+  const schritt = [1, 2, 2.5, 5, 10].map((s) => s * zehner).find((s) => s * TEILSTRICHE >= groesster)
+  return Math.max(mindestens, schritt)
 }
 
 // Liniendiagramm über die 12 Monate eines Jahres. werte: 12 Zahlen; null = kein Wert (z. B. Monat liegt noch in der Zukunft)
-export function Monatsverlauf({ titel, werte, format = (w) => String(w), einheit = '' }) {
+// ganzzahlig: für Anzahlen (keine halben Teilstriche)
+export function Monatsverlauf({ titel, werte, format = (w) => String(w), einheit = '', ganzzahlig = false }) {
   const B = 640, H = 240, links = 44, rechts = 12, oben = 12, unten = 28
-  const max = achsenMaximum(Math.max(0, ...werte.filter((w) => w !== null)))
+  const schritt = achsenSchritt(Math.max(0, ...werte.filter((w) => w !== null)), ganzzahlig)
+  const max = schritt * TEILSTRICHE
   const x = (i) => links + (i * (B - links - rechts)) / 11
   const y = (w) => oben + (1 - w / max) * (H - oben - unten)
-  const striche = [0, 1, 2, 3, 4].map((n) => (max * n) / 4)
+  const striche = Array.from({ length: TEILSTRICHE + 1 }, (_, n) => schritt * n)
+  // Achsenbeschriftung ohne unnötige Nachkommastellen (die Teilstriche sind glatte Werte)
+  const achse = (w) => w.toLocaleString('de-DE', { maximumFractionDigits: 2 })
   // Lücken (null) unterbrechen die Linie
   const abschnitte = werte.reduce((teile, w, i) => {
     if (w === null) return [...teile, []]
@@ -34,7 +42,7 @@ export function Monatsverlauf({ titel, werte, format = (w) => String(w), einheit
         {striche.map((s) => (
           <g key={s}>
             <line className="diagramm__gitter" x1={links} x2={B - rechts} y1={y(s)} y2={y(s)} />
-            <text className="diagramm__achse" x={links - 8} y={y(s)} textAnchor="end" dominantBaseline="middle">{format(s)}</text>
+            <text className="diagramm__achse" x={links - 8} y={y(s)} textAnchor="end" dominantBaseline="middle">{achse(s)}</text>
           </g>
         ))}
         {MONATE.map((m, i) => (
