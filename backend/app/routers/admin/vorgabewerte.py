@@ -2,8 +2,10 @@
 
 Kein hartes Löschen: Ein Wert wird archiviert (archiviert_am) und von der Schätzung dann
 ignoriert, z. B. um einen versehentlich angelegten spezifischen Wert zurückzunehmen.
-Jede Kombination Reparaturart + Instrumentenklasse gibt es höchstens einmal unter den AKTIVEN
-Einträgen; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reaktiviert wurden.
+Jede Kombination Reparaturart + Instrumentenklasse + Ausführung gibt es höchstens einmal unter den
+AKTIVEN Einträgen. Die Ausführung (z. B. "Perinet, versilbert") verfeinert innerhalb derselben
+Instrumentenklasse; ohne Angabe ist es die Standardausführung.
+Einträge; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reaktiviert wurden.
 """
 
 import uuid
@@ -15,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter_id
 from app.db import get_db
+from app.eingabe import feldfehler
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.speichern import sicher_speichern
 from app.models import Instrumentenklasse, Reparaturart, ReparaturVorgabewert, SystemEreignisLog
@@ -70,10 +73,16 @@ def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrument
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 
+def _ausfuehrung_pruefen(instrumentenklasse_id: uuid.UUID | None, ausfuehrung: str | None) -> None:
+    """Eine Ausführung verfeinert innerhalb einer Instrumentenklasse – ohne Klasse ergibt sie keinen Sinn."""
+    if ausfuehrung is not None and instrumentenklasse_id is None:
+        raise feldfehler(ausfuehrung="Eine Ausführung ist nur zusammen mit einer Instrumentenklasse möglich")
+
+
 # Passendere Meldung beim Reaktivieren (sonst gilt die zentrale aus app/speichern.py)
 REAKTIVIEREN_MELDUNGEN = {
     "uq_reparatur_vorgabewert_kombination":
-        "Für diese Kombination aus Reparaturart und Instrumentenklasse ist bereits ein anderer "
+        "Für diese Kombination aus Reparaturart, Instrumentenklasse und Ausführung ist bereits ein anderer "
         "Vorgabewert aktiv – diesen zuerst archivieren.",
 }
 
@@ -83,6 +92,7 @@ def _werte(eintrag: ReparaturVorgabewert) -> dict:
     return {
         "reparaturart_id": str(eintrag.reparaturart_id),
         "instrumentenklasse_id": str(eintrag.instrumentenklasse_id) if eintrag.instrumentenklasse_id else None,
+        "ausfuehrung": eintrag.ausfuehrung,
         "vorgabe_stunden": f"{eintrag.vorgabe_stunden:.2f}",
         "vorgabe_kosten": f"{eintrag.vorgabe_kosten:.2f}",
         "notiz": eintrag.notiz,
@@ -94,9 +104,12 @@ _GILT_FUER = func.coalesce(Instrumentenklasse.bezeichnung, "")
 # Bei gleicher Kombination (nur mit "alle"/"archiviert" möglich): der aktive vor den archivierten
 _AKTIVE_ZUERST = ReparaturVorgabewert.archiviert_am.is_not(None)
 
+_AUSFUEHRUNG = func.coalesce(ReparaturVorgabewert.ausfuehrung, "")
+
 SORTIERUNG = {
-    "reparaturart": (Reparaturart.bezeichnung, _GILT_FUER, _AKTIVE_ZUERST),
-    "gilt_fuer": (_GILT_FUER, Reparaturart.bezeichnung, _AKTIVE_ZUERST),
+    # Innerhalb der Instrumentenklasse: Standardausführung zuerst, dann die Ausführungen alphabetisch
+    "reparaturart": (Reparaturart.bezeichnung, _GILT_FUER, _AUSFUEHRUNG, _AKTIVE_ZUERST),
+    "gilt_fuer": (_GILT_FUER, Reparaturart.bezeichnung, _AUSFUEHRUNG, _AKTIVE_ZUERST),
     "vorgabe_stunden": (ReparaturVorgabewert.vorgabe_stunden, Reparaturart.bezeichnung, _GILT_FUER),
     "vorgabe_kosten": (ReparaturVorgabewert.vorgabe_kosten, Reparaturart.bezeichnung, _GILT_FUER),
     "geaendert_am": ReparaturVorgabewert.geaendert_am,
@@ -117,7 +130,7 @@ def vorgabewerte_auflisten(
     gefiltert = basis
     if (muster := liste.suchmuster()) is not None:
         gefiltert = gefiltert.where(enthaelt(muster, Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung,
-                                             ReparaturVorgabewert.notiz))
+                                             ReparaturVorgabewert.ausfuehrung, ReparaturVorgabewert.notiz))
     if status_ == "aktiv":
         gefiltert = gefiltert.where(ReparaturVorgabewert.archiviert_am.is_(None))
     elif status_ == "archiviert":
@@ -142,6 +155,7 @@ def vorgabewert_anlegen(
     mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> Vorgabewert:
     _verweise_pruefen(db, daten.reparaturart_id, daten.instrumentenklasse_id)
+    _ausfuehrung_pruefen(daten.instrumentenklasse_id, daten.ausfuehrung)
     eintrag = ReparaturVorgabewert(**daten.model_dump(), geaendert_von_mitarbeiter_id=mitarbeiter_id)
     with sicher_speichern(db):
         db.add(eintrag)  # erzeugt beim Speichern die ID
@@ -180,6 +194,8 @@ def vorgabewert_bearbeiten(
         aenderungen.get("instrumentenklasse_id")
         if aenderungen.get("instrumentenklasse_id") != eintrag.instrumentenklasse_id else None,
     )
+    _ausfuehrung_pruefen(aenderungen.get("instrumentenklasse_id", eintrag.instrumentenklasse_id),
+                         aenderungen.get("ausfuehrung", eintrag.ausfuehrung))
     alt = _werte(eintrag)
     with sicher_speichern(db):
         for feld, wert in aenderungen.items():

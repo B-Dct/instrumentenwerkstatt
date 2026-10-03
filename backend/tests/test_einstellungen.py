@@ -73,3 +73,30 @@ def test_kein_freitext(client, db, admin, ohne_bundesland, daten):
 
 def test_unbekannte_einstellung(client, admin):
     assert client.put(f"{URL}/waehrung", json={"wert": "Euro"}).status_code == 404
+
+
+# --- Zahl-Einstellung: Stundensatz ---------------------------------------------------
+
+def _stundensatz(client):
+    return next(e for e in client.get(URL).json() if e["schluessel"] == "stundensatz")
+
+
+def test_stundensatz_ist_eine_zahl_mit_einheit(client, admin):
+    e = _stundensatz(client)
+    assert (e["art"], e["einheit"], e["optionen"]) == ("zahl", "€/Std.", [])
+    assert _bundesland(client)["art"] == "auswahl"
+
+
+@pytest.mark.parametrize("eingabe, gespeichert", [("52", "52"), ("47,50", "47.5"), (" 60.00 ", "60")])
+def test_stundensatz_setzen(client, db, admin, eingabe, gespeichert):
+    antwort = client.put(f"{URL}/stundensatz", json={"wert": eingabe})
+    assert antwort.status_code == 200 and antwort.json()["wert"] == gespeichert
+    assert wert(db, "stundensatz") == gespeichert
+
+
+@pytest.mark.parametrize("eingabe", ["0", "-5", "viel", "1001", "45,123", "", "NaN"])
+def test_stundensatz_ungueltig(client, db, admin, eingabe):
+    vorher = wert(db, "stundensatz")
+    antwort = client.put(f"{URL}/stundensatz", json={"wert": eingabe})
+    assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "wert"
+    assert wert(db, "stundensatz") == vorher

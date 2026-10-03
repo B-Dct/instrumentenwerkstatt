@@ -179,9 +179,10 @@ class ReparaturVorgabewert(Base):
 
     __tablename__ = "reparatur_vorgabewert"
     __table_args__ = (
-        # Jede Kombination (auch "allgemein" = NULL) höchstens einmal unter den AKTIVEN Einträgen
+        # Jede Kombination aus Reparaturart, Instrumentenklasse und Ausführung (auch "allgemein"/
+        # "Standard" = NULL) höchstens einmal unter den AKTIVEN Einträgen
         Index(
-            "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id",
+            "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id", "ausfuehrung",
             unique=True, postgresql_nulls_not_distinct=True, postgresql_where=text("archiviert_am IS NULL"),
         ),
         CheckConstraint("vorgabe_stunden >= 0", name="stunden_nicht_negativ"),
@@ -191,6 +192,9 @@ class ReparaturVorgabewert(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     reparaturart_id: Mapped[uuid.UUID] = fk("reparaturart")
     instrumentenklasse_id: Mapped[uuid.UUID | None] = fk("instrumentenklasse", nullable=True, index=False)
+    # Verfeinerung innerhalb derselben Instrumentenklasse für reine Ausführungsunterschiede
+    # (Oberfläche, Ventilmechanik), z. B. "Perinet, versilbert". NULL = Standardausführung.
+    ausfuehrung: Mapped[str | None] = mapped_column(String(100))
     vorgabe_stunden: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     vorgabe_kosten: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # in Euro
     notiz: Mapped[str | None] = mapped_column(Text)

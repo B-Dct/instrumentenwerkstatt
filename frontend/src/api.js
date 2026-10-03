@@ -175,6 +175,8 @@ export const api = {
     vorgabewertReaktivieren: (id) => anfrage(`/admin/vorgabewerte/${id}/reaktivieren`, { methode: 'POST' }),
   },
   reparaturarten: () => anfrage('/reparaturarten'),
+  // Wählbare Ausführungen für Reparaturart + Instrumentenklasse (2.6a); leer oder ein Eintrag = keine Auswahl nötig
+  ausfuehrungen: (parameter) => anfrage('/ausfuehrungen?' + new URLSearchParams(parameter)),
   auftragsstatus: () => anfrage('/auftragsstatus'),
   mitarbeiter: () => anfrage('/mitarbeiter'),
 }

@@ -1,5 +1,6 @@
 // Werkstatt-Einstellungen (7.5) – nur Admin, nach 9.10: Werte im Lesezustand,
-// "… ändern" öffnet das Formular eingebettet. Werte kommen aus einer Auswahl, kein Freitext.
+// "… ändern" öffnet das Formular eingebettet. Werte kommen aus einer Auswahl (kein Freitext)
+// oder sind eine Zahl mit Einheit (z. B. Stundensatz).
 // Dazu die Admin-Aktion "Feiertage für Jahr X erzeugen" (9.13.1), die am Bundesland hängt.
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
@@ -10,20 +11,28 @@ import { useHervorhebung } from '../../komponenten/hervorhebung.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
 import { useSpeichern, vorabPruefen } from '../../komponenten/speichern.js'
 
+// Zahlen mit Komma und Einheit anzeigen (gespeichert wird z. B. "47.5")
+const anzeige = (e) => (e.art === 'zahl' ? `${Number(e.wert).toLocaleString('de-DE')} ${e.einheit ?? ''}`.trim() : e.wert)
+
 function EinstellungFormular({ formular, einstellung, onGespeichert }) {
   const [wert, setWert] = useState(einstellung.wert ?? '')
   const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
-    vorabPruefen({ wert: !wert && 'Bitte auswählen' })
-    return api.admin.einstellungSetzen(einstellung.schluessel, wert)
+    vorabPruefen({ wert: !wert && (einstellung.art === 'zahl' ? 'Pflichtfeld' : 'Bitte auswählen') })
+    return api.admin.einstellungSetzen(einstellung.schluessel, String(wert))
   }, onGespeichert)
   return (
     <FokusFormular formular={formular} titel={`${einstellung.bezeichnung} ${einstellung.wert ? 'ändern' : 'festlegen'}`}
                    onSpeichern={ausfuehren} sendet={sendet} fehler={fehler}>
-      <Feld label={einstellung.bezeichnung} fehler={felder.wert} hinweis={einstellung.beschreibung}>
-        <select value={wert} onChange={(e) => { feldGeaendert('wert'); setWert(e.target.value) }} required>
-          <option value="">Bitte wählen</option>
-          {einstellung.optionen.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+      <Feld label={einstellung.einheit ? `${einstellung.bezeichnung} in ${einstellung.einheit}` : einstellung.bezeichnung}
+            fehler={felder.wert} hinweis={einstellung.beschreibung}>
+        {einstellung.art === 'zahl' ? (
+          <input type="number" min="0.01" step="0.01" value={wert} onChange={(e) => { feldGeaendert('wert'); setWert(e.target.value) }} required />
+        ) : (
+          <select value={wert} onChange={(e) => { feldGeaendert('wert'); setWert(e.target.value) }} required>
+            <option value="">Bitte wählen</option>
+            {einstellung.optionen.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )}
       </Feld>
     </FokusFormular>
   )
@@ -73,7 +82,7 @@ export default function Einstellungen() {
   function gespeichert(neu) {
     formular.gespeichert()
     setEinstellungen((alle) => alle.map((e) => (e.schluessel === neu.schluessel ? neu : e)))
-    rueckmeldung(`${neu.bezeichnung}: ${neu.wert}`)
+    rueckmeldung(`${neu.bezeichnung}: ${anzeige(neu)}`)
     hervorheben(neu.schluessel)
     // Beim Festlegen des Bundeslands entstehen die Feiertage für dieses und das nächste Jahr automatisch
     api.admin.feiertage().then(setFeiertage).catch(() => {})
@@ -102,7 +111,7 @@ export default function Einstellungen() {
           <Fragment key={e.schluessel}>
             <dt>{e.bezeichnung}</dt>
             <dd className={hervorgehoben === e.schluessel ? 'hervorgehoben' : undefined}>
-              {e.wert ?? <span className="leise">noch nicht festgelegt</span>}
+              {e.wert === null ? <span className="leise">noch nicht festgelegt</span> : anzeige(e)}
               {e.geaendert_am && (
                 <span className="leise"> (geändert am {zeit(e.geaendert_am)}{e.geaendert_von_name ? ` von ${e.geaendert_von_name}` : ''})</span>
               )}

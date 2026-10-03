@@ -20,9 +20,23 @@ Euro = Annotated[
 
 # --- Reparatur-Vorgabewerte (Datenmodell 2.6a) ------------------------------
 
+# Leere Eingabe = Standardausführung
+Ausfuehrung = Annotated[
+    str | None, StringConstraints(strip_whitespace=True, max_length=100), AfterValidator(lambda w: w or None)
+]
+
+
+class AusfuehrungAuswahl(BaseModel):
+    """Eine wählbare Ausführung im Auftragsformular samt ihrer Vorgabewerte."""
+
+    ausfuehrung: str | None  # None = Standardausführung
+    vorgabe_stunden: Stunden
+    vorgabe_kosten: Euro
+
 class VorgabewertNeu(BaseModel):
     reparaturart_id: uuid.UUID
     instrumentenklasse_id: uuid.UUID | None = None  # None = gilt allgemein für die Reparaturart
+    ausfuehrung: Ausfuehrung = None  # None = Standardausführung; nur zusammen mit einer Instrumentenklasse
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None = None
@@ -33,6 +47,7 @@ class VorgabewertAenderung(BaseModel):
 
     reparaturart_id: uuid.UUID | None = None
     instrumentenklasse_id: uuid.UUID | None = None  # explizit null = auf "allgemein" setzen
+    ausfuehrung: Ausfuehrung = None  # explizit null/leer = Standardausführung
     vorgabe_stunden: Stunden | None = None
     vorgabe_kosten: Euro | None = None
     notiz: str | None = None
@@ -46,6 +61,7 @@ class Vorgabewert(BaseModel):
     reparaturart_bezeichnung: str
     instrumentenklasse_id: uuid.UUID | None
     instrumentenklasse_bezeichnung: str | None
+    ausfuehrung: str | None  # None = Standardausführung
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None
@@ -60,6 +76,8 @@ class AuftragNeu(BaseModel):
     kunde_id: uuid.UUID
     instrument_id: uuid.UUID  # muss dem Kunden gehören
     reparaturart_id: uuid.UUID
+    # Nur wenn es für Reparaturart + Instrumentenklasse mehrere Vorgabewerte gibt (2.6a); None = Standard
+    ausfuehrung: Ausfuehrung = None
     zugewiesener_mitarbeiter_id: uuid.UUID | None = None
     prioritaet: Prioritaet = Prioritaet.normal
     # Weggelassen = Standard-Komplexität der Reparaturart
@@ -453,7 +471,9 @@ class EinstellungEintrag(BaseModel):
     schluessel: str
     bezeichnung: str
     beschreibung: str
-    optionen: list[str]  # erlaubte Werte (Auswahl, kein Freitext)
+    art: Literal["auswahl", "zahl"]
+    einheit: str | None  # nur bei Zahlen, z. B. "€/Std."
+    optionen: list[str]  # bei art = auswahl: erlaubte Werte (kein Freitext)
     wert: str | None  # None = noch nicht festgelegt
     geaendert_von_name: str | None
     geaendert_am: datetime | None

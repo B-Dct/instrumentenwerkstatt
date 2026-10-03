@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { angemeldeterNutzer, api } from '../api.js'
+import { angemeldeterNutzer, api, euro, zahl } from '../api.js'
 
 const instrumentName = (i) =>
   [i.instrumentenklasse_bezeichnung, i.hersteller, i.typenbezeichnung].filter(Boolean).join(' · ')
@@ -10,7 +10,7 @@ export default function AuftragNeu() {
   const [listen, setListen] = useState(null)
   const [instrumente, setInstrumente] = useState([])
   const [form, setForm] = useState({
-    kunde_id: '', instrument_id: '', reparaturart_id: '',
+    kunde_id: '', instrument_id: '', reparaturart_id: '', ausfuehrung: '',
     zugewiesener_mitarbeiter_id: angemeldeterNutzer()?.id ?? '',
     prioritaet: 'normal', komplexitaet: '', notizen: '',
   })
@@ -28,9 +28,29 @@ export default function AuftragNeu() {
     if (form.kunde_id) api.instrumente(form.kunde_id).then(setInstrumente).catch((e) => setFehler(e.message))
   }, [form.kunde_id])
 
+  // Ausführungen (2.6a): Gibt es für Reparaturart + Instrumentenklasse mehrere Vorgabewerte, erscheint
+  // ein zusätzliches Auswahlfeld – sonst nicht. Ohne Auswahl gilt die Standardausführung.
+  const [ausfuehrungen, setAusfuehrungen] = useState([])
+  const klasseId = instrumente.find((i) => i.id === form.instrument_id)?.instrumentenklasse_id
+  useEffect(() => {
+    let abgebrochen = false
+    if (!klasseId || !form.reparaturart_id) return undefined
+    api.ausfuehrungen({ reparaturart_id: form.reparaturart_id, instrumentenklasse_id: klasseId })
+      .then((liste) => { if (!abgebrochen) setAusfuehrungen(liste) })
+      .catch(() => {})
+    return () => { abgebrochen = true }
+  }, [klasseId, form.reparaturart_id])
+  const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1
+
   const setze = (feld) => (e) => {
     if (feld === 'kunde_id') setInstrumente([])
-    setForm((f) => ({ ...f, [feld]: e.target.value, ...(feld === 'kunde_id' ? { instrument_id: '' } : {}) }))
+    // Andere Kombination: die bisherige Auswahl der Ausführung passt nicht mehr
+    if (['kunde_id', 'instrument_id', 'reparaturart_id'].includes(feld)) setAusfuehrungen([])
+    setForm((f) => ({
+      ...f, [feld]: e.target.value,
+      ...(feld === 'kunde_id' ? { instrument_id: '' } : {}),
+      ...(['kunde_id', 'instrument_id', 'reparaturart_id'].includes(feld) ? { ausfuehrung: '' } : {}),
+    }))
   }
 
   async function absenden(e) {
@@ -42,6 +62,7 @@ export default function AuftragNeu() {
         kunde_id: form.kunde_id,
         instrument_id: form.instrument_id,
         reparaturart_id: form.reparaturart_id,
+        ausfuehrung: mehrereAusfuehrungen ? form.ausfuehrung || null : null,
         zugewiesener_mitarbeiter_id: form.zugewiesener_mitarbeiter_id || null,
         prioritaet: form.prioritaet,
         komplexitaet: form.komplexitaet ? Number(form.komplexitaet) : null,
@@ -84,6 +105,19 @@ export default function AuftragNeu() {
               ))}
             </select>
           </label>
+          {mehrereAusfuehrungen && (
+            <label className="feld">
+              <span>Ausführung</span>
+              <select value={form.ausfuehrung} onChange={setze('ausfuehrung')}>
+                {ausfuehrungen.map((a) => (
+                  <option key={a.ausfuehrung ?? ''} value={a.ausfuehrung ?? ''}>
+                    {a.ausfuehrung ?? 'Standard'} ({zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)})
+                  </option>
+                ))}
+              </select>
+              <small>Optional – bestimmt den Vorgabewert für die Schätzung. Ohne Auswahl gilt die Standardausführung.</small>
+            </label>
+          )}
           <label className="feld">
             <span>Zugewiesen an</span>
             <select value={form.zugewiesener_mitarbeiter_id} onChange={setze('zugewiesener_mitarbeiter_id')}>

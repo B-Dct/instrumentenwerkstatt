@@ -37,10 +37,27 @@ function auswahl(liste, aktuelleId) {
     .map((e) => ({ id: e.id, text: e.archiviert_am ? `${e.bezeichnung} (archiviert)` : e.bezeichnung }))
 }
 
+// "Trompete, Perinet, versilbert" / "Trompete" / "allgemein"
+const geltung = (e) => [e.instrumentenklasse_bezeichnung ?? 'allgemein', e.ausfuehrung].filter(Boolean).join(', ')
+
+// Aufeinanderfolgende Einträge derselben Reparaturart und Instrumentenklasse bilden eine Gruppe:
+// mehrere Ausführungen stehen als Unterzeilen unter einer gemeinsamen Überschrift (2.6a, 9.12)
+function gruppieren(eintraege) {
+  const gruppen = []
+  for (const e of eintraege) {
+    const letzte = gruppen[gruppen.length - 1]
+    if (letzte && e.instrumentenklasse_id && letzte[0].reparaturart_id === e.reparaturart_id
+        && letzte[0].instrumentenklasse_id === e.instrumentenklasse_id) letzte.push(e)
+    else gruppen.push([e])
+  }
+  return gruppen
+}
+
 function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert }) {
   const [werte, setWerte] = useState({
     reparaturart_id: eintrag?.reparaturart_id ?? '',
     instrumentenklasse_id: eintrag?.instrumentenklasse_id ?? ALLGEMEIN,
+    ausfuehrung: eintrag?.ausfuehrung ?? '',
     vorgabe_stunden: eintrag?.vorgabe_stunden ?? '',
     vorgabe_kosten: eintrag?.vorgabe_kosten ?? '',
     notiz: eintrag?.notiz ?? '',
@@ -49,6 +66,7 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
     const daten = {
       reparaturart_id: werte.reparaturart_id || null,
       instrumentenklasse_id: werte.instrumentenklasse_id || null,
+      ausfuehrung: werte.instrumentenklasse_id ? leerZuNull(werte.ausfuehrung) : null,
       vorgabe_stunden: werte.vorgabe_stunden === '' ? null : Number(werte.vorgabe_stunden),
       vorgabe_kosten: werte.vorgabe_kosten === '' ? null : Number(werte.vorgabe_kosten),
       notiz: leerZuNull(werte.notiz),
@@ -75,6 +93,12 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
             {auswahl(klassen, eintrag?.instrumentenklasse_id).map((k) => <option key={k.id} value={k.id}>nur {k.text}</option>)}
           </select>
         </Feld>
+        {werte.instrumentenklasse_id !== ALLGEMEIN && (
+          <Feld label="Ausführung" fehler={felder.ausfuehrung}
+                hinweis="Optional, z. B. „Perinet, versilbert“. Leer = Standardausführung. Nur für Varianten desselben Instruments (Oberfläche, Ventilmechanik) – ein anderes Instrument ist eine eigene Instrumentenklasse.">
+            <input value={werte.ausfuehrung} onChange={setze('ausfuehrung')} maxLength={100} autoComplete="off" />
+          </Feld>
+        )}
         <Feld label="Arbeitsstunden" fehler={felder.vorgabe_stunden}>
           <input type="number" min="0" step="0.25" value={werte.vorgabe_stunden} onChange={setze('vorgabe_stunden')} required />
         </Feld>
@@ -115,7 +139,7 @@ export default function Vorgabewerte() {
 
   function gespeichert(eintrag, neu) {
     formular.gespeichert()
-    const fuer = eintrag.instrumentenklasse_bezeichnung ?? 'allgemein'
+    const fuer = geltung(eintrag)
     rueckmeldung(`Vorgabewert ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}`)
     liste.neuLaden()
     hervorheben(eintrag.id)
@@ -128,7 +152,7 @@ export default function Vorgabewerte() {
       return
     }
     formular.gespeichert()
-    const name = `${eintrag.reparaturart_bezeichnung} (${eintrag.instrumentenklasse_bezeichnung ?? 'allgemein'})`
+    const name = `${eintrag.reparaturart_bezeichnung} (${geltung(eintrag)})`
     try {
       await (archiv ? api.admin.vorgabewertArchivieren(eintrag.id) : api.admin.vorgabewertReaktivieren(eintrag.id))
       rueckmeldung(archiv
@@ -167,7 +191,7 @@ export default function Vorgabewerte() {
         )}
       </FormularBereich>
 
-      <Listenkopf liste={liste} suchhinweis="Suchen: Reparaturart, Instrumentenklasse, Notiz" />
+      <Listenkopf liste={liste} suchhinweis="Suchen: Reparaturart, Instrument, Ausführung, Notiz" />
 
       {fehler && <p className="meldung meldung--fehler">{fehler}</p>}
       {!liste.daten && !fehler && <p className="leise">Lädt …</p>}
@@ -186,41 +210,64 @@ export default function Vorgabewerte() {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              {eintraege.map((e) => {
-                const archiviert = e.archiviert_am !== null
-                return (
-                  <tr key={e.id} onClick={archiviert ? undefined : () => formular.oeffnen(e.id)}
-                      className={[e.id === hervorgehoben && 'zeile--hervorgehoben', formular.offen === e.id && 'zeile--ausgewaehlt',
-                        archiviert && 'zeile--archiviert zeile--nicht-klickbar'].filter(Boolean).join(' ') || undefined}>
-                    <td>
-                      {archiviert
-                        ? e.reparaturart_bezeichnung
-                        : <button type="button" className="link-button" aria-expanded={formular.offen === e.id}
-                                  onClick={(ev) => { ev.stopPropagation(); formular.oeffnen(e.id) }}>
-                            {e.reparaturart_bezeichnung}
-                          </button>}
-                      {istArchiviert(arten, e.reparaturart_id) && <span className="marke">Reparaturart archiviert</span>}
-                    </td>
-                    <td>
-                      {e.instrumentenklasse_bezeichnung ?? <span className="leise">allgemein</span>}
-                      {istArchiviert(klassen, e.instrumentenklasse_id) && <span className="marke">Klasse archiviert</span>}
-                    </td>
-                    <td className="zahl">{zahl(e.vorgabe_stunden)}</td>
-                    <td className="zahl">{euro(e.vorgabe_kosten)}</td>
-                    <td>{e.notiz ?? ''}</td>
-                    <td>{datum(e.geaendert_am)}</td>
-                    <td className="zeilenaktionen">
-                      {archiviert && <span className="marke">archiviert</span>}
-                      <button type="button" className={`btn btn--klein ${archiviert ? 'btn--sekundaer' : 'btn--gefahr'}`}
-                              onClick={(ev) => { ev.stopPropagation(); archivStatus(e, !archiviert) }}>
-                        {archiviert ? 'Reaktivieren' : 'Archivieren'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
+            {gruppieren(eintraege).map((gruppe) => {
+              const mehrere = gruppe.length > 1
+              const erster = gruppe[0]
+              return (
+                <tbody key={erster.id} className={mehrere ? 'gruppe' : undefined}>
+                  {mehrere && (
+                    <tr className="gruppe__kopf zeile--nicht-klickbar">
+                      <th scope="rowgroup">
+                        {erster.reparaturart_bezeichnung}
+                        {istArchiviert(arten, erster.reparaturart_id) && <span className="marke">Reparaturart archiviert</span>}
+                      </th>
+                      <th scope="rowgroup">
+                        {erster.instrumentenklasse_bezeichnung}
+                        {istArchiviert(klassen, erster.instrumentenklasse_id) && <span className="marke">Klasse archiviert</span>}
+                      </th>
+                      <td colSpan={5} className="leise">{gruppe.length} Ausführungen</td>
+                    </tr>
+                  )}
+                  {gruppe.map((e) => {
+                    const archiviert = e.archiviert_am !== null
+                    // In einer Gruppe heißt die Zeile nach ihrer Ausführung, sonst nach der Reparaturart
+                    const name = mehrere ? e.ausfuehrung ?? 'Standard' : e.reparaturart_bezeichnung
+                    return (
+                      <tr key={e.id} onClick={archiviert ? undefined : () => formular.oeffnen(e.id)}
+                          className={[e.id === hervorgehoben && 'zeile--hervorgehoben', formular.offen === e.id && 'zeile--ausgewaehlt',
+                            archiviert && 'zeile--archiviert zeile--nicht-klickbar'].filter(Boolean).join(' ') || undefined}>
+                        <td colSpan={mehrere ? 2 : 1} className={mehrere ? 'gruppe__unterzeile' : undefined}>
+                          {archiviert
+                            ? name
+                            : <button type="button" className="link-button" aria-expanded={formular.offen === e.id}
+                                      onClick={(ev) => { ev.stopPropagation(); formular.oeffnen(e.id) }}>
+                                {name}
+                              </button>}
+                          {!mehrere && istArchiviert(arten, e.reparaturart_id) && <span className="marke">Reparaturart archiviert</span>}
+                        </td>
+                        {!mehrere && (
+                          <td>
+                            {e.instrumentenklasse_bezeichnung ? geltung(e) : <span className="leise">allgemein</span>}
+                            {istArchiviert(klassen, e.instrumentenklasse_id) && <span className="marke">Klasse archiviert</span>}
+                          </td>
+                        )}
+                        <td className="zahl">{zahl(e.vorgabe_stunden)}</td>
+                        <td className="zahl">{euro(e.vorgabe_kosten)}</td>
+                        <td>{e.notiz ?? ''}</td>
+                        <td>{datum(e.geaendert_am)}</td>
+                        <td className="zeilenaktionen">
+                          {archiviert && <span className="marke">archiviert</span>}
+                          <button type="button" className={`btn btn--klein ${archiviert ? 'btn--sekundaer' : 'btn--gefahr'}`}
+                                  onClick={(ev) => { ev.stopPropagation(); archivStatus(e, !archiviert) }}>
+                            {archiviert ? 'Reaktivieren' : 'Archivieren'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              )
+            })}
           </table>
         </div>
       )}

@@ -394,3 +394,9 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .balken__zeile--sonstige .balken__spur span { background: var(--farbe-text-leise); }
 .balken__zeile--sonstige .balken__name { color: var(--farbe-text-leise); }
 .balken__wert { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* --- Gruppierte Tabellenzeilen: mehrere Ausführungen unter einer gemeinsamen Überschrift (2.6a, 9.12) --- */
+.tabelle .gruppe__kopf th { text-align: left; font-weight: var(--gewicht-halbfett); padding: var(--abstand-2) var(--abstand-3); background: var(--farbe-flaeche-leise); border-bottom: var(--randbreite) solid var(--farbe-rand); }
+.tabelle .gruppe__kopf td { background: var(--farbe-flaeche-leise); }
+.tabelle .gruppe__unterzeile { padding-left: var(--abstand-6); }
+.tabelle .gruppe__unterzeile::before { content: '↳ '; color: var(--farbe-text-leise); }

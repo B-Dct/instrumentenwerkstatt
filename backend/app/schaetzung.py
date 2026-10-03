@@ -98,9 +98,11 @@ def _historisch_kosten(
 
 
 def _vorgabe(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, spalte: str
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, spalte: str,
+    ausfuehrung: str | None = None,
 ) -> tuple[Quelle, Decimal] | None:
-    """Spezifischen Vorgabewert der Instrumentenklasse bevorzugen, sonst den allgemeinen."""
+    """Spezifischen Vorgabewert der Instrumentenklasse bevorzugen, sonst den allgemeinen.
+    Innerhalb der Instrumentenklasse: die gewählte Ausführung, sonst die Standardausführung (NULL)."""
     eintraege = db.scalars(
         select(ReparaturVorgabewert).where(
             ReparaturVorgabewert.archiviert_am.is_(None),  # archivierte Vorgabewerte zählen nicht
@@ -109,10 +111,14 @@ def _vorgabe(
             | ReparaturVorgabewert.instrumentenklasse_id.is_(None),
         )
     ).all()
-    spezifisch = next((e for e in eintraege if e.instrumentenklasse_id is not None), None)
+    der_klasse = [e for e in eintraege if e.instrumentenklasse_id is not None]
+    spezifisch = (
+        next((e for e in der_klasse if ausfuehrung is not None and e.ausfuehrung == ausfuehrung), None)
+        or next((e for e in der_klasse if e.ausfuehrung is None), None)
+    )
     if spezifisch is not None:
         return Quelle.vorgabe_instrumentenklasse, getattr(spezifisch, spalte)
-    allgemein = next((e for e in eintraege if e.instrumentenklasse_id is None), None)
+    allgemein = next((e for e in eintraege if e.instrumentenklasse_id is None and e.ausfuehrung is None), None)
     if allgemein is not None:
         return Quelle.vorgabe_allgemein, getattr(allgemein, spalte)
     return None
@@ -130,18 +136,31 @@ def _schaetzen(
 
 
 def schaetze_arbeitsstunden(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
 ) -> Schaetzung:
-    """Geschätzter reiner Arbeitsaufwand in Stunden (Grundlage für auftrag.geschaetzte_arbeitsstunden)."""
+    """Geschätzter reiner Arbeitsaufwand in Stunden (Grundlage für auftrag.geschaetzte_arbeitsstunden).
+    `ausfuehrung` wählt nur den Vorgabewert (2.6a); der historische Durchschnitt gilt je Instrumentenklasse."""
     anzahl, durchschnitt = _historisch_stunden(db, instrumentenklasse_id, reparaturart_id)
-    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_stunden")
+    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_stunden", ausfuehrung)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
 
 
 def schaetze_kosten(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
 ) -> Schaetzung:
     """Geschätzter Preis in Euro (Grundlage für auftrag.geschaetzte_kosten)."""
     anzahl, durchschnitt = _historisch_kosten(db, instrumentenklasse_id, reparaturart_id)
-    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_kosten")
+    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_kosten", ausfuehrung)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
+
+
+def ausfuehrungen(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID) -> list[ReparaturVorgabewert]:
+    """Aktive Vorgabewerte genau dieser Kombination – Standardausführung (NULL) zuerst, dann alphabetisch.
+    Gibt es mehr als einen, kann beim Anlegen eines Auftrags eine Ausführung gewählt werden (2.6a)."""
+    return list(db.scalars(
+        select(ReparaturVorgabewert).where(
+            ReparaturVorgabewert.archiviert_am.is_(None),
+            ReparaturVorgabewert.reparaturart_id == reparaturart_id,
+            ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
+        ).order_by(ReparaturVorgabewert.ausfuehrung.asc().nulls_first())
+    ))

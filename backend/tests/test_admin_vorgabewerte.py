@@ -196,6 +196,53 @@ def test_archivieren_nur_admin(client, stammdaten, db):
         assert client.post(f"{URL}/{eintrag['id']}/archivieren", headers=header).status_code == 403
 
 
+# --- Ausführung (2.6a) --------------------------------------------------------------
+
+def test_mehrere_ausfuehrungen_derselben_kombination(client, stammdaten):
+    klasse = {"instrumentenklasse_id": str(stammdaten["klasse"])}
+    standard = client.post(URL, json=neu(stammdaten, **klasse))
+    versilbert = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="  versilbert ", vorgabe_kosten=50))
+    assert (standard.status_code, versilbert.status_code) == (201, 201)
+    assert (standard.json()["ausfuehrung"], versilbert.json()["ausfuehrung"]) == (None, "versilbert")
+
+    # Dieselbe Ausführung ein zweites Mal: abgelehnt, mit verständlicher Meldung
+    doppelt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert"))
+    assert doppelt.status_code == 409 and "Ausführung" in doppelt.json()["detail"]
+    assert client.post(URL, json=neu(stammdaten, **klasse)).status_code == 409           # Standard gibt es auch schon
+    assert client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="vergoldet")).status_code == 201
+
+    # Liste: Standardausführung zuerst, dann alphabetisch; Suche findet die Ausführung
+    liste = client.get(URL, params={"instrumentenklasse_id": str(stammdaten["klasse"])}).json()["eintraege"]
+    assert [e["ausfuehrung"] for e in liste] == [None, "vergoldet", "versilbert"]
+    treffer = client.get(URL, params={"suche": "vergoldet", "instrumentenklasse_id": str(stammdaten["klasse"])}).json()
+    assert [e["ausfuehrung"] for e in treffer["eintraege"]] == ["vergoldet"]
+
+
+def test_ausfuehrung_nur_mit_instrumentenklasse_und_leer_ist_standard(client, stammdaten):
+    antwort = client.post(URL, json=neu(stammdaten, ausfuehrung="versilbert"))  # allgemeiner Wert + Ausführung
+    assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+
+    v = client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]), ausfuehrung="   ")).json()
+    assert v["ausfuehrung"] is None
+    geaendert = client.patch(f"{URL}/{v['id']}", json={"ausfuehrung": "lackiert"})
+    assert geaendert.status_code == 200 and geaendert.json()["ausfuehrung"] == "lackiert"
+    # Klasse entfernen, solange eine Ausführung gesetzt ist: abgelehnt
+    assert client.patch(f"{URL}/{v['id']}", json={"instrumentenklasse_id": None}).status_code == 422
+    assert client.patch(f"{URL}/{v['id']}", json={"instrumentenklasse_id": None, "ausfuehrung": None}).status_code == 200
+
+
+def test_reaktivieren_prueft_auch_die_ausfuehrung(client, stammdaten):
+    klasse = {"instrumentenklasse_id": str(stammdaten["klasse"])}
+    alt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert")).json()
+    client.post(f"{URL}/{alt['id']}/archivieren")
+    assert client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert")).status_code == 201  # Ersatz
+    assert client.post(f"{URL}/{alt['id']}/reaktivieren").status_code == 409
+    # Eine andere Ausführung stört nicht
+    andere = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="lackiert")).json()
+    client.post(f"{URL}/{andere['id']}/archivieren")
+    assert client.post(f"{URL}/{andere['id']}/reaktivieren").status_code == 200
+
+
 # --- Liste nach 9.11 ----------------------------------------------------------------
 
 @pytest.fixture

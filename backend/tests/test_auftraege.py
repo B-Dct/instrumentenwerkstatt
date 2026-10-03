@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, SchaetzungsLog, Systemrolle
+from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, ReparaturVorgabewert, SchaetzungsLog, Systemrolle
 from app.routers.auftraege import _neue_auftragsnummer  # Original (Tests nutzen Ersatz)
 from tests.beispieldaten import Werkstatt
 from tests.conftest import OHNE_ANMELDUNG, angemeldet_als, konto_anlegen
@@ -102,6 +102,52 @@ def test_auftragsnummer_format():
             return type("R", (), {"scalar_one": lambda self: 42})()
 
     assert _neue_auftragsnummer(FakeDb()) == f"{date.today().year}-00042"
+
+
+# --- Ausführung beim Anlegen (2.6a) -------------------------------------------
+
+@pytest.fixture
+def versilbert(w, db):
+    """Zweiter Vorgabewert für Kontrabass + Saitenwechsel, unterschieden durch die Ausführung."""
+    db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.kontrabass.id,
+                                ausfuehrung="versilbert", vorgabe_stunden=Decimal("3.00"), vorgabe_kosten=Decimal("120.00")))
+    db.flush()
+
+
+def test_auswahlliste_der_ausfuehrungen(client, w, versilbert):
+    def auswahl(klasse):
+        return client.get("/ausfuehrungen", params={"reparaturart_id": str(w.saitenwechsel.id),
+                                                    "instrumentenklasse_id": str(klasse.id)}).json()
+    assert auswahl(w.kontrabass) == [
+        {"ausfuehrung": None, "vorgabe_stunden": 1.5, "vorgabe_kosten": 60.0},        # Standard zuerst
+        {"ausfuehrung": "versilbert", "vorgabe_stunden": 3.0, "vorgabe_kosten": 120.0},
+    ]
+    assert auswahl(w.violine) == []                                                    # nur der allgemeine Wert: keine Auswahl
+    assert client.get("/ausfuehrungen", headers=OHNE_ANMELDUNG,
+                      params={"reparaturart_id": str(w.saitenwechsel.id), "instrumentenklasse_id": str(w.violine.id)}).status_code == 401
+
+
+def test_anlegen_mit_und_ohne_ausfuehrung(client, w, db, versilbert):
+    ohne = client.post(URL, json=neuer_auftrag(w)).json()
+    assert (ohne["geschaetzte_arbeitsstunden"], ohne["geschaetzte_kosten"]) == (1.5, 60.0)   # Standardausführung
+
+    mit = client.post(URL, json=neuer_auftrag(w, ausfuehrung="versilbert")).json()
+    assert (mit["geschaetzte_arbeitsstunden"], mit["geschaetzte_kosten"]) == (3.0, 120.0)
+    log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(mit["id"]))).one()
+    assert log.eingabefaktoren["ausfuehrung"] == "versilbert"
+
+    # Unbekannte Ausführung bzw. Klasse ohne Ausführungen: am Feld abgelehnt
+    for daten in (neuer_auftrag(w, ausfuehrung="vergoldet"), neuer_auftrag(w, klasse=w.violine, ausfuehrung="versilbert")):
+        antwort = client.post(URL, json=daten)
+        assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+
+
+def test_archivierte_ausfuehrung_nicht_waehlbar(client, w, db, versilbert):
+    v = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.ausfuehrung == "versilbert",
+                                                     ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
+    v.archiviert_am = datetime.now(timezone.utc)
+    db.flush()
+    assert client.post(URL, json=neuer_auftrag(w, ausfuehrung="versilbert")).status_code == 422
 
 
 # --- Auflisten / Abrufen -----------------------------------------------------

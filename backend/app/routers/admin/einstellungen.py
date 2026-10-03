@@ -33,6 +33,7 @@ def _eintrag(db: Session, schluessel: str) -> EinstellungEintrag:
     gespeichert, name = zeile if zeile else (None, None)
     return EinstellungEintrag(
         schluessel=schluessel, bezeichnung=definition.bezeichnung, beschreibung=definition.beschreibung,
+        art=definition.art, einheit=definition.einheit,
         optionen=list(definition.optionen), wert=gespeichert.wert if gespeichert else None,
         geaendert_von_name=name, geaendert_am=gespeichert.geaendert_am if gespeichert else None,
     )
@@ -54,21 +55,23 @@ def einstellung_setzen(
     definition = EINSTELLUNGEN.get(schluessel)
     if definition is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Diese Einstellung gibt es nicht")
-    if daten.wert not in definition.optionen:
-        raise feldfehler(wert="Bitte einen Wert aus der Auswahl wählen")
+    wert = definition.pruefen(daten.wert)
+    if wert is None:
+        raise feldfehler(wert="Bitte einen Wert aus der Auswahl wählen" if definition.optionen
+                         else f"Bitte eine Zahl über 0 bis höchstens {definition.zahl_bis} eingeben (höchstens 2 Nachkommastellen)")
 
     gespeichert = db.scalar(select(Einstellung).where(Einstellung.schluessel == schluessel).with_for_update())
     alt = gespeichert.wert if gespeichert else None
-    if alt != daten.wert:
+    if alt != wert:
         with sicher_speichern(db):
             if gespeichert is None:
-                gespeichert = Einstellung(schluessel=schluessel, wert=daten.wert)
+                gespeichert = Einstellung(schluessel=schluessel, wert=wert)
                 db.add(gespeichert)
-            gespeichert.wert = daten.wert
+            gespeichert.wert = wert
             gespeichert.geaendert_von_mitarbeiter_id = mitarbeiter_id
             gespeichert.geaendert_am = func.clock_timestamp()
         protokollieren(db, mitarbeiter_id, "einstellung_geaendert", "einstellung", gespeichert.id,
-                       {"schluessel": schluessel, "alt": alt, "neu": daten.wert})
+                       {"schluessel": schluessel, "alt": alt, "neu": wert})
         db.commit()
         if schluessel == "bundesland":
             # Laufendes und kommendes Jahr anlegen, falls noch nie erzeugt (9.13.1). Bereits erzeugte

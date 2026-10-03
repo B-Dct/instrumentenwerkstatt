@@ -48,9 +48,10 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/auth/ich` | Wer bin ich? (prüft die Anmeldung) |
 | GET | `/admin/vorgabewerte` | Vorgabewerte-Liste nach 9.11 (`suche`, Filter `reparaturart_id`, `instrumentenklasse_id`, `status`; `sortierung`, `seite`) |
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
-| POST | `/admin/vorgabewerte` | Vorgabewert anlegen (409, falls Kombination schon existiert) |
+| POST | `/admin/vorgabewerte` | Vorgabewert anlegen (optional mit `ausfuehrung` für Varianten derselben Instrumentenklasse; 409, falls Reparaturart + Instrumentenklasse + Ausführung schon aktiv existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
 | POST | `/admin/vorgabewerte/{id}/archivieren`, `/…/reaktivieren` | Vorgabewert zurücknehmen/zurückholen (Schätzung ignoriert archivierte) |
+| GET | `/ausfuehrungen?reparaturart_id=…&instrumentenklasse_id=…` | Wählbare Ausführungen samt Vorgabewerten für das Auftragsformular (Standardausführung zuerst); `POST /auftraege` nimmt dazu optional `ausfuehrung` |
 | GET | `/kunden?suche=…&status=…&sortierung=…&seite=…`, `/kunden/{id}` | Kundenliste nach 9.11 (Suche auch nach externer Kundennummer; `status` archiviert/alle nur Leitung), Kunde mit Instrumenten |
 | POST, PATCH | `/kunden`, `/kunden/{id}` | Kunde anlegen/bearbeiten (alle Angemeldeten; Kundennummer wird vergeben; `externe_kundennummer` optional, eindeutig falls gesetzt) |
 | POST | `/kunden/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin; nicht bei offenen Aufträgen) |
@@ -77,7 +78,7 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST, PATCH | `/abwesenheiten`, `/abwesenheiten/{id}` | Abwesenheit eintragen/bearbeiten (Urlaub, Krankheit, Schulung, reduzierte Stunden je Mitarbeiter; Feiertag, Betriebsschließung für die ganze Werkstatt; optionale Notiz; kein Doppeleintrag gleichen Typs im selben Zeitraum) |
 | POST | `/abwesenheiten/{id}/stornieren`, `/…/wiederherstellen` | Stornieren statt Löschen (zählt dann nicht mehr für die Terminschätzung) und Zurückholen |
 | GET | `/abwesenheiten/raster?von=…&tage=7&stornierte=…` | Daten für das Abwesenheits-Raster (9.13): aktive Mitarbeiter mit normalen Tagesstunden und alle Abwesenheiten im Ausschnitt |
-| GET, PUT | `/admin/einstellungen`, `/admin/einstellungen/{schluessel}` | Werkstatt-Einstellungen lesen/setzen (nur Admin; bisher `bundesland`, Auswahl aus den 16 Bundesländern) |
+| GET, PUT | `/admin/einstellungen`, `/admin/einstellungen/{schluessel}` | Werkstatt-Einstellungen lesen/setzen (nur Admin; `bundesland` als Auswahl aus den 16 Bundesländern, `stundensatz` als Zahl in €/Std.) |
 | GET, POST | `/admin/feiertage` | Stand der erzeugten Jahre / „Feiertage für Jahr X erzeugen“ (nur Admin; Bundesland aus den Einstellungen; legt nur Fehlendes an, überschreibt nichts). Laufendes und kommendes Jahr entstehen automatisch beim Festlegen des Bundeslands und beim Öffnen des Rasters |
 
 Alle Endpunkte außer `/health` und `/auth/login` erfordern Anmeldung.

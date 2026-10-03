@@ -112,6 +112,8 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 03.10.2026 | Vorgabewerte mit optionaler `ausfuehrung` (2.6a): Varianten desselben Instruments (Oberfläche, Ventilmechanik) sind keine eigenen Instrumentenklassen; Eindeutigkeit über Reparaturart + Instrumentenklasse + Ausführung; Auftragsformular zeigt bei mehreren Ausführungen ein Auswahlfeld; Vorgabewerte-Liste gruppiert Ausführungen als Unterzeilen |
+| 03.10.2026 | Grunddaten Blechblasinstrumente per Migration (`app/grunddaten/blechblas_2026_10.py`): 14 neue Instrumentenklassen (Trompete bleibt eine Klasse mit vier Ausführungen, Flügelhorn/Kornett mit zwei), Reparaturarten „Reinigung“/„Überholung“, 38 Vorgabewerte, Einstellung `stundensatz`; Einstellungen können jetzt auch Zahlen mit Einheit sein |
 | 03.10.2026 | Auswertungen (9.14), Teil 4 „Schätzgenauigkeit“: Ø Abweichung der ersten automatischen Schätzung von erfasster Arbeitszeit und abgerechnetem Betrag, mit Tendenz |
 | 03.10.2026 | Status-Merkmal `erfordert_zeiterfassung` heißt jetzt `erfordert_abschlussdaten` (Arbeitszeit und Betrag, 2.7a); „Abgeholt“ ist nur aus einem abgeschlossenen Status („Fertig“) erreichbar |
 | 03.10.2026 | Auftragsabschluss (9.8): Beim Wechsel auf „Fertig“ ist neben der Arbeitszeit der abgerechnete Betrag Pflicht (vorbelegt mit der Kostenschätzung), gespeichert als `tatsaechliche_kosten`; eine Wiederaufnahme leert ihn wieder. Diagramme zeigen den Wert über jedem Punkt |

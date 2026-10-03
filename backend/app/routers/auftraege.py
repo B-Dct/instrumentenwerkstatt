@@ -44,7 +44,9 @@ from app.models import (
     Systemrolle,
     Unterbrechung,
 )
-from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, schaetze_arbeitsstunden, schaetze_kosten
+from app.schaetzung import (
+    MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, ausfuehrungen, schaetze_arbeitsstunden, schaetze_kosten,
+)
 from app.terminschaetzung import termin_neu_berechnen, termin_uebernehmen
 from app.schemas import (
     AuftragAenderung,
@@ -311,8 +313,13 @@ def auftrag_anlegen(
         raise RuntimeError(f"Startstatus '{STARTSTATUS}' fehlt in auftragsstatus")
 
     # Stufe-1-Schätzung (Datenmodell 4 / 4.1)
-    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id)
-    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id)
+    # Eine gewählte Ausführung muss es als aktiven Vorgabewert für genau diese Kombination geben (2.6a)
+    if daten.ausfuehrung is not None and daten.ausfuehrung not in {
+        a.ausfuehrung for a in ausfuehrungen(db, reparaturart.id, instrument.instrumentenklasse_id)
+    }:
+        raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die gewählte Reparaturart und das Instrument nicht")
+    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id, daten.ausfuehrung)
+    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id, daten.ausfuehrung)
 
     auftrag = Auftrag(
         auftragsnummer=_neue_auftragsnummer(db),
@@ -347,6 +354,7 @@ def auftrag_anlegen(
         geschaetztes_datum=termin.datum,
         eingabefaktoren={
             "anlass": "auftrag_angelegt",
+            "ausfuehrung": daten.ausfuehrung,  # None = Standardausführung
             "instrumentenklasse_id": str(instrument.instrumentenklasse_id),
             "reparaturart_id": str(reparaturart.id),
             "komplexitaet": auftrag.komplexitaet,
