@@ -972,10 +972,12 @@ Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand 
 - Balkendiagramm: Verteilung nach Instrumentenklasse (Top 5, Rest als "Sonstige"), gleiche Darstellung
 
 **9.14.2 Zeit**
-- Kennzahl: Ø Bearbeitungsdauer in Kalendertagen (`erstellt_am` bis `tatsächliches_fertigstellungsdatum`)
-- Kennzahl: Ø reine Arbeitszeit in Stunden (Summe `arbeitszeiterfassung.dauer_minuten` je Auftrag, über alle abgeschlossenen Aufträge gemittelt) — bewusst getrennt von der Kalenderdauer ausgewiesen, da sie nicht durch Wartezeiten auf Ersatzteile verzerrt ist (dieselbe Unterscheidung wie in Abschnitt 4)
-- Liniendiagramm: Ø Bearbeitungsdauer pro Monat
-- Kennzahl: **Pünktlichkeitsquote** — Anteil der Aufträge, deren `tatsächliches_fertigstellungsdatum` nicht nach der *ersten automatischen* Terminschätzung lag (`schätzungs_log`-Eintrag mit `methode = "regelbasiert"` beim Anlegen des Auftrags, nicht eine spätere manuelle Korrektur oder Neuberechnung). Das misst bewusst die Treffsicherheit der ursprünglichen Prognose, nicht ob am Ende irgendein — ggf. nachträglich angepasster — Termin eingehalten wurde
+- Kennzahl: Ø Bearbeitungsdauer in Kalendertagen (`erstellt_am` bis `tatsächliches_fertigstellungsdatum`, inklusive Wartezeiten), eine Nachkommastelle
+- Kennzahl: Ø reine Arbeitszeit in Stunden (Summe `arbeitszeiterfassung.dauer_minuten` je Auftrag), zwei Nachkommastellen — bewusst getrennt von der Kalenderdauer ausgewiesen, da sie nicht durch Wartezeiten auf Ersatzteile verzerrt ist (dieselbe Unterscheidung wie in Abschnitt 4). Gemittelt wird nur über Aufträge mit mindestens einer Zeiterfassung, nicht über alle abgeschlossenen — ein Auftrag ganz ohne Erfassung hat eine *unbekannte*, nicht eine *null* Arbeitszeit und würde den Schnitt sonst verfälschen. Die Kachel nennt, wie viele Aufträge deshalb fehlen
+- Liniendiagramm: Ø Bearbeitungsdauer pro Monat, nach Monat der Fertigstellung; Monate ohne Abschlüsse bleiben leer, die Linie ist dort unterbrochen
+- Kennzahl: **Pünktlichkeitsquote**, ganze Prozent — Anteil der Aufträge, deren `tatsächliches_fertigstellungsdatum` nicht nach der *ersten automatischen* Terminschätzung lag (der zeitlich erste `schätzungs_log`-Eintrag mit `methode = "regelbasiert"`, der beim Anlegen entsteht; "pünktlich" heißt am Prognosetag oder früher fertig). Spätere Neuberechnungen (Umzuweisung, Prioritätsänderung) und manuelle Terminkorrekturen zählen nicht — ein Auftrag bleibt "nicht pünktlich", selbst wenn eine spätere Korrektur den Termin gerettet hätte. Aufträge ohne eine solche erste automatische Schätzung zählen nicht in die Quote; die Kachel nennt die Grundlage ("x von y") und wie viele fehlen
+- Fehlt die Grundlage für eine Kennzahl ganz, erscheint "–" statt "0"
+- Dieselbe Hilfsfunktion zur Ermittlung der ersten automatischen Schätzung wird in 9.14.4 (Schätzgenauigkeit) wiederverwendet
 
 **9.14.3 Geld**
 - Kennzahl: Umsatz im gewählten Jahr (Summe `auftrag.tatsächliche_kosten` aller im Jahr abgeschlossenen Aufträge)
