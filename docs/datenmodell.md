@@ -203,7 +203,7 @@ Die zentrale Tabelle.
 | zugewiesener_mitarbeiter_id | FK → mitarbeiter | Kann initial NULL sein (noch nicht zugewiesen) |
 | priorität | ENUM (`normal` / `hoch`) | Manuell durch Werkstattleiter/Admin setzbar, z. B. bei Eilaufträgen oder Kulanzfällen. Fließt in die Sortierung der Mitarbeiter- und Werkstattleiter-Dashboards ein (siehe Abschnitt 9) |
 | komplexität | INT (1–5) | Vom Mitarbeiter bei Anlage geschätzt |
-| status_aktuell_id | FK → status | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
+| status_aktuell_id | FK → auftragsstatus | Redundant zu Performance-Zwecken — Quelle der Wahrheit ist `auftrag_statusverlauf` |
 | erstellt_am | TIMESTAMP | |
 | geschätztes_fertigstellungsdatum | DATE | Ergebnis der Berechnung (Stufe 1 oder 2) |
 | geschätzte_bandbreite_von | DATE | z. B. für Anzeige "zwischen dem 12. und 16.10." |
@@ -216,22 +216,26 @@ Die zentrale Tabelle.
 
 ---
 
-### 2.7a `status`
+### 2.7a `auftragsstatus`
 
-Nachschlagetabelle für Auftragsstatus — eingeführt bei der UI-Umsetzung, damit Farbe und Symbol (Abschnitt 9.3/9.6) direkt aus der Datenbank kommen, statt im Frontend-Code hinterlegt zu sein. Neue Status lassen sich damit ohne Code-Änderung ergänzen.
+Nachschlagetabelle für Auftragsstatus — eingeführt bei der UI-Umsetzung, damit Farbe und Symbol (Abschnitt 9.3/9.6) direkt aus der Datenbank kommen, statt im Frontend-Code hinterlegt zu sein. Neue Status lassen sich damit ohne Code-Änderung ergänzen. Heißt in der Datenbank `auftragsstatus` (nicht `status`).
 
 | Feld | Typ | Beschreibung |
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
-| bezeichnung | VARCHAR | z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
+| schlüssel | VARCHAR, UNIQUE | Stabiler, sprachunabhängiger Name für den Code (z. B. `fertig`), damit sich die `bezeichnung` ändern lässt, ohne Programmlogik zu berühren |
+| bezeichnung | VARCHAR | Anzeigename, z. B. "Angenommen", "In Bearbeitung", "Wartet auf Ersatzteil", "Qualitätsprüfung", "Fertig", "Abgeholt" |
 | farbe | VARCHAR | Hex-Wert, siehe Statusfarben-Tabelle in Abschnitt 9.6 |
 | symbol | VARCHAR | z. B. "○", "◐", "⏸", "◑", "✓", "●" |
 | reihenfolge | INT | Für konsistente Sortierung/Anzeige (z. B. in Auswahllisten) |
+| aktiv | BOOLEAN | Erlaubt, einen Status außer Betrieb zu nehmen, ohne ihn aus bestehenden Verläufen zu entfernen |
+| ist_abgeschlossen | BOOLEAN | Kennzeichnet einen Abschluss-Status (z. B. "Fertig", "Abgeholt") |
 | erfordert_abschlussdaten | BOOLEAN | Steuert die Pflichtabfrage aus 9.8 (Arbeitszeit und abgerechneter Betrag) beim Wechsel in diesen Status. Derzeit nur bei "Fertig" gesetzt — datengetrieben am Status festgemacht, nicht am Namen "Fertig" im Code |
+| unterbrechungsgrund | VARCHAR | Nur bei Status wie "Wartet auf Ersatzteil" gesetzt; steuert den automatisch angelegten `unterbrechung`-Eintrag (2.9) |
 
-**Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün, `erfordert_abschlussdaten`), Abgeholt (●, dunkles Neutral `#5E554C`).
+**Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange, `unterbrechungsgrund` gesetzt), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün, `ist_abgeschlossen` + `erfordert_abschlussdaten`), Abgeholt (●, dunkles Neutral `#5E554C`, `ist_abgeschlossen`).
 
-**Regel zu "Abgeholt":** Dieser Status ist nur aus dem Status "Fertig" heraus erreichbar (nicht aus jedem offenen Status), damit die Pflichtabfrage aus 9.8 nicht umgangen werden kann. Ein Versuch, direkt auf "Abgeholt" zu wechseln, wird abgelehnt.
+**Regel zu "Abgeholt" (allgemein, nicht namensgebunden):** Ein Abschluss-Status (`ist_abgeschlossen = true`) ohne eigene Pflichtabfrage (`erfordert_abschlussdaten = false`) ist nur aus einem bereits abgeschlossenen Status heraus erreichbar — das trifft aktuell auf "Abgeholt" zu (nur aus "Fertig" erreichbar) und würde für einen künftigen weiteren Abschluss-Status automatisch genauso gelten, ohne Code-Änderung. Ein direkter Wechsel aus einem offenen Status wird mit 409 abgelehnt ("'Abgeholt' ist erst nach 'Fertig' möglich — dort werden Arbeitszeit und abgerechneter Betrag erfasst"); im Formular "Status ändern" ist die Option ausgegraut und nicht wählbar, solange die Voraussetzung nicht erfüllt ist.
 
 ---
 
@@ -243,7 +247,7 @@ Kernstück für spätere Auswertung — jeder Wechsel wird protokolliert, nichts
 |---|---|---|
 | id | UUID / SERIAL | Primärschlüssel |
 | auftrag_id | FK → auftrag | |
-| status_id | FK → status | |
+| status_id | FK → auftragsstatus | |
 | geändert_am | TIMESTAMP | |
 | geändert_von_mitarbeiter_id | FK → mitarbeiter | |
 | kommentar | TEXT | Optional |
