@@ -227,8 +227,11 @@ Nachschlagetabelle für Auftragsstatus — eingeführt bei der UI-Umsetzung, dam
 | farbe | VARCHAR | Hex-Wert, siehe Statusfarben-Tabelle in Abschnitt 9.6 |
 | symbol | VARCHAR | z. B. "○", "◐", "⏸", "◑", "✓", "●" |
 | reihenfolge | INT | Für konsistente Sortierung/Anzeige (z. B. in Auswahllisten) |
+| erfordert_abschlussdaten | BOOLEAN | Steuert die Pflichtabfrage aus 9.8 (Arbeitszeit und abgerechneter Betrag) beim Wechsel in diesen Status. Derzeit nur bei "Fertig" gesetzt — datengetrieben am Status festgemacht, nicht am Namen "Fertig" im Code |
 
-**Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün), Abgeholt (●, dunkles Neutral `#5E554C`).
+**Aktuelle Werte** (siehe Abschnitt 9.6 für die vollständige Farbtabelle): Angenommen (○, Grau), In Bearbeitung (◐, Blau), Wartet auf Ersatzteil (⏸, Orange), Qualitätsprüfung (◑, Violett), Fertig (✓, Grün, `erfordert_abschlussdaten`), Abgeholt (●, dunkles Neutral `#5E554C`).
+
+**Regel zu "Abgeholt":** Dieser Status ist nur aus dem Status "Fertig" heraus erreichbar (nicht aus jedem offenen Status), damit die Pflichtabfrage aus 9.8 nicht umgangen werden kann. Ein Versuch, direkt auf "Abgeholt" zu wechseln, wird abgelehnt.
 
 ---
 
@@ -797,6 +800,13 @@ Festgelegt, bevor die UI überarbeitet wird — danach konsequent einzuhalten, d
 - Nach dem Speichern erscheint dieselbe nicht-blockierende Erfolgsbestätigung wie bei anderen Speichervorgängen (9.1), z. B. "Auftrag abgeschlossen, Arbeitszeit und Betrag erfasst"
 - **Hintergrund:** Ohne erfassten Betrag bliebe `tatsächliche_kosten` dauerhaft leer — das hätte zwei Folgen: Die historische Kostenschätzung (4.1) käme nie über die Vorgabewerte (2.6a) hinaus, da ihr die Vergleichsbasis fehlt, und der Umsatz in den Auswertungen (9.14.3) sowie die dortige Schätzgenauigkeit (9.14.4) blieben dauerhaft bei "–". Diese Lücke wurde beim Bau der Auswertungen entdeckt und hier nachgetragen
 
+**Weitere Regeln:**
+- Welcher Status die Abfrage auslöst, hängt am Merkmal `erfordert_abschlussdaten` des jeweiligen Status (2.7a), nicht an der Bezeichnung "Fertig" im Code — derzeit nur bei "Fertig" gesetzt
+- Der Wechsel von "Fertig" zu "Abgeholt" verlangt keine erneute Eingabe und behält Arbeitszeit/Betrag unverändert bei; "Abgeholt" ist ausschließlich aus "Fertig" heraus erreichbar (siehe 2.7a)
+- Wird ein Auftrag aus "Fertig" wieder in einen offenen Status zurückgenommen, werden sowohl `tatsächliches_fertigstellungsdatum` (4.0a) als auch `tatsächliche_kosten` geleert; beim erneuten Abschluss werden Arbeitszeit und Betrag neu abgefragt
+- Ein mitgeschickter Betrag bei einem Statuswechsel ohne `erfordert_abschlussdaten` wird abgelehnt
+- Eine nachträgliche Korrektur eines falsch erfassten Betrags (ohne Wiederaufnahme) ist für die Auftragsdetailseite im Zuge der Stift-Umstellung vorgesehen (siehe 9.10, Ausnahme Auftragsdetailseite) — "Abgerechnet" bekommt dort einen eigenen Stift für Werkstattleitung/Admin, mit Pflichtbegründung wie bei der Terminkorrektur
+
 ### 9.9 Kapazitäts-Dashboard, ausführliche Ansicht (spätere Erweiterung)
 
 Eine kompakte erste Version (eine Zeile je Mitarbeiter, aktuelle Woche) ist bereits Teil der Werkstattleiter-Startseite (9.5). Dieser Abschnitt beschreibt die spätere, ausführlichere Wochenübersicht über mehrere Wochen hinweg, erreichbar von dort aus verlinkt, nicht als separat zu bauende Seite von Anfang an — dem Muster gängiger Ressourcenplanungs-Tools (Float, Resource Guru) folgend:
@@ -844,7 +854,7 @@ Nach Klick auf eine Aktion öffnet sich nur dieses eine Formular direkt unter de
 1. **Ruhige Standardansicht:** Kopf, Eckdaten und Aktionsleiste. Keine Formularfelder sichtbar, solange keine Aktion gewählt ist.
 2. **Eine feste Aktionsleiste** (Standardfall, z. B. Kunden, Instrumente, Mitarbeiter): Jede Aktion ist ein Button an immer derselben Stelle. Angezeigt werden nur Aktionen, die der Nutzer laut Berechtigungsmatrix (7.2) und laut Zustand des Datensatzes ausführen darf. Darf jemand keine der Aktionen ausführen, entfällt die Aktionsleiste ganz und ein kurzer Hinweis steht an ihrer Stelle, statt eine leere Leiste zu zeigen oder die Ablehnung erst beim Speichern zu melden.
 
-**Ausnahme Auftragsdetailseite — Stift-Symbole statt Aktionsleiste:** Da die bearbeitbaren Punkte hier eins-zu-eins Felder sind, die ohnehin schon in den Eckdaten angezeigt werden (Status, Priorität, Zuweisung, geschätzte Stunden/Kosten, Termin), steht statt einer separaten Aktionsleiste neben jedem bearbeitbaren Feld ein Stift-Symbol. Ein Klick öffnet dasselbe eingebettete Formular wie zuvor (inkl. Pflichtbegründung, wo vorgesehen), fokussiert aber direkt auf das angeklickte Feld. Deckt eine Aktion mehrere Felder ab — "Schätzung korrigieren" betrifft Stunden **und** Kosten mit einer gemeinsamen Begründung —, öffnet der Stift neben jedem der beiden Felder dasselbe gemeinsame Formular, nur mit unterschiedlichem Startfokus. "Termin korrigieren" bleibt eine eigene Aktion mit eigenem Stift am Termin-Feld, damit kein Nutzer ein Formular mit einem für ihn gesperrten Feld sieht (siehe 7.2: nur Werkstattleitung/Admin).
+**Ausnahme Auftragsdetailseite — Stift-Symbole statt Aktionsleiste:** Da die bearbeitbaren Punkte hier eins-zu-eins Felder sind, die ohnehin schon in den Eckdaten angezeigt werden (Status, Priorität, Zuweisung, geschätzte Stunden/Kosten, Termin, nach Abschluss zusätzlich der abgerechnete Betrag), steht statt einer separaten Aktionsleiste neben jedem bearbeitbaren Feld ein Stift-Symbol. Ein Klick öffnet dasselbe eingebettete Formular wie zuvor (inkl. Pflichtbegründung, wo vorgesehen), fokussiert aber direkt auf das angeklickte Feld. Deckt eine Aktion mehrere Felder ab — "Schätzung korrigieren" betrifft Stunden **und** Kosten mit einer gemeinsamen Begründung —, öffnet der Stift neben jedem der beiden Felder dasselbe gemeinsame Formular, nur mit unterschiedlichem Startfokus. "Termin korrigieren" und die nachträgliche Korrektur des "Abgerechnet"-Betrags bleiben eigene Aktionen mit eigenem Stift am jeweiligen Feld, beide nur für Werkstattleitung/Admin (7.2), damit kein Nutzer ein Formular mit einem für ihn gesperrten Feld sieht und finanzielle Korrekturen eine Begründung verlangen.
 
 Sichtbarkeit folgt derselben Regel wie Zeilenaktionen in Listen (9.11, Punkt "Zeilenaktionen"): bei Mausbedienung erst bei Hover/Tastaturfokus sichtbar, bei Touch immer. Hat ein Nutzer für ein Feld keine Berechtigung, erscheint dort kein Stift-Symbol — ein Hinweistext ist hier nicht mehr nötig, da die Einschränkung jetzt pro Feld statt pro ganzer Aktionsleiste gilt. Alle übrigen Regeln bleiben unverändert: nur ein Formular gleichzeitig, eingebettete Rückfrage bei ungespeicherten Änderungen, Erfolgsbestätigung nach dem Speichern, Fehlermeldungen direkt am Feld.
 
@@ -1023,11 +1033,11 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 - Abwesenheiten: Backend und Raster-Oberfläche (9.13), ersetzt die ursprünglich geplante Listen-Seite
 - Feiertags-Automatik (9.13.1), Bundesland Baden-Württemberg hinterlegt
 - Werkstattleiter-Dashboard als Startseite (9.5), vollständig: Kennzahl-Kacheln, "Nächste fällige Aufträge", "Auslastung", Abschnitt "Heute"
+- Pflicht-Betrag beim Auftragsabschluss (9.8), inkl. Sperre für "Abgeholt" ohne vorheriges "Fertig"
 
 ### 10.2 In Arbeit
 
-- **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1 (Menge) und 2 (Zeit) fertig, Teilschritt 3 (Geld) fertig, Teilschritt 4 (Schätzgenauigkeit) und 5 (Betrieb) stehen aus
-- **Vorgezogen, vor Teilschritt 4:** Pflicht-Betrag beim Auftragsabschluss (9.8) — Lücke, entdeckt beim Bau von Teilschritt 3, da `tatsächliche_kosten` bisher nirgends erfasst wurde
+- **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1-3 (Menge, Zeit, Geld) fertig, Teilschritt 4 (Schätzgenauigkeit) und 5 (Betrieb) stehen aus
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
