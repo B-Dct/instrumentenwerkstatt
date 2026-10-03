@@ -378,17 +378,18 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 
 /* --- Auswertungen (9.14): selbst gezeichnete Diagramme --- */
 .diagramm { margin: 0 0 var(--abstand-6); }
-.diagramm figcaption { font-weight: var(--gewicht-halbfett); margin-bottom: var(--abstand-2); }
-.diagramm svg { display: block; width: 100%; max-width: var(--inhalt-max); height: auto; }
+.diagramm figcaption { font-size: var(--groesse-14); font-weight: var(--gewicht-halbfett); margin-bottom: var(--abstand-2); }
+.diagramm svg { display: block; max-width: 100%; }
 .diagramm__gitter { stroke: var(--farbe-rand); stroke-width: var(--randbreite); }
 .diagramm__achse { fill: var(--farbe-text-leise); font-size: var(--groesse-12); font-family: var(--schrift-ui); }
-.diagramm__linie { fill: none; stroke: var(--farbe-primaer); stroke-width: var(--fokusbreite); stroke-linejoin: round; stroke-linecap: round; }
-.diagramm__punkt { fill: var(--farbe-hintergrund); stroke: var(--farbe-primaer); stroke-width: var(--fokusbreite); }
+.diagramm__wert { fill: var(--farbe-text); font-size: var(--groesse-12); font-family: var(--schrift-ui); font-variant-numeric: tabular-nums; }
+.diagramm__linie { fill: none; stroke: var(--farbe-primaer); stroke-width: 1.5px; stroke-linejoin: round; stroke-linecap: round; }
+.diagramm__punkt { fill: var(--farbe-hintergrund); stroke: var(--farbe-primaer); stroke-width: 1.5px; }
 .diagramm__punkt:hover { fill: var(--farbe-primaer); }
 .balken { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--abstand-2); font-size: var(--groesse-14); }
 .balken__zeile { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) max-content; gap: var(--abstand-3); align-items: center; }
 .balken__name { overflow-wrap: anywhere; }
-.balken__spur { height: var(--abstand-3); background: var(--farbe-flaeche-leise); border-radius: var(--radius); overflow: hidden; }
+.balken__spur { height: var(--abstand-2); background: var(--farbe-flaeche-leise); border-radius: var(--radius); overflow: hidden; }
 .balken__spur span { display: block; height: 100%; background: var(--farbe-primaer); }
 .balken__zeile--sonstige .balken__spur span { background: var(--farbe-text-leise); }
 .balken__zeile--sonstige .balken__name { color: var(--farbe-text-leise); }
