@@ -235,3 +235,74 @@ def test_auftragswert_rundet_auf_cent(client, db, leitung, w):
     abgerechnet(w, 2, "10.00"), abgerechnet(w, 2, "10.00"), abgerechnet(w, 2, "0.01")
     db.flush()
     assert auswertung(client)["geld"]["auftragswert"] == 6.67   # 20,01 / 3
+
+
+# --- 9.14.4 Schätzgenauigkeit ------------------------------------------------------
+
+def geschaetzt_und_ist(w, stunden=None, kosten=None, minuten=(), ist_kosten=None):
+    """Abgeschlossener Auftrag mit erster automatischer Schätzung (Stunden/Kosten) und Ist-Werten."""
+    a = fertig_nach(w, 5, tage=10, minuten=minuten)
+    a.tatsaechliche_kosten = None if ist_kosten is None else Decimal(ist_kosten)
+    w.db.add(SchaetzungsLog(
+        auftrag_id=a.id, methode="regelbasiert", berechnet_am=a.erstellt_am,
+        geschaetzte_stunden=None if stunden is None else Decimal(stunden),
+        geschaetzte_kosten=None if kosten is None else Decimal(kosten),
+    ))
+    return a
+
+
+def test_schaetzgenauigkeit_ohne_daten(client, leitung):
+    leer = {"abweichung_prozent": None, "tendenz_prozent": None, "auftraege": 0}
+    assert auswertung(client)["schaetzgenauigkeit"] == {"stunden": leer, "kosten": leer}
+
+
+def test_abweichung_stunden_und_kosten_in_prozent_der_schaetzung(client, db, leitung, w):
+    geschaetzt_und_ist(w, stunden="2.00", minuten=(90, 90), kosten="100.00", ist_kosten="80.00")   # +50 % / −20 %
+    geschaetzt_und_ist(w, stunden="4.00", minuten=(180,), kosten="50.00", ist_kosten="60.00")      # −25 % / +20 %
+    db.flush()
+    genau = auswertung(client)["schaetzgenauigkeit"]
+    # Stunden: Abweichungen +50 und −25 → Ø Betrag 37,5 → 38; Tendenz +12,5 → 12 (tatsächlich mehr als geschätzt)
+    assert genau["stunden"] == {"abweichung_prozent": 38, "tendenz_prozent": 12, "auftraege": 2}
+    # Kosten: −20 und +20 → im Schnitt 20 % daneben, aber ohne Tendenz
+    assert genau["kosten"] == {"abweichung_prozent": 20, "tendenz_prozent": 0, "auftraege": 2}
+
+
+def test_schaetzgenauigkeit_nur_mit_schaetzung_und_istwert(client, db, leitung, w):
+    geschaetzt_und_ist(w, stunden="1.00", minuten=(60,), kosten="40.00", ist_kosten="40.00")   # zählt bei beiden, 0 % Abweichung
+    geschaetzt_und_ist(w, stunden="1.00", kosten="40.00")                                      # keine Ist-Werte
+    geschaetzt_und_ist(w, minuten=(60,), ist_kosten="40.00")                                   # keine Schätzung
+    geschaetzt_und_ist(w, stunden="0.00", minuten=(60,), kosten="0.00", ist_kosten="40.00")    # Schätzung 0: kein Prozentwert
+    fertig_nach(w, 5, tage=3, minuten=(60,))                                                   # gar kein Protokolleintrag
+    db.flush()
+    genau = auswertung(client)["schaetzgenauigkeit"]
+    assert genau["stunden"] == {"abweichung_prozent": 0, "tendenz_prozent": 0, "auftraege": 1}
+    assert genau["kosten"] == {"abweichung_prozent": 0, "tendenz_prozent": 0, "auftraege": 1}
+
+
+def test_schaetzgenauigkeit_misst_die_erste_automatik_nicht_die_korrektur(client, db, leitung, w):
+    a = geschaetzt_und_ist(w, stunden="2.00", minuten=(240,), kosten="100.00", ist_kosten="200.00")
+    # Eine spätere manuelle Korrektur trifft genau – die Kennzahl misst trotzdem die erste Automatik
+    w.db.add(SchaetzungsLog(auftrag_id=a.id, methode="manuelle_korrektur", berechnet_am=a.erstellt_am + timedelta(days=1),
+                            geschaetzte_stunden=Decimal("4.00"), geschaetzte_kosten=Decimal("200.00"),
+                            korrigiert_von_mitarbeiter_id=leitung.id, grund="Mehr Aufwand"))
+    a.geschaetzte_arbeitsstunden, a.geschaetzte_kosten = Decimal("4.00"), Decimal("200.00")
+    db.flush()
+    genau = auswertung(client)["schaetzgenauigkeit"]
+    assert genau["stunden"] == {"abweichung_prozent": 100, "tendenz_prozent": 100, "auftraege": 1}
+    assert genau["kosten"] == {"abweichung_prozent": 100, "tendenz_prozent": 100, "auftraege": 1}
+
+
+def test_schaetzgenauigkeit_ueber_die_oberflaeche_abgeschlossener_auftrag(client, db, leitung, w):
+    """Ende zu Ende: Anlegen erzeugt die erste Schätzung, der Abschluss liefert Arbeitszeit und Betrag."""
+    w.vorgabe(stunden="2.00", kosten="100.00")
+    jahr = date.today().year
+    vorher = auswertung(client, jahr)["schaetzgenauigkeit"]
+    a = client.post("/auftraege", json={"kunde_id": str(w.kunde.id), "instrument_id": str(w.instrument().id),
+                                        "reparaturart_id": str(w.saitenwechsel.id)}).json()
+    assert (a["geschaetzte_arbeitsstunden"], a["geschaetzte_kosten"]) == (2.0, 100.0)
+    antwort = client.post(f"/auftraege/{a['id']}/status", json={
+        "status_id": str(w.fertig), "arbeitszeit_minuten": 150, "abgerechneter_betrag": 110})
+    assert antwort.status_code == 200
+    nachher = auswertung(client, jahr)["schaetzgenauigkeit"]
+    assert nachher["stunden"]["auftraege"] == vorher["stunden"]["auftraege"] + 1
+    assert nachher["kosten"]["auftraege"] == vorher["kosten"]["auftraege"] + 1

@@ -89,6 +89,34 @@ function Geld({ geld, abgeschlossen, jahr }) {
   )
 }
 
+// Tendenz in Worten: positiv = tatsächlich mehr als geschätzt
+function tendenz(prozent, mehr, weniger) {
+  if (prozent === 0) return 'im Schnitt weder zu hoch noch zu niedrig geschätzt'
+  return prozent > 0 ? `tatsächlich im Schnitt ${prozent} % ${mehr} als geschätzt` : `tatsächlich im Schnitt ${-prozent} % ${weniger} als geschätzt`
+}
+
+function Schaetzgenauigkeit({ genau }) {
+  const kachel = (a, titel, istWert, mehr, weniger) => (
+    <Kennzahl wert={a.abweichung_prozent === null ? null : `${a.abweichung_prozent} %`} titel={titel}
+              zusatz={a.auftraege === 0
+                ? `Noch keine Grundlage: Es braucht abgeschlossene Aufträge mit automatischer Schätzung und ${istWert}`
+                : `Aus ${auftraege(a.auftraege)} · ${tendenz(a.tendenz_prozent, mehr, weniger)}`} />
+  )
+  return (
+    <section className="abschnitt">
+      <h2>Schätzgenauigkeit</h2>
+      <p className="leise seitenbeschreibung">
+        Verglichen wird die erste automatische Schätzung beim Anlegen des Auftrags mit dem tatsächlichen Wert –
+        spätere manuelle Korrekturen zählen bewusst nicht. So zeigt sich, wie gut die automatische Schätzung selbst ist.
+      </p>
+      <ul className="kacheln" aria-label="Kennzahlen Schätzgenauigkeit">
+        {kachel(genau.stunden, 'Ø Abweichung Stunden', 'erfasster Arbeitszeit', 'mehr Stunden', 'weniger Stunden')}
+        {kachel(genau.kosten, 'Ø Abweichung Kosten', 'abgerechnetem Betrag', 'teurer', 'günstiger')}
+      </ul>
+    </section>
+  )
+}
+
 export default function Auswertungen() {
   const [adresse, setAdresse] = useSearchParams()
   const [daten, setDaten] = useState(null)
@@ -128,6 +156,7 @@ export default function Auswertungen() {
       <Menge menge={daten.menge} jahr={daten.jahr} />
       <Zeit zeit={daten.zeit} abgeschlossen={daten.menge.abgeschlossen} />
       <Geld geld={daten.geld} abgeschlossen={daten.menge.abgeschlossen} jahr={daten.jahr} />
+      <Schaetzgenauigkeit genau={daten.schaetzgenauigkeit} />
     </>
   )
 }

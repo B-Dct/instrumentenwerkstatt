@@ -577,9 +577,25 @@ class AuswertungGeld(BaseModel):
     umsatz_pro_monat: list[float]  # 12 Werte nach Monat der Fertigstellung
 
 
+class Abweichung(BaseModel):
+    """Erste automatische Schätzung gegen den Ist-Wert, in Prozent der Schätzung. None = keine Grundlage."""
+
+    abweichung_prozent: int | None  # Ø ohne Vorzeichen: wie weit daneben
+    tendenz_prozent: int | None  # Ø mit Vorzeichen: positiv = tatsächlich mehr als geschätzt
+    auftraege: int  # Aufträge mit Schätzung UND Ist-Wert
+
+
+class AuswertungSchaetzgenauigkeit(BaseModel):
+    """9.14.4 – misst das automatische Modell, nicht spätere manuelle Korrekturen."""
+
+    stunden: Abweichung
+    kosten: Abweichung
+
+
 class Auswertung(BaseModel):
     jahr: int
     jahre: list[int]  # wählbare Jahre, neuestes zuerst
     menge: AuswertungMenge
     zeit: AuswertungZeit
     geld: AuswertungGeld
+    schaetzgenauigkeit: AuswertungSchaetzgenauigkeit

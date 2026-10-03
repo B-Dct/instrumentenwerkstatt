@@ -18,7 +18,9 @@ from app.eingabe import feldfehler
 from app.models import (
     Arbeitszeiterfassung, Auftrag, Instrument, Instrumentenklasse, Reparaturart, SchaetzungsLog, Systemrolle,
 )
-from app.schemas import Auswertung, AuswertungGeld, AuswertungMenge, AuswertungZeit, Verteilung
+from app.schemas import (
+    Abweichung, Auswertung, AuswertungGeld, AuswertungMenge, AuswertungSchaetzgenauigkeit, AuswertungZeit, Verteilung,
+)
 
 router = APIRouter(prefix="/auswertungen", tags=["Auswertungen"],
                    dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
@@ -136,6 +138,43 @@ def _geld(db: Session, jahr: int) -> AuswertungGeld:
     )
 
 
+def _abweichung(paare: list[tuple[Decimal, Decimal]]) -> Abweichung:
+    """paare = (geschätzt, tatsächlich). Abweichung je Auftrag in Prozent der Schätzung:
+    - mittlere Abweichung ohne Vorzeichen (wie weit daneben, egal in welche Richtung)
+    - Tendenz mit Vorzeichen (positiv = tatsächlich mehr als geschätzt, also zu niedrig geschätzt)"""
+    prozente = [(ist - geschaetzt) / geschaetzt * 100 for geschaetzt, ist in paare]
+    return Abweichung(
+        abweichung_prozent=_durchschnitt([abs(p) for p in prozente], stellen=0) if prozente else None,
+        tendenz_prozent=_durchschnitt(prozente, stellen=0) if prozente else None,
+        auftraege=len(prozente),
+    )
+
+
+def _schaetzgenauigkeit(db: Session, jahr: int) -> AuswertungSchaetzgenauigkeit:
+    """Vergleicht die ERSTE automatische Schätzung (nicht spätere Korrekturen) mit den Ist-Werten:
+    erfasste Arbeitszeit bzw. abgerechneter Betrag. Zeigt, wie gut das automatische Modell selbst ist."""
+    erste = erste_automatische_schaetzungen(db, jahr)
+    im_jahr = select(Auftrag.id).where(_im_jahr(jahr))
+    ist_stunden = {
+        auftrag_id: Decimal(minuten) / 60 for auftrag_id, minuten in db.execute(
+            select(Arbeitszeiterfassung.auftrag_id, func.sum(Arbeitszeiterfassung.dauer_minuten))
+            .where(Arbeitszeiterfassung.auftrag_id.in_(im_jahr)).group_by(Arbeitszeiterfassung.auftrag_id))
+    }
+    ist_kosten = dict(db.execute(
+        select(Auftrag.id, Auftrag.tatsaechliche_kosten).where(_im_jahr(jahr), Auftrag.tatsaechliche_kosten.is_not(None))
+    ).all())
+
+    def paare(ist: dict, feld: str) -> list[tuple[Decimal, Decimal]]:
+        # Ohne Schätzung oder mit Schätzung 0 lässt sich keine prozentuale Abweichung bilden
+        return [(getattr(erste[a], feld), wert) for a, wert in ist.items()
+                if a in erste and getattr(erste[a], feld)]
+
+    return AuswertungSchaetzgenauigkeit(
+        stunden=_abweichung(paare(ist_stunden, "geschaetzte_stunden")),
+        kosten=_abweichung(paare(ist_kosten, "geschaetzte_kosten")),
+    )
+
+
 def _jahre(db: Session, heute: date) -> list[int]:
     """Wählbare Jahre: vom ersten Jahr mit einem abgeschlossenen Auftrag bis heute, neuestes zuerst."""
     erstes = db.scalar(select(func.min(Auftrag.tatsaechliches_fertigstellungsdatum)))
@@ -152,4 +191,5 @@ def auswertung(
     jahr = heute.year if jahr is None else jahr
     if not FRUEHESTES_JAHR <= jahr <= heute.year:
         raise feldfehler(jahr=f"Bitte ein Jahr zwischen {FRUEHESTES_JAHR} und {heute.year} wählen")
-    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr), zeit=_zeit(db, jahr), geld=_geld(db, jahr))
+    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr), zeit=_zeit(db, jahr), geld=_geld(db, jahr),
+                      schaetzgenauigkeit=_schaetzgenauigkeit(db, jahr))
