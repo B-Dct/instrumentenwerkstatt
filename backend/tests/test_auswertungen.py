@@ -1,6 +1,7 @@
 """Auswertungen (Datenmodell 9.14): Jahresstatistik über die im Jahr abgeschlossenen Aufträge."""
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 import pytest
 
@@ -198,3 +199,39 @@ def test_puenktlichkeit_ignoriert_manuelle_korrektur_vor_der_ersten_automatik(cl
     db.flush()
     zeit = auswertung(client)["zeit"]
     assert (zeit["puenktlich"], zeit["auftraege_mit_terminprognose"], zeit["puenktlichkeit_prozent"]) == (0, 1, 0)
+
+
+# --- 9.14.3 Geld -------------------------------------------------------------------
+
+def abgerechnet(w, monat, kosten, **extra):
+    a = abgeschlossen(w, monat, **extra)
+    a.tatsaechliche_kosten = None if kosten is None else Decimal(kosten)
+    return a
+
+
+def test_geld_ohne_daten(client, leitung):
+    assert auswertung(client)["geld"] == {
+        "umsatz": 0, "auftragswert": None, "auftraege_mit_kosten": 0, "umsatz_pro_monat": [0] * 12}
+
+
+def test_umsatz_auftragswert_und_verlauf(client, db, leitung, w):
+    abgerechnet(w, 1, "100.00"), abgerechnet(w, 1, "49.50")
+    abgerechnet(w, 11, "250.25")
+    abgerechnet(w, 11, None)                              # ohne eingetragene Kosten: unbekannt, nicht 0
+    abgerechnet(w, 5, "999.00", jahr=JAHR + 1)            # anderes Jahr
+    offen = w.auftrag(status=w.in_bearbeitung)            # offener Auftrag mit Betrag: zählt nicht
+    offen.tatsaechliche_kosten = Decimal("500.00")
+    db.flush()
+
+    daten = auswertung(client)
+    geld = daten["geld"]
+    assert geld["umsatz"] == 399.75
+    assert (geld["auftragswert"], geld["auftraege_mit_kosten"]) == (133.25, 3)   # 399,75 / 3, nicht / 4
+    assert geld["umsatz_pro_monat"] == [149.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250.25, 0]
+    assert daten["menge"]["abgeschlossen"] == 4            # die Menge zählt weiterhin alle
+
+
+def test_auftragswert_rundet_auf_cent(client, db, leitung, w):
+    abgerechnet(w, 2, "10.00"), abgerechnet(w, 2, "10.00"), abgerechnet(w, 2, "0.01")
+    db.flush()
+    assert auswertung(client)["geld"]["auftragswert"] == 6.67   # 20,01 / 3

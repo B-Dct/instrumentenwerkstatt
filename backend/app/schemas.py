@@ -566,8 +566,18 @@ class AuswertungZeit(BaseModel):
     puenktlichkeit_prozent: int | None
 
 
+class AuswertungGeld(BaseModel):
+    """9.14.3 – Grundlage: im Jahr abgeschlossene Aufträge mit eingetragenen tatsächlichen Kosten."""
+
+    umsatz: float
+    auftragswert: float | None  # Ø je Auftrag mit eingetragenen Kosten; None = keine Grundlage
+    auftraege_mit_kosten: int
+    umsatz_pro_monat: list[float]  # 12 Werte nach Monat der Fertigstellung
+
+
 class Auswertung(BaseModel):
     jahr: int
     jahre: list[int]  # wählbare Jahre, neuestes zuerst
     menge: AuswertungMenge
     zeit: AuswertungZeit
+    geld: AuswertungGeld

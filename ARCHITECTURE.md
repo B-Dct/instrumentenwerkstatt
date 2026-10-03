@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 03.10.2026 | Auswertungen (9.14), Teil 3 „Geld“: Umsatz, Ø Auftragswert, Umsatz pro Monat; Diagramme werden in echter Größe gezeichnet (feine Linien, kleine Schrift wie im Rest der Seite) |
 | 03.10.2026 | Auswertungen (9.14), Teil 2 „Zeit“: Ø Bearbeitungsdauer (Kalendertage), Ø reine Arbeitszeit, Verlauf pro Monat, Pünktlichkeitsquote gemessen an der ersten automatischen Terminschätzung im Schätzprotokoll |
 | 02.10.2026 | Auswertungen (9.14), Teil 1 „Menge“: neue Seite mit Jahresfilter, Endpunkt `/auswertungen`, eigene Diagramm-Bausteine (`komponenten/Diagramme.jsx`: Monatsverlauf als SVG, Balkenverteilung) ohne Bibliothek |
 | 02.10.2026 | Werkstattleiter-Startseite (9.5), Teil 3: Hinweis auf heutige Abwesenheiten (werkstattweite Schließung und abwesende Mitarbeiter) – Startseite damit vollständig |

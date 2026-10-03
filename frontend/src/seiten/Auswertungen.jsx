@@ -3,7 +3,7 @@
 // Grundlage sind die im Jahr abgeschlossenen Aufträge (Fertigstellungsdatum im Jahr).
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { api, zahl } from '../api.js'
+import { api, euro, zahl } from '../api.js'
 import { Balkenverteilung, Monatsverlauf } from '../komponenten/Diagramme.jsx'
 
 // Monate, die im laufenden Jahr noch in der Zukunft liegen, zeigen keinen Wert statt einer irreführenden 0
@@ -69,6 +69,26 @@ function Zeit({ zeit, abgeschlossen }) {
   )
 }
 
+const ganzeEuro = (w) => `${w.toLocaleString('de-DE', { maximumFractionDigits: 0 })} €`
+
+function Geld({ geld, abgeschlossen, jahr }) {
+  const ohneKosten = abgeschlossen - geld.auftraege_mit_kosten
+  const fehlend = ohneKosten > 0 ? ` · ${auftraege(ohneKosten)} ohne eingetragene Kosten nicht eingerechnet` : ''
+  return (
+    <section className="abschnitt">
+      <h2>Geld</h2>
+      <ul className="kacheln" aria-label="Kennzahlen Geld">
+        <Kennzahl wert={geld.auftraege_mit_kosten === 0 ? null : euro(geld.umsatz)} titel={`Umsatz ${jahr}`}
+                  zusatz={`Summe der tatsächlich abgerechneten Kosten der abgeschlossenen Aufträge${fehlend}`} />
+        <Kennzahl wert={geld.auftragswert === null ? null : euro(geld.auftragswert)} titel="Ø Auftragswert"
+                  zusatz={`Umsatz geteilt durch ${auftraege(geld.auftraege_mit_kosten)} mit eingetragenen Kosten`} />
+      </ul>
+      <Monatsverlauf titel="Umsatz pro Monat (nach Monat der Fertigstellung)"
+                     werte={ohneZukunft(geld.umsatz_pro_monat, jahr)} format={ganzeEuro} genau={euro} />
+    </section>
+  )
+}
+
 export default function Auswertungen() {
   const [adresse, setAdresse] = useSearchParams()
   const [daten, setDaten] = useState(null)
@@ -107,6 +127,7 @@ export default function Auswertungen() {
 
       <Menge menge={daten.menge} jahr={daten.jahr} />
       <Zeit zeit={daten.zeit} abgeschlossen={daten.menge.abgeschlossen} />
+      <Geld geld={daten.geld} abgeschlossen={daten.menge.abgeschlossen} jahr={daten.jahr} />
     </>
   )
 }

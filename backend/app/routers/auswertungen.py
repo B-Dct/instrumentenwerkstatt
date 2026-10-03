@@ -6,6 +6,7 @@ geleert, ein gesetztes Datum heißt also "abgeschlossen".
 """
 
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, extract, func, select
@@ -17,7 +18,7 @@ from app.eingabe import feldfehler
 from app.models import (
     Arbeitszeiterfassung, Auftrag, Instrument, Instrumentenklasse, Reparaturart, SchaetzungsLog, Systemrolle,
 )
-from app.schemas import Auswertung, AuswertungMenge, AuswertungZeit, Verteilung
+from app.schemas import Auswertung, AuswertungGeld, AuswertungMenge, AuswertungZeit, Verteilung
 
 router = APIRouter(prefix="/auswertungen", tags=["Auswertungen"],
                    dependencies=[Depends(rolle_mindestens(Systemrolle.werkstattleiter))])
@@ -114,6 +115,27 @@ def _zeit(db: Session, jahr: int) -> AuswertungZeit:
     )
 
 
+def _geld(db: Session, jahr: int) -> AuswertungGeld:
+    """Umsatz = Summe der tatsächlich abgerechneten Kosten der im Jahr abgeschlossenen Aufträge.
+    Aufträge ohne eingetragene Kosten haben einen unbekannten, keinen Null-Betrag: Sie fehlen
+    im Umsatz und zählen nicht in den Durchschnitt."""
+    monat = extract("month", Auftrag.tatsaechliches_fertigstellungsdatum)
+    je_monat = {
+        m: (anzahl, summe) for m, anzahl, summe in db.execute(
+            select(monat, func.count(), func.sum(Auftrag.tatsaechliche_kosten))
+            .where(_im_jahr(jahr), Auftrag.tatsaechliche_kosten.is_not(None)).group_by(monat)
+        )
+    }
+    anzahl = sum(n for n, _ in je_monat.values())
+    umsatz = sum((summe for _, summe in je_monat.values()), Decimal(0))
+    return AuswertungGeld(
+        umsatz=umsatz,
+        auftragswert=round(umsatz / anzahl, 2) if anzahl else None,
+        auftraege_mit_kosten=anzahl,
+        umsatz_pro_monat=[je_monat.get(m, (0, Decimal(0)))[1] for m in range(1, 13)],
+    )
+
+
 def _jahre(db: Session, heute: date) -> list[int]:
     """Wählbare Jahre: vom ersten Jahr mit einem abgeschlossenen Auftrag bis heute, neuestes zuerst."""
     erstes = db.scalar(select(func.min(Auftrag.tatsaechliches_fertigstellungsdatum)))
@@ -130,4 +152,4 @@ def auswertung(
     jahr = heute.year if jahr is None else jahr
     if not FRUEHESTES_JAHR <= jahr <= heute.year:
         raise feldfehler(jahr=f"Bitte ein Jahr zwischen {FRUEHESTES_JAHR} und {heute.year} wählen")
-    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr), zeit=_zeit(db, jahr))
+    return Auswertung(jahr=jahr, jahre=_jahre(db, heute), menge=_menge(db, jahr), zeit=_zeit(db, jahr), geld=_geld(db, jahr))
