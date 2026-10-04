@@ -699,6 +699,7 @@ Diese Regeln gelten seitenübergreifend für die gesamte Software (internes Dash
 - **Breadcrumbs** auf tieferliegenden Seiten (z. B. Auftrag-Detail), damit klar ist, wo man sich befindet
 - **Kein hartes Löschen:** Aufträge, Mitarbeiter und Stammdaten werden nie endgültig gelöscht, sondern archiviert/deaktiviert — ein versehentlicher Klick soll nichts unwiederbringlich zerstören
 - **Seitenleiste einklappbar:** Ein Umschalt-Knopf (oben in der Leiste) wechselt zwischen voll ausgeklappt (Icon + Beschriftung je Punkt) und eingeklappt (nur Icon). Der gewählte Zustand wird pro Gerät gemerkt (lokale Speicherung im Browser, keine Serverdaten). Im eingeklappten Zustand bekommt jedes Icon eine über Hover/Tastaturfokus erreichbare Beschriftung (Tooltip) sowie ein `aria-label`, damit die Bedeutung nicht nur über das Symbol erraten werden muss. Einheitliches, schlichtes Icon-Set für alle Navigationspunkte, passend zur Anmutung aus 9.6 (keine bunten oder verspielten Icon-Stile).
+- **Seitenleiste nach Tagesgeschäft und Verwaltung gegliedert:** Zwei kleine Gruppenüberschriften trennen, was Mitarbeiter täglich nutzen, von dem, was selten gepflegt wird. *Tagesgeschäft:* Übersicht (Werkstattleitung/Admin), Aufträge, Kunden, Abwesenheiten (Werkstattleitung/Admin), Auswertungen (Werkstattleitung/Admin). *Verwaltung (nur Admin):* Preisliste (siehe 9.15), Mitarbeiter, Einstellungen sowie als Untergruppe "Stammdaten" die Seiten Instrumentenklassen und Reparaturarten (nur noch zum Umbenennen und Archivieren). Instrumente haben keinen eigenen Menüpunkt, sie hängen an der Kundenseite. Im eingeklappten Zustand entfallen die Überschriften, eine feine Trennlinie bleibt
 - **Primäre Aktion abgesetzt:** "Neuer Auftrag" (und vergleichbare Haupt-Aktionen je Bereich) ist kein gleichwertiger Navigationspunkt, sondern ein eigener, in der Primärfarbe gefüllter Button am Anfang der Leiste, deutlich von der übrigen Navigation abgesetzt. Bleibt auch im eingeklappten Zustand als eigenständiges, erkennbares Element bestehen (nicht einfach ein Icon unter vielen).
 
 ### 9.3 Statusdarstellung
@@ -936,7 +937,7 @@ Gilt für **alle** Listen der Anwendung (Aufträge, Kunden, Instrumente, Stammda
 
 ### 9.12 Gegliederte Stammdaten und Auswahllisten
 
-Ziel: Keine endlosen, ungeordneten Listen. Umgesetzt über Instrumentenfamilien (2.4a) und Reparaturkategorien (2.6b) sowie die automatische Rubrik "Häufig verwendet".
+Ziel: Keine endlosen, ungeordneten Listen. Umgesetzt über Instrumentenfamilien (2.4a) und Reparaturkategorien (2.6b) sowie die automatische Rubrik "Häufig verwendet". Familie und Kategorie liefern zugleich die Gruppierung der Zeilen und Spalten der Preisliste-Matrix (9.15); die Reparaturart-Auswahl mit "Häufig für [Klasse]" ist Teil des geführten Auftragsablaufs (9.16, Schritt 3).
 
 1. **Verwaltungslisten gegliedert:** Instrumentenklassen erscheinen gruppiert nach Familie, Reparaturarten gruppiert nach Kategorie. Jede Gruppe ist einklappbar und zeigt Namen und Anzahl der Einträge. Suche und Filter nach Familie bzw. Kategorie gelten zusätzlich (siehe 9.11). Vorgabewerte lassen sich nach Reparaturart, Kategorie und Instrumentenfamilie filtern und sind nach Kategorie gruppiert; **innerhalb** einer Instrumentenklasse stehen mehrere `ausführung`-Varianten (2.6a) als Unterzeilen unter einer gemeinsamen Überschrift (z. B. "Trompete" einmal, darunter die Preise je Ausführung), statt als scheinbar eigenständige Einträge nebeneinander zu erscheinen.
 2. **Gruppierte Auswahl im Auftragsformular:** Nach der Wahl des Instruments zeigt die Reparaturart-Auswahl zuerst die Rubrik "Häufig für [Instrumentenklasse]", darunter alle übrigen Reparaturarten nach Kategorie gruppiert. Bei langen Listen ist die Auswahl durchsuchbar. Dieselbe durchsuchbare Auswahl braucht die Kundenauswahl im Auftragsformular, sobald mehr als rund 100 aktive Kunden bestehen (bisher werden alle geladen, siehe 9.11).
@@ -1022,6 +1023,46 @@ Eigene Seite, getrennt von der Übersicht (9.5): Die Übersicht zeigt den Stand 
 - Kennzahl: Anteil der im Jahr abgeschlossenen Aufträge mit mindestens einem `unterbrechung`-Eintrag (2.9)
 - Liniendiagramm: Ø Auslastung der Mitarbeiter pro Monat im Jahresverlauf — rückblickend berechnet aus der tatsächlich geleisteten Arbeitszeit (`arbeitszeiterfassung`) je Mitarbeiter und Woche, ins Verhältnis gesetzt zu den damals gültigen Wochenstunden (`mitarbeiter_arbeitszeit`, unter Nutzung des Gültigkeitszeitraums aus 2.12) — anders als die vorausschauende Kapazitätsformel in 8.2, die mit offenen, noch nicht erledigten Aufträgen rechnet
 
+### 9.15 Preisliste (Matrix-Ansicht der Richtpreise)
+
+Eine Seite statt drei getrennter Pflege-Listen. Fachlich ist die Preisliste eine einzige Sache — die Tabelle, wie sie auch eine Werkstatt auf ihrer Website veröffentlicht: Zeilen sind Instrumente, Spalten sind Reparaturarten, in den Zellen stehen Preise. Bisher musste man Instrumentenklassen (2.4), Reparaturarten (2.6) und Vorgabewerte (2.6a) auf drei Seiten pflegen und im Kopf zusammensetzen. Die Matrix ist nur eine andere Darstellung derselben Daten, am Datenmodell ändert sich nichts; alle Regeln aus 2.4, 2.6 und 2.6a (Eindeutigkeit, Archivieren, Ausführung) und das Änderungsprotokoll (7.3) gelten unverändert. Zugriff nur für den Admin (7.2).
+
+**Aufbau:**
+- Zeilen: Instrumentenklassen, nach Oberkategorie gruppiert und einklappbar (nach Einführung von 9.12 nach Instrumentenfamilie)
+- Spalten: Reparaturarten, alphabetisch (nach 9.12 nach Reparaturkategorie gruppiert)
+- Zelle: Richtpreis in Euro, darunter klein die Richtzeit in Stunden. Hat die Instrumentenklasse für diese Reparaturart mehrere Ausführungen (2.6a), zeigt die Zelle den Standardwert mit dem Zusatz "+ n Ausführungen". Eine leere Zelle zeigt "–" mit dem Hinweis, dass kein eigener Wert besteht und der allgemeine Wert gilt (falls vorhanden)
+- Die erste Spalte (Instrumentenklasse) bleibt beim seitlichen Scrollen stehen; die Matrix scrollt in ihrem eigenen Bereich, nicht die ganze Seite
+- Suche und Filter nach Instrumentenklasse und Reparaturart wie in 9.11; wer eine Liste braucht, erreicht die bisherige Vorgabewerte-Liste (mit Sortierung und Filtern) über den Link "Als Liste anzeigen"
+
+**Bedienung (wie 9.13 eine bewusste Ausnahme von Regel 9.10, da ein Raster ein eigenständiges Bedienmuster ist):** Ein Klick auf eine Zelle öffnet darunter eingebettet den Editor: Richtpreis, Richtzeit, Notiz. Bei mehreren Ausführungen steht dort je Ausführung eine Zeile, dazu "Ausführung hinzufügen" und Archivieren je Zeile. Gibt der Admin nur den Preis ein und lässt die Richtzeit leer, wird die Richtzeit als Vorschlag aus dem Preis und dem Stundensatz aus den Einstellungen (7.5) berechnet (Preis ÷ Stundensatz, auf 0,25 Std. gerundet) und bleibt änderbar.
+
+**Direkt auf der Seite anlegen:** "Instrumentenklasse hinzufügen" (Bezeichnung, Oberkategorie/Familie) und "Reparaturart hinzufügen" (Bezeichnung, Standard-Komplexität) öffnen jeweils ein eingebettetes Formular; neue Zeilen bzw. Spalten erscheinen sofort in der Matrix. Umbenennen, Archivieren und Reaktivieren bleiben auf den Seiten "Instrumentenklassen" und "Reparaturarten" (Verweise darauf stehen oben auf der Preisliste).
+
+### 9.16 Geführter Auftragsablauf ("Neuer Auftrag")
+
+Der neue Auftrag folgt der Reihenfolge des echten Gesprächs, wenn sich ein Kunde per E-Mail oder vor Ort meldet: Wer meldet sich, was wird gebracht, was ist zu tun. Ein Mitarbeiter muss dafür nie wissen, was ein Vorgabewert ist. Die vier Schritte stehen auf einer Seite untereinander; der aktuelle Schritt ist aufgeklappt, erledigte Schritte sind auf eine Zeile mit Stift-Symbol zum Zurückspringen zusammengefasst (gleiche Logik wie 9.10).
+
+1. **Kunde:** Suchfeld über Name, Kundennummer, externe Kundennummer, E-Mail und Telefon (wie die Kundensuche in 9.11) oder "Neuer Kunde" mit eingebettetem Formular (Name, optional E-Mail, Telefon, externe Kundennummer); nach dem Speichern ist der Kunde ausgewählt und der Ablauf geht weiter
+2. **Instrument:** Die Instrumente des gewählten Kunden als Auswahl (Klasse, Hersteller, Typ, Ausführung) oder "Neues Instrument" mit eingebettetem Formular (Instrumentenklasse als Pflicht; Hersteller, Typ, Baujahr, Seriennummer, Ausführung optional; die Ausführung erscheint nur, wenn die Klasse mehrere kennt). Bei einem neuen Kunden springt der Ablauf direkt zu "Neues Instrument"
+3. **Reparaturart:** Auswahl, durchsuchbar, mit der Rubrik "Häufig für [Klasse]" zuerst (9.12). Sobald gewählt, erscheinen sofort Richtpreis, Richtzeit und voraussichtlicher Termin, mit Herkunft ("aus der Preisliste" bzw. "aus n bisherigen Aufträgen", entsprechend der Stufe-1-Logik aus Abschnitt 4). Hat das Instrument noch keine Ausführung und die Klasse mehrere, wird sie hier einmalig abgefragt und am Instrument gespeichert (2.5). Nur Werkstattleitung und Admin sehen zusätzlich Zuweisung und Priorität; für alle anderen gilt die Zuweisung an sich selbst und Priorität "normal"
+4. **Bestätigen:** Zusammenfassung aus Kunde, Instrument, Reparaturart, Richtpreis, Richtzeit und Termin, Knopf "Auftrag anlegen". Danach erscheinen Auftragsnummer und Zugriffstoken (siehe 9.7, Abgabebeleg, sobald umgesetzt)
+
+**Einstiegspunkte:** Seitenleisten-Knopf "Neuer Auftrag" (ab Schritt 1), Knopf "Neuer Auftrag" auf der Kundenseite (Schritt 1 entfällt) und an einer Instrumentenzeile (Schritte 1 und 2 entfallen).
+
+**Technisch:** Angelegt wird weiterhin über den bestehenden Endpunkt zum Anlegen eines Auftrags. Neu nötig ist ein lesender Endpunkt "Schätzung vorab", der für Instrument und Reparaturart Stunden, Kosten, Termin und Herkunft liefert, ohne etwas zu speichern. Er verwendet dieselbe Berechnungslogik wie das spätere Anlegen, damit Vorschau und Ergebnis nicht auseinanderlaufen.
+
+### 9.17 Begriffe in der Oberfläche
+
+Regel: ein Name pro Begriff, in der Oberfläche wie im Datenmodell, und Begriffe aus dem Werkstattalltag statt technischer Wörter. Wo zwei Begriffe leicht verwechselt werden (Instrument und Instrumentenklasse), steht unter dem Feld ein Beispiel ("z. B. Trompete").
+
+| Im Datenmodell | In der Oberfläche |
+|---|---|
+| Vorgabewert (`reparatur_vorgabewert`) | Richtpreis und Richtzeit; die zugehörige Seite heißt "Preisliste" |
+| Instrumentenklasse | Instrumentenklasse (unverändert), Feldhinweis "z. B. Trompete" |
+| Instrument | Instrument: das konkrete Instrument eines Kunden |
+| Reparaturart | Reparaturart (unverändert, kein zweiter Name wie "Leistung") |
+| Schätzungs-Log | Schätzprotokoll (wie bisher) |
+
 ---
 
 ## 10. Fahrplan und offene Punkte
@@ -1055,7 +1096,9 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1-3 (Menge, Zeit, Geld) fertig, Teilschritt 4 (Schätzgenauigkeit) und 5 (Betrieb) stehen aus
+- **Ausführung am Instrument** (2.5, 2.6a, Abschnitt 4): Feld am Instrument, Auswahl nur noch einmalig, historischer Durchschnitt je Ausführung getrennt
+- **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1-4 (Menge, Zeit, Geld, Schätzgenauigkeit) fertig, Teilschritt 5 (Betrieb) steht aus
+- **Übersichtlichkeit der Stammdaten** (9.15 bis 9.17, neu ausgearbeitet): in drei Schritten — (a) Preisliste als Matrix, Navigation nach Tagesgeschäft und Verwaltung, Begriffe in der Oberfläche; (b) Endpunkt "Schätzung vorab"; (c) geführter Auftragsablauf. Reihenfolge relativ zu Teilschritt 5 der Auswertungen offen; vor Instrumentenfamilie/Reparaturkategorie (9.12) sinnvoll, da diese dann nur noch die Gruppierung der Matrix liefern
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
