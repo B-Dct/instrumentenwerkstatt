@@ -42,7 +42,6 @@ export default function AuftragNeu() {
       .catch(() => {})
     return () => { abgebrochen = true }
   }, [klasseId, form.reparaturart_id])
-  const standard = ausfuehrungen.find((a) => !a.ausfuehrung)
   const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1 && !instrument?.ausfuehrung
 
   const setze = (feld) => (e) => {
@@ -112,16 +111,14 @@ export default function AuftragNeu() {
             <label className="feld">
               <span>Ausführung</span>
               <select value={form.ausfuehrung} onChange={setze('ausfuehrung')}>
-                <option value="">
-                  {standard ? `Standard (${zahl(standard.vorgabe_stunden)} Std., ${euro(standard.vorgabe_kosten)})` : 'Noch nicht festlegen'}
-                </option>
+                <option value="">Noch nicht festlegen</option>
                 {ausfuehrungen.filter((a) => a.ausfuehrung).map((a) => (
                   <option key={a.ausfuehrung} value={a.ausfuehrung}>
-                    {a.ausfuehrung} ({zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)})
+                    {a.ausfuehrung}{a.ist_standard ? ' (Standard)' : ''} – {zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)}
                   </option>
                 ))}
               </select>
-              <small>Optional – bestimmt Richtpreis und Richtzeit. Die Auswahl wird am Instrument gespeichert und gilt dann auch für künftige Aufträge.</small>
+              <small>Die Auswahl wird am Instrument gespeichert und gilt dann auch für künftige Aufträge. Ohne Auswahl bleibt die Ausführung unbekannt, es gilt der Standard.</small>
             </label>
           )}
           {instrument?.ausfuehrung && (

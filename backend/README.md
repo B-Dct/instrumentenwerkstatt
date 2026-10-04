@@ -48,11 +48,11 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | GET | `/auth/ich` | Wer bin ich? (prüft die Anmeldung) |
 | GET | `/admin/vorgabewerte` | Vorgabewerte-Liste nach 9.11 (`suche`, Filter `reparaturart_id`, `instrumentenklasse_id`, `status`; `sortierung`, `seite`) |
 | GET | `/admin/vorgabewerte/{id}` | Einen Vorgabewert abrufen |
-| POST | `/admin/vorgabewerte` | Vorgabewert anlegen (optional mit `ausfuehrung` für Varianten derselben Instrumentenklasse; 409, falls Reparaturart + Instrumentenklasse + Ausführung schon aktiv existiert) |
-| PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
-| POST | `/admin/vorgabewerte/{id}/archivieren`, `/…/reaktivieren` | Vorgabewert zurücknehmen/zurückholen (Schätzung ignoriert archivierte) |
+| POST | `/admin/vorgabewerte` | Vorgabewert anlegen (optional mit `ausfuehrung` und `ist_standard`; bei mehreren Ausführungen trägt jede einen Namen, die erste benannte wird Standard; 409, falls Reparaturart + Instrumentenklasse + Ausführung schon aktiv existiert) |
+| PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder); `ist_standard: true` gibt das Standard-Kennzeichen weiter; Umbenennen einer Ausführung gilt für die ganze Instrumentenklasse und ihre Instrumente |
+| POST | `/admin/vorgabewerte/{id}/archivieren`, `/…/reaktivieren` | Vorgabewert zurücknehmen/zurückholen (Schätzung ignoriert archivierte); der Standard nur, wenn er der letzte ist oder vorher ein anderer bestimmt wurde |
 | GET | `/ausfuehrungen?reparaturart_id=…&instrumentenklasse_id=…` | Wählbare Ausführungen samt Vorgabewerten für das Auftragsformular (Standardausführung zuerst); `POST /auftraege` nimmt dazu optional `ausfuehrung` – nur nötig, solange das Instrument keine hat; die Wahl wird am Instrument gespeichert (2.5) |
-| GET | `/instrumentenklassen/ausfuehrungen` | Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (für das Instrumentenformular) |
+| GET | `/instrumentenklassen/ausfuehrungen` | Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann, mit `ist_standard` (für das Instrumentenformular) |
 | GET | `/kunden?suche=…&status=…&sortierung=…&seite=…`, `/kunden/{id}` | Kundenliste nach 9.11 (Suche auch nach externer Kundennummer; `status` archiviert/alle nur Leitung), Kunde mit Instrumenten |
 | POST, PATCH | `/kunden`, `/kunden/{id}` | Kunde anlegen/bearbeiten (alle Angemeldeten; Kundennummer wird vergeben; `externe_kundennummer` optional, eindeutig falls gesetzt) |
 | POST | `/kunden/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin; nicht bei offenen Aufträgen) |

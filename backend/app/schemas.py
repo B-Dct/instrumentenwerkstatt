@@ -29,14 +29,24 @@ Ausfuehrung = Annotated[
 class AusfuehrungAuswahl(BaseModel):
     """Eine wählbare Ausführung im Auftragsformular samt ihrer Vorgabewerte."""
 
-    ausfuehrung: str | None  # None = Standardausführung
+    ausfuehrung: str | None  # None = die Kombination hat keine Varianten (ein einziger Wert)
+    ist_standard: bool
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
+
+
+class AusfuehrungDerKlasse(BaseModel):
+    """Eine Ausführung, die ein Instrument dieser Klasse tragen kann (2.5)."""
+
+    ausfuehrung: str
+    ist_standard: bool
+
 
 class VorgabewertNeu(BaseModel):
     reparaturart_id: uuid.UUID
     instrumentenklasse_id: uuid.UUID | None = None  # None = gilt allgemein für die Reparaturart
-    ausfuehrung: Ausfuehrung = None  # None = Standardausführung; nur zusammen mit einer Instrumentenklasse
+    ausfuehrung: Ausfuehrung = None  # None = keine Varianten; nur zusammen mit einer Instrumentenklasse
+    ist_standard: bool = False  # die erste benannte Ausführung einer Kombination wird ohnehin Standard
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None = None
@@ -47,7 +57,8 @@ class VorgabewertAenderung(BaseModel):
 
     reparaturart_id: uuid.UUID | None = None
     instrumentenklasse_id: uuid.UUID | None = None  # explizit null = auf "allgemein" setzen
-    ausfuehrung: Ausfuehrung = None  # explizit null/leer = Standardausführung
+    ausfuehrung: Ausfuehrung = None  # explizit null/leer = ohne Namen (nur als einziger Wert der Kombination)
+    ist_standard: bool | None = None  # true = diese Ausführung wird Standard, die bisherige verliert das Kennzeichen
     vorgabe_stunden: Stunden | None = None
     vorgabe_kosten: Euro | None = None
     notiz: str | None = None
@@ -61,10 +72,16 @@ class Vorgabewert(BaseModel):
     reparaturart_bezeichnung: str
     instrumentenklasse_id: uuid.UUID | None
     instrumentenklasse_bezeichnung: str | None
-    ausfuehrung: str | None  # None = Standardausführung
+    ausfuehrung: str | None  # None = die Kombination hat keine Varianten
+    ist_standard: bool
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None
+    # Aktive Instrumente der Klasse, an denen diese Ausführung hinterlegt ist (Hinweis vor dem Archivieren, 2.5)
+    instrumente_mit_ausfuehrung: int = 0
+    # Nur direkt nach dem Umbenennen einer Ausführung gefüllt: was in derselben Transaktion mitumbenannt wurde
+    umbenannte_instrumente: int = 0
+    umbenannte_richtpreise: int = 0
     archiviert_am: datetime | None  # NULL = aktiv
     geaendert_von_mitarbeiter_id: uuid.UUID | None
     geaendert_am: datetime

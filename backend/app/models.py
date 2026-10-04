@@ -185,6 +185,11 @@ class ReparaturVorgabewert(Base):
             "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id", "ausfuehrung",
             unique=True, postgresql_nulls_not_distinct=True, postgresql_where=text("archiviert_am IS NULL"),
         ),
+        # Je Reparaturart + Instrumentenklasse höchstens ein aktiver Standard (2.6a)
+        Index(
+            "uq_reparatur_vorgabewert_standard", "reparaturart_id", "instrumentenklasse_id",
+            unique=True, postgresql_where=text("archiviert_am IS NULL AND ist_standard"),
+        ),
         CheckConstraint("vorgabe_stunden >= 0", name="stunden_nicht_negativ"),
         CheckConstraint("vorgabe_kosten >= 0", name="kosten_nicht_negativ"),
     )
@@ -193,8 +198,11 @@ class ReparaturVorgabewert(Base):
     reparaturart_id: Mapped[uuid.UUID] = fk("reparaturart")
     instrumentenklasse_id: Mapped[uuid.UUID | None] = fk("instrumentenklasse", nullable=True, index=False)
     # Verfeinerung innerhalb derselben Instrumentenklasse für reine Ausführungsunterschiede
-    # (Oberfläche, Ventilmechanik), z. B. "Perinet, versilbert". NULL = Standardausführung.
+    # (Oberfläche, Ventilmechanik), z. B. "Perinet, versilbert". NULL = die Kombination hat keine Varianten.
     ausfuehrung: Mapped[str | None] = mapped_column(String(100))
+    # Bei mehreren (benannten) Ausführungen ist genau eine der Standard: Er greift, wenn die Ausführung
+    # des Instruments unbekannt ist oder keine eigene Zeile hat
+    ist_standard: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     vorgabe_stunden: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     vorgabe_kosten: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # in Euro
     notiz: Mapped[str | None] = mapped_column(Text)

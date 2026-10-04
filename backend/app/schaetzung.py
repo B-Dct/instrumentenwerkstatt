@@ -10,11 +10,14 @@ Vorgehen für eine Kombination aus Instrumentenklasse + Reparaturart:
    Instrumentenklasse, sonst der allgemeine Wert der Reparaturart.
 3. Sonst: keine Schätzung möglich (wert = None).
 
-Hat das Instrument eine Ausführung (2.5), gilt die Reihenfolge aus Abschnitt 4:
-historischer Durchschnitt nur über Aufträge mit Instrumenten DERSELBEN Ausführung,
-sonst der Vorgabewert dieser Ausführung, sonst der Standardwert der Instrumentenklasse
-(ausfuehrung = NULL), sonst der allgemeine Wert. Verschiedene Ausführungen werden im
-Durchschnitt nie vermischt. Ohne Ausführung zählen wie bisher alle Aufträge der Klasse.
+Zwei Reihenfolgen (Abschnitt 4), je nachdem ob am Instrument eine Ausführung hinterlegt ist (2.5):
+- Bekannte Ausführung: historischer Durchschnitt nur über Aufträge mit Instrumenten DERSELBEN
+  Ausführung, sonst der Vorgabewert dieser Ausführung, sonst der Standard der Kombination
+  (ist_standard), sonst der allgemeine Wert. Verschiedene Ausführungen werden nie vermischt.
+- Unbekannte Ausführung: historischer Durchschnitt über alle Aufträge der Klasse, sonst der
+  Standard der Kombination bzw. ihr einziger Wert, sonst der allgemeine Wert.
+Auch die Standardausführung trägt einen Namen – ein Instrument mit bewusst eingetragener
+Standardausführung ist deshalb etwas anderes als eines mit unbekannter Ausführung.
 """
 
 import enum
@@ -112,7 +115,8 @@ def _vorgabe(
     ausfuehrung: str | None = None,
 ) -> tuple[Quelle, Decimal] | None:
     """Spezifischen Vorgabewert der Instrumentenklasse bevorzugen, sonst den allgemeinen.
-    Innerhalb der Instrumentenklasse: die gewählte Ausführung, sonst die Standardausführung (NULL)."""
+    Innerhalb der Instrumentenklasse: die Ausführung des Instruments, sonst der Standard (ist_standard),
+    sonst der Wert ohne Namen (einziger Wert der Kombination bzw. Altdaten ohne Kennzeichen)."""
     eintraege = db.scalars(
         select(ReparaturVorgabewert).where(
             ReparaturVorgabewert.archiviert_am.is_(None),  # archivierte Vorgabewerte zählen nicht
@@ -124,6 +128,7 @@ def _vorgabe(
     der_klasse = [e for e in eintraege if e.instrumentenklasse_id is not None]
     spezifisch = (
         next((e for e in der_klasse if ausfuehrung is not None and e.ausfuehrung == ausfuehrung), None)
+        or next((e for e in der_klasse if e.ist_standard), None)
         or next((e for e in der_klasse if e.ausfuehrung is None), None)
     )
     if spezifisch is not None:
@@ -166,28 +171,33 @@ def schaetze_kosten(
 
 
 def ausfuehrungen(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID) -> list[ReparaturVorgabewert]:
-    """Aktive Vorgabewerte genau dieser Kombination – Standardausführung (NULL) zuerst, dann alphabetisch.
+    """Aktive Vorgabewerte genau dieser Kombination – der Standard zuerst, dann alphabetisch.
     Gibt es mehr als einen, kann beim Anlegen eines Auftrags eine Ausführung gewählt werden (2.6a)."""
     return list(db.scalars(
         select(ReparaturVorgabewert).where(
             ReparaturVorgabewert.archiviert_am.is_(None),
             ReparaturVorgabewert.reparaturart_id == reparaturart_id,
             ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
-        ).order_by(ReparaturVorgabewert.ausfuehrung.asc().nulls_first())
+        ).order_by(ReparaturVorgabewert.ist_standard.desc(), ReparaturVorgabewert.ausfuehrung.asc().nulls_first())
     ))
 
 
-def ausfuehrungen_je_klasse(db: Session, instrumentenklasse_id: uuid.UUID | None = None) -> dict[uuid.UUID, list[str]]:
-    """Benannte Ausführungen je Instrumentenklasse (über alle Reparaturarten, nur aktive Vorgabewerte),
-    alphabetisch. Das sind die Werte, die ein Instrument als Ausführung tragen kann (2.5)."""
-    abfrage = select(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung).where(
+def ausfuehrungen_je_klasse(
+    db: Session, instrumentenklasse_id: uuid.UUID | None = None
+) -> dict[uuid.UUID, list[tuple[str, bool]]]:
+    """Benannte Ausführungen je Instrumentenklasse als (Name, ist Standard) – über alle Reparaturarten,
+    nur aktive Vorgabewerte; der Standard zuerst, dann alphabetisch. Das sind die Werte, die ein
+    Instrument als Ausführung tragen kann (2.5)."""
+    standard = func.bool_or(ReparaturVorgabewert.ist_standard)
+    abfrage = select(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung, standard).where(
         ReparaturVorgabewert.archiviert_am.is_(None),
         ReparaturVorgabewert.instrumentenklasse_id.is_not(None),
         ReparaturVorgabewert.ausfuehrung.is_not(None),
-    ).distinct().order_by(ReparaturVorgabewert.ausfuehrung)
+    ).group_by(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung).order_by(
+        standard.desc(), ReparaturVorgabewert.ausfuehrung)
     if instrumentenklasse_id is not None:
         abfrage = abfrage.where(ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
-    ergebnis: dict[uuid.UUID, list[str]] = {}
-    for klasse_id, ausfuehrung in db.execute(abfrage):
-        ergebnis.setdefault(klasse_id, []).append(ausfuehrung)
+    ergebnis: dict[uuid.UUID, list[tuple[str, bool]]] = {}
+    for klasse_id, ausfuehrung, ist_standard in db.execute(abfrage):
+        ergebnis.setdefault(klasse_id, []).append((ausfuehrung, ist_standard))
     return ergebnis

@@ -37,11 +37,12 @@ class Werkstatt:
             self.status["fertig"], self.status["abgeholt"], self.status["in_bearbeitung"]
         )
 
-    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00", ausfuehrung=None):
+    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00", ausfuehrung=None, ist_standard=False):
         self.db.add(ReparaturVorgabewert(
             reparaturart_id=self.saitenwechsel.id,
             instrumentenklasse_id=klasse.id if klasse else None,
             ausfuehrung=ausfuehrung,
+            ist_standard=ist_standard,
             vorgabe_stunden=Decimal(stunden),
             vorgabe_kosten=Decimal(kosten),
         ))

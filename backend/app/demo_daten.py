@@ -9,6 +9,9 @@ Angelegt werden:
 - Stammdaten (2.4 Instrumentenklassen, 2.6 Reparaturarten, 2.6a Vorgabewerte). Die sind
   realistisch und bleiben beim Entfernen erhalten – sie können auch echt genutzt werden.
 - Demo-Kunden (Kundennummer "DEMO-…") mit Instrumenten (2.1, 2.5)
+- Ein Demo-Kunde mit Blechblasinstrumenten ("DEMO-004"), um im Auftragsformular die Ausführung
+  durchzuklicken (2.5): eine Trompete ohne hinterlegte Ausführung (das Formular fragt einmal),
+  ein Flügelhorn mit hinterlegter Ausführung (keine Nachfrage) und eine Tuba ohne Varianten
 - Vier offene Demo-Aufträge in verschiedenen Status (einer mit hoher Priorität, einer
   überfällig), um Statusdarstellung und Markierungen zu sehen
 - Fünf abgeschlossene Demo-Aufträge "Saitenwechsel an Violine" (Nummer "DEMO-…") mit
@@ -29,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import passwort_hashen
 from app.db import Base, SessionLocal
+from app.schaetzung import ausfuehrungen_je_klasse
 from app.models import (
     Abwesenheit,
     ArbeitszeitAnpassung,
@@ -95,6 +99,15 @@ KUNDEN = [  # (Kundennummer, Name, E-Mail, Telefon, [(Klasse, Hersteller, Typ, B
     ]),
 ]
 
+# Blechblas-Kunde: (Klasse, Hersteller, Typ, Baujahr, Seriennummer, Ausführung oder None = unbekannt).
+# Die Ausführung wird nur gesetzt, wenn die Preisliste sie für die Klasse kennt (2.5).
+BLECHBLAS_OBERKATEGORIE = "Blechblasinstrument"
+BLECHBLAS_KUNDE = ("DEMO-004", "Stadtkapelle Rebental", "noten.rebental@example.com", "07000 000004", [
+    ("Trompete", "Bach", "TR650", 2018, "TR-650114", None),
+    ("Flügelhorn/Kornett", "Miraphone", "24R", 2011, "FH-24077", "Drehventile, lackiert"),
+    ("B-Tuba (4 Ventile)", "Melton", "195", 2004, None, None),
+])
+
 # Offene Demo-Aufträge in verschiedenen Status (zeigen Statusfarben, Priorität, "überfällig"):
 # (Nummer, Kunde, Instrumentenklasse, Reparaturart, Status, Priorität, vor wie vielen Tagen,
 #  voraussichtlich fertig in Tagen – negativ = überfällig)
@@ -139,9 +152,23 @@ def anlegen(db: Session) -> None:
                 hersteller=hersteller, baujahr=baujahr, seriennummer=seriennr,
             )
 
+    _blechblas_kunde_anlegen(db)
     _historie_anlegen(db, klassen["Violine"], arten["Saitenwechsel"])
     _offene_auftraege_anlegen(db, klassen, arten)
     db.commit()
+
+
+def _blechblas_kunde_anlegen(db: Session) -> None:
+    nummer, name, email, telefon, instrumente = BLECHBLAS_KUNDE
+    kunde = _get_or_create(db, Kunde, {"kundennummer": nummer}, name=name, email=email, telefon=telefon)
+    for klasse, hersteller, typ, baujahr, seriennr, ausfuehrung in instrumente:
+        klasse_id = _get_or_create(db, Instrumentenklasse, {"bezeichnung": klasse}, oberkategorie=BLECHBLAS_OBERKATEGORIE).id
+        bekannt = {name for name, _ in ausfuehrungen_je_klasse(db, klasse_id).get(klasse_id, [])}
+        _get_or_create(
+            db, Instrument, {"kunde_id": kunde.id, "instrumentenklasse_id": klasse_id, "typenbezeichnung": typ},
+            hersteller=hersteller, baujahr=baujahr, seriennummer=seriennr,
+            ausfuehrung=ausfuehrung if ausfuehrung in bekannt else None,
+        )
 
 
 def _offene_auftraege_anlegen(db: Session, klassen: dict, arten: dict) -> None:

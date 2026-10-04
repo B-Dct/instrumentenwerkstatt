@@ -114,7 +114,12 @@ def test_kosten_keine_daten_keine_vorgabe(db):
 # --- Ausführung des Instruments (Abschnitt 4, "Reihenfolge bei vorhandener ausführung") ---
 
 @pytest.fixture
-def ausfuehrungen(w):
+def ausfuehrungen(w, db):
+    from sqlalchemy import select
+    from app.models import ReparaturVorgabewert
+    # Der bisher einzige Kontrabass-Wert (1,5 Std. / 60 €) wird zur benannten Standardausführung
+    standard = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
+    standard.ausfuehrung, standard.ist_standard = "natur", True
     w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
     w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung="lackiert")
     return w
@@ -142,7 +147,21 @@ def test_reihenfolge_mit_ausfuehrung_ohne_historie(db):
     w = Werkstatt(db)
     w.vorgabe(stunden="0.50", kosten="20.00")
     assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
-    w.vorgabe(w.kontrabass, stunden="1.50", kosten="60.00")               # Standard der Klasse
+    w.vorgabe(w.kontrabass, stunden="1.50", kosten="60.00", ausfuehrung="lackiert", ist_standard=True)
+    w.vorgabe(w.kontrabass, stunden="2.00", kosten="70.00", ausfuehrung="vergoldet")
+    # Kein eigener Wert für "versilbert" → Standard der Kombination, nicht irgendeine andere Ausführung
     assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("1.50"))
+    assert w.stunden().wert == Decimal("1.50") and w.kosten().wert == Decimal("60.00")     # unbekannt: Standard
     w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
     assert w.stunden("versilbert").wert == Decimal("3.00") and w.kosten("versilbert").wert == Decimal("120.00")
+    assert w.stunden("lackiert").wert == Decimal("1.50")                                   # bewusst der Standard
+
+
+def test_altdaten_ohne_standard_fallen_auf_den_allgemeinen_wert(db):
+    """Mehrere benannte Ausführungen ohne Kennzeichen: nichts wird geraten."""
+    w = Werkstatt(db)
+    w.vorgabe(stunden="0.50", kosten="20.00")
+    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
+    w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung="lackiert")
+    assert (w.stunden().quelle, w.stunden().wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
+    assert w.stunden("versilbert").wert == Decimal("3.00")

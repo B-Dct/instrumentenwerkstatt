@@ -237,7 +237,7 @@ def _klasse_pruefen(db: Session, klasse_id: uuid.UUID) -> None:
 
 def _ausfuehrung_pruefen(db: Session, klasse_id: uuid.UUID, ausfuehrung: str | None) -> None:
     """Die Ausführung eines Instruments muss es bei seiner Klasse als Ausführung eines Richtpreises geben (2.5)."""
-    if ausfuehrung is not None and ausfuehrung not in ausfuehrungen_je_klasse(db, klasse_id).get(klasse_id, []):
+    if ausfuehrung is not None and ausfuehrung not in {name for name, _ in ausfuehrungen_je_klasse(db, klasse_id).get(klasse_id, [])}:
         raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die Instrumentenklasse nicht")
 
 

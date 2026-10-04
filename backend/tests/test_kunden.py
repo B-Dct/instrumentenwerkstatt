@@ -140,10 +140,13 @@ def test_instrument_ausfuehrung(client, w, db):
     from app.models import ReparaturVorgabewert
     for name in ("versilbert", "lackiert"):
         db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.violine.id, ausfuehrung=name,
+                                    ist_standard=name == "versilbert",
                                     vorgabe_stunden=Decimal("1.00"), vorgabe_kosten=Decimal("40.00")))
     db.flush()
     liste = client.get("/instrumentenklassen/ausfuehrungen").json()
-    assert liste[str(w.violine.id)] == ["lackiert", "versilbert"] and str(w.kontrabass.id) not in liste
+    assert liste[str(w.violine.id)] == [{"ausfuehrung": "versilbert", "ist_standard": True},      # Standard zuerst
+                                        {"ausfuehrung": "lackiert", "ist_standard": False}]
+    assert str(w.kontrabass.id) not in liste
 
     kunde = kunde_anlegen(client)
     instrument = instrument_anlegen(client, w, kunde["id"], ausfuehrung=" versilbert ")

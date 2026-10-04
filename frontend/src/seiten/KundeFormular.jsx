@@ -97,10 +97,16 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
       </Feld>
       {(ausfuehrungen.length > 0 || werte.ausfuehrung) && (
         <Feld label="Ausführung" fehler={felder.ausfuehrung}
-              hinweis="Optional – Oberfläche bzw. Ventilmechanik dieses Instruments. Bestimmt Richtpreis und Richtzeit neuer Aufträge.">
+              hinweis="Oberfläche bzw. Ventilmechanik dieses Instruments – bestimmt Richtpreis und Richtzeit neuer Aufträge. Solange sie unbekannt ist, gilt der Standard.">
           <select value={werte.ausfuehrung} onChange={setze('ausfuehrung')}>
-            <option value="">Unbekannt / Standard</option>
-            {[...new Set([...ausfuehrungen, werte.ausfuehrung].filter(Boolean))].map((a) => <option key={a} value={a}>{a}</option>)}
+            <option value="">Noch nicht festlegen (unbekannt)</option>
+            {ausfuehrungen.map((a) => (
+              <option key={a.ausfuehrung} value={a.ausfuehrung}>{a.ausfuehrung}{a.ist_standard ? ' (Standard)' : ''}</option>
+            ))}
+            {/* Eine hinterlegte Ausführung, die es in der Preisliste nicht mehr gibt, trotzdem anzeigen */}
+            {werte.ausfuehrung && !ausfuehrungen.some((a) => a.ausfuehrung === werte.ausfuehrung) && (
+              <option value={werte.ausfuehrung}>{werte.ausfuehrung} (nicht mehr in der Preisliste)</option>
+            )}
           </select>
         </Feld>
       )}

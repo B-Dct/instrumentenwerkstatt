@@ -4,6 +4,11 @@ import { ApiFehler } from '../api.js'
 
 export const leerZuNull = (wert) => (typeof wert === 'string' && wert.trim() === '' ? null : wert)
 
+// Hinweis vor dem Archivieren einer Ausführung, die an Instrumenten hinterlegt ist (2.5)
+export const instrumenteHinweis = (anzahl) =>
+  `${anzahl === 1 ? 'Ein Instrument trägt' : `${anzahl} Instrumente tragen`} diese Ausführung. `
+  + 'Für diese Reparaturart gilt für sie danach der Standardwert.'
+
 // Prüfung schon im Browser, bevor gesendet wird: { feld: Meldung oder null }.
 // Im speichern-Callback aufrufen; die Meldungen erscheinen wie Backend-Fehler direkt am Feld.
 export function vorabPruefen(pruefungen) {

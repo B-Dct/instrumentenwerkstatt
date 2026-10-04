@@ -10,7 +10,7 @@ import { AktionsButton, FokusFormular, FormularBereich, Rueckfrage } from '../..
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
-import { leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
+import { instrumenteHinweis, leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
 import { KlasseFelder } from './Instrumentenklassen.jsx'
 import { ArtFelder } from './Reparaturarten.jsx'
 
@@ -49,6 +49,8 @@ const neueZeile = (wert) => ({
   schluessel: wert?.id ?? `neu-${laufendeNummer += 1}`,
   id: wert?.id ?? null,
   ausfuehrung: wert?.ausfuehrung ?? '',
+  istStandard: wert?.ist_standard ?? false,
+  instrumente: wert?.instrumente_mit_ausfuehrung ?? 0,
   preis: wert ? String(wert.vorgabe_kosten) : '',
   zeit: wert ? String(wert.vorgabe_stunden) : '',
   notiz: wert?.notiz ?? '',
@@ -72,10 +74,11 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState(null)
   const [zeilenfehler, setZeilenfehler] = useState({})
+  const [archivFrage, setArchivFrage] = useState(null)
   const name = `${art.bezeichnung} (${klasse?.bezeichnung ?? 'allgemein'})`
   // Es gibt Ausführungen, aber keine Zeile für die Standardausführung (9.15)
   const gefuellt = zeilen.filter((z) => !zeileLeer(z))
-  const ohneStandard = klasse && gefuellt.length > 0 && gefuellt.every((z) => z.ausfuehrung.trim())
+  const ohneStandard = klasse && gefuellt.length > 1 && gefuellt.every((z) => z.id) && !gefuellt.some((z) => z.istStandard)
 
   const aendern = (schluessel, feld, wert) => {
     setZeilenfehler((f) => (f[schluessel]?.[feld] ? { ...f, [schluessel]: { ...f[schluessel], [feld]: undefined } } : f))
@@ -125,8 +128,11 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
     setSendet(false)
   }
 
-  async function archivieren(z) {
+  async function archivieren(z, bestaetigt = false) {
     setFehler(null)
+    setArchivFrage(null)
+    // Vor dem Archivieren zeigen, wie viele Instrumente die Ausführung verwenden (2.5)
+    if (!bestaetigt && z.instrumente > 0) { setArchivFrage(z.schluessel); return }
     try {
       await api.admin.vorgabewertArchivieren(z.id)
     } catch (err) {
@@ -197,6 +203,17 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
                   </td>
                 </tr>
                 {f.allgemein && <tr><td colSpan={5} className="meldung--fehler">{f.allgemein}</td></tr>}
+                {archivFrage === z.schluessel && (
+                  <tr>
+                    <td colSpan={5}>
+                      <div className="rueckfrage" role="alert">
+                        <p>{instrumenteHinweis(z.instrumente)}</p>
+                        <button type="button" className="btn btn--gefahr btn--klein" onClick={() => archivieren(z, true)}>Trotzdem archivieren</button>
+                        <button type="button" className="btn btn--sekundaer btn--klein" onClick={() => setArchivFrage(null)}>Abbrechen</button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             )
           })}
@@ -219,9 +236,12 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
   )
 }
 
+// Der Standard einer Zelle: bei mehreren Ausführungen die gekennzeichnete, sonst der einzige Wert (2.6a)
+const standardVon = (werte) => werte.find((w) => w.ist_standard) ?? werte.find((w) => w.ausfuehrung === null)
+
 // Inhalt einer Zelle: Richtpreis, darunter klein die Richtzeit; bei mehreren Ausführungen ein Zusatz
 function Zellinhalt({ werte, allgemein }) {
-  const standard = werte.find((w) => w.ausfuehrung === null)
+  const standard = standardVon(werte)
   const ausfuehrungen = werte.length - (standard ? 1 : 0)
   if (standard) {
     return (
@@ -251,7 +271,7 @@ function Zellinhalt({ werte, allgemein }) {
 }
 
 function zellBeschreibung(zeilenName, art, werte, allgemein) {
-  const standard = werte.find((w) => w.ausfuehrung === null)
+  const standard = standardVon(werte)
   const inhalt = standard ? `${euro(standard.vorgabe_kosten)}, ${stunden(standard.vorgabe_stunden)}`
     : werte.length ? `${werte.length} Ausführungen`
     : allgemein ? `kein eigener Wert, es gilt der allgemeine Wert ${euro(allgemein.vorgabe_kosten)}` : 'kein Wert'

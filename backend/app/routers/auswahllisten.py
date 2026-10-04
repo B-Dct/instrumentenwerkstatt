@@ -15,7 +15,7 @@ from app.auth import aktueller_mitarbeiter
 from app.db import get_db
 from app.models import Auftragsstatus, Instrumentenklasse, Mitarbeiter, Reparaturart
 from app.schaetzung import ausfuehrungen, ausfuehrungen_je_klasse
-from app.schemas import AusfuehrungAuswahl, InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
+from app.schemas import AusfuehrungAuswahl, AusfuehrungDerKlasse, InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
 
 router = APIRouter(tags=["Auswahllisten"], dependencies=[Depends(aktueller_mitarbeiter)])
 
@@ -26,11 +26,12 @@ def instrumentenklassen_auflisten(db: Session = Depends(get_db)) -> list[Instrum
                            .order_by(Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung)))
 
 
-@router.get("/instrumentenklassen/ausfuehrungen", response_model=dict[uuid.UUID, list[str]])
-def ausfuehrungen_der_klassen(db: Session = Depends(get_db)) -> dict[uuid.UUID, list[str]]:
-    """Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5). Klassen ohne
-    Ausführungen fehlen – das Instrumentenformular zeigt das Feld dann nicht."""
-    return ausfuehrungen_je_klasse(db)
+@router.get("/instrumentenklassen/ausfuehrungen", response_model=dict[uuid.UUID, list[AusfuehrungDerKlasse]])
+def ausfuehrungen_der_klassen(db: Session = Depends(get_db)) -> dict[uuid.UUID, list[AusfuehrungDerKlasse]]:
+    """Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5), der Standard zuerst.
+    Klassen ohne Ausführungen fehlen – das Instrumentenformular zeigt das Feld dann nicht."""
+    return {klasse: [AusfuehrungDerKlasse(ausfuehrung=name, ist_standard=standard) for name, standard in liste]
+            for klasse, liste in ausfuehrungen_je_klasse(db).items()}
 
 
 @router.get("/reparaturarten", response_model=list[ReparaturartKurz])
@@ -43,8 +44,8 @@ def ausfuehrungen_auflisten(
     reparaturart_id: uuid.UUID = Query(), instrumentenklasse_id: uuid.UUID = Query(), db: Session = Depends(get_db),
 ) -> list[AusfuehrungAuswahl]:
     """Wählbare Ausführungen für Reparaturart + Instrumentenklasse (2.6a). Das Auftragsformular
-    zeigt die Auswahl nur, wenn es mehr als einen Eintrag gibt; None ist die Standardausführung."""
-    return [AusfuehrungAuswahl(ausfuehrung=v.ausfuehrung, vorgabe_stunden=v.vorgabe_stunden, vorgabe_kosten=v.vorgabe_kosten)
+    zeigt die Auswahl nur, wenn es mehr als einen Eintrag gibt; der Standard steht zuerst."""
+    return [AusfuehrungAuswahl(ausfuehrung=v.ausfuehrung, ist_standard=v.ist_standard, vorgabe_stunden=v.vorgabe_stunden, vorgabe_kosten=v.vorgabe_kosten)
             for v in ausfuehrungen(db, reparaturart_id, instrumentenklasse_id)]
 
 

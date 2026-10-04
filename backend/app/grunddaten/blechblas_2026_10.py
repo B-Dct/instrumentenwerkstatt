@@ -11,7 +11,9 @@ Abgrenzung (Datenmodell 2.6a): Ein echtes anderes Instrument (andere Bauform/Ton
 eigene Instrumentenklasse. Eine reine Ausführungsvariante desselben Instruments (Oberfläche,
 Ventilmechanik) ist KEINE eigene Klasse, sondern eine `ausfuehrung` am Vorgabewert – deshalb
 gibt es eine Klasse "Trompete" mit vier Ausführungen und eine Klasse "Flügelhorn/Kornett" mit zwei.
-Die Standardausführung (ausfuehrung = NULL) ist jeweils "Perinet, lackiert".
+Die Standardausführung ist jeweils "Perinet, lackiert". Dieses Modul legt sie noch ohne Namen an
+(Stand Oktober 2026); die spätere Migration `vorgabewert_ist_standard` gibt ihr den Namen und das
+Standard-Kennzeichen (app/grunddaten/ausfuehrung_standard_2026_10.py).
 
 "Generalüberholung" bekommt bewusst keinen Vorgabewert (nur individuelles Angebot).
 
@@ -92,7 +94,9 @@ def anlegen(verbindung: Connection) -> dict[str, int]:
                     "FROM reparaturart r, instrumentenklasse k "
                     "WHERE r.bezeichnung = :r AND k.bezeichnung = :k AND NOT EXISTS ("
                     "  SELECT 1 FROM reparatur_vorgabewert v WHERE v.reparaturart_id = r.id AND v.instrumentenklasse_id = k.id"
-                    "  AND v.ausfuehrung IS NOT DISTINCT FROM CAST(:a AS varchar))"
+                    # Den unbenannten Standardwert nur anlegen, solange die Kombination noch leer ist – nach der
+                    # Umstellung auf benannte Standards (ist_standard) würde er sonst ein zweites Mal entstehen
+                    "  AND (CAST(:a AS varchar) IS NULL OR v.ausfuehrung = CAST(:a AS varchar)))"
                 ), {"r": reparaturart, "k": klasse, "a": ausfuehrung, "stunden": stunden, "kosten": kosten, "notiz": notiz}).rowcount
 
     neu["einstellungen"] += verbindung.execute(text(

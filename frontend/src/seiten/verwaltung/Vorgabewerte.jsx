@@ -10,7 +10,7 @@ import { useHervorhebung } from '../../komponenten/hervorhebung.js'
 import { ListeLeer, Listenkopf, Seitenwahl, SortierKopf } from '../../komponenten/Liste.jsx'
 import { useListe } from '../../komponenten/liste.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
-import { leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
+import { instrumenteHinweis, leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
 
 const NEU = 'neu'
 const ALLGEMEIN = ''
@@ -60,6 +60,7 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
     reparaturart_id: eintrag?.reparaturart_id ?? '',
     instrumentenklasse_id: eintrag?.instrumentenklasse_id ?? ALLGEMEIN,
     ausfuehrung: eintrag?.ausfuehrung ?? '',
+    ist_standard: eintrag?.ist_standard ?? false,
     vorgabe_stunden: eintrag?.vorgabe_stunden ?? '',
     vorgabe_kosten: eintrag?.vorgabe_kosten ?? '',
     notiz: eintrag?.notiz ?? '',
@@ -69,6 +70,8 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
       reparaturart_id: werte.reparaturart_id || null,
       instrumentenklasse_id: werte.instrumentenklasse_id || null,
       ausfuehrung: werte.instrumentenklasse_id ? leerZuNull(werte.ausfuehrung) : null,
+      // Nur "wird Standard" senden – entfernen lässt sich das Kennzeichen nur durch einen anderen Standard
+      ...(werte.instrumentenklasse_id && werte.ausfuehrung.trim() && werte.ist_standard ? { ist_standard: true } : {}),
       vorgabe_stunden: werte.vorgabe_stunden === '' ? null : Number(werte.vorgabe_stunden),
       vorgabe_kosten: werte.vorgabe_kosten === '' ? null : Number(werte.vorgabe_kosten),
       notiz: leerZuNull(werte.notiz),
@@ -97,8 +100,18 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
         </Feld>
         {werte.instrumentenklasse_id !== ALLGEMEIN && (
           <Feld label="Ausführung" fehler={felder.ausfuehrung}
-                hinweis="Optional, z. B. „Perinet, versilbert“. Leer = Standardausführung. Nur für Varianten desselben Instruments (Oberfläche, Ventilmechanik) – ein anderes Instrument ist eine eigene Instrumentenklasse.">
+                hinweis="z. B. „Perinet, versilbert“. Leer nur, wenn es keine Varianten gibt – bei mehreren Ausführungen trägt jede einen Namen. Umbenennen gilt für die ganze Instrumentenklasse und ihre Instrumente.">
             <input value={werte.ausfuehrung} onChange={setze('ausfuehrung')} maxLength={100} autoComplete="off" />
+          </Feld>
+        )}
+        {werte.instrumentenklasse_id !== ALLGEMEIN && werte.ausfuehrung.trim() !== '' && (
+          <Feld label="Standard" fehler={felder.ist_standard}
+                hinweis="Gilt, wenn die Ausführung des Instruments unbekannt ist. Genau eine Ausführung ist Standard.">
+            <span className="feld__auswahl">
+              <input type="checkbox" checked={werte.ist_standard} disabled={eintrag?.ist_standard}
+                     onChange={(e) => { feldGeaendert('ist_standard'); setWerte((w) => ({ ...w, ist_standard: e.target.checked })) }} />
+              {' '}Standardausführung
+            </span>
           </Feld>
         )}
         <Feld label="Richtzeit in Stunden" fehler={felder.vorgabe_stunden}>
@@ -120,6 +133,7 @@ export default function Vorgabewerte() {
   const rueckmeldung = useRueckmeldung()
   const [hervorgehoben, hervorheben] = useHervorhebung()
   const [aktionsfehler, setAktionsfehler] = useState(null)
+  const [archivFrage, setArchivFrage] = useState(null)
   const [arten, setArten] = useState([])
   const [klassen, setKlassen] = useState([])
   const [stammdatenFehler, setStammdatenFehler] = useState(null)
@@ -142,15 +156,23 @@ export default function Vorgabewerte() {
   function gespeichert(eintrag, neu) {
     formular.gespeichert()
     const fuer = geltung(eintrag)
-    rueckmeldung(`Richtpreis ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}`)
+    const mit = eintrag.umbenannte_instrumente || eintrag.umbenannte_richtpreise
+      ? ` – mitumbenannt: ${eintrag.umbenannte_instrumente} Instrument(e), ${eintrag.umbenannte_richtpreise} weitere(r) Richtpreis(e) der Klasse` : ''
+    rueckmeldung(`Richtpreis ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}${mit}`)
     liste.neuLaden()
     hervorheben(eintrag.id)
   }
 
-  async function archivStatus(eintrag, archiv) {
+  async function archivStatus(eintrag, archiv, bestaetigt = false) {
     setAktionsfehler(null)
+    setArchivFrage(null)
     if (formular.geaendert) {
       setAktionsfehler('Bitte das offene Formular zuerst speichern oder abbrechen.')
+      return
+    }
+    // Vor dem Archivieren zeigen, wie viele Instrumente die Ausführung verwenden (2.5)
+    if (archiv && !bestaetigt && eintrag.instrumente_mit_ausfuehrung > 0) {
+      setArchivFrage(eintrag)
       return
     }
     formular.gespeichert()
@@ -182,6 +204,13 @@ export default function Vorgabewerte() {
         <AktionsButton formular={formular} schluessel={NEU} primaer>Neuer Richtpreis</AktionsButton>
       </div>
       {aktionsfehler && <p className="meldung meldung--fehler" role="alert">{aktionsfehler}</p>}
+      {archivFrage && (
+        <div className="rueckfrage" role="alert">
+          <p>{archivFrage.reparaturart_bezeichnung} ({geltung(archivFrage)}): {instrumenteHinweis(archivFrage.instrumente_mit_ausfuehrung)}</p>
+          <button type="button" className="btn btn--gefahr btn--klein" onClick={() => archivStatus(archivFrage, true, true)}>Trotzdem archivieren</button>
+          <button type="button" className="btn btn--sekundaer btn--klein" onClick={() => setArchivFrage(null)}>Abbrechen</button>
+        </div>
+      )}
       <FormularBereich formular={formular}>
         {formular.offen === NEU && (
           <VorgabewertFormular key={NEU} formular={formular} arten={arten} klassen={klassen}
@@ -233,7 +262,7 @@ export default function Vorgabewerte() {
                   {gruppe.map((e) => {
                     const archiviert = e.archiviert_am !== null
                     // In einer Gruppe heißt die Zeile nach ihrer Ausführung, sonst nach der Reparaturart
-                    const name = mehrere ? e.ausfuehrung ?? 'Standard' : e.reparaturart_bezeichnung
+                    const name = mehrere ? e.ausfuehrung ?? 'ohne Namen' : e.reparaturart_bezeichnung
                     return (
                       <tr key={e.id} onClick={archiviert ? undefined : () => formular.oeffnen(e.id)}
                           className={[e.id === hervorgehoben && 'zeile--hervorgehoben', formular.offen === e.id && 'zeile--ausgewaehlt',
@@ -245,6 +274,7 @@ export default function Vorgabewerte() {
                                       onClick={(ev) => { ev.stopPropagation(); formular.oeffnen(e.id) }}>
                                 {name}
                               </button>}
+                          {e.ist_standard && mehrere && <span className="marke marke--aktuell">Standard</span>}
                           {!mehrere && istArchiviert(arten, e.reparaturart_id) && <span className="marke">Reparaturart archiviert</span>}
                         </td>
                         {!mehrere && (

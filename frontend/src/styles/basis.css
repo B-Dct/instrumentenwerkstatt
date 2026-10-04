@@ -472,3 +472,5 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .preisliste__zeilen small { display: block; font-size: var(--groesse-12); color: var(--farbe-text-leise); }
 .preisliste__hinweis { padding: var(--abstand-3); margin: 0; }
 .preisliste__ohne-standard { margin: 0 0 var(--abstand-2); font-weight: var(--gewicht-halbfett); }
+.feld__auswahl { display: flex; align-items: center; gap: var(--abstand-2); }
+.feld__auswahl input { width: auto; }

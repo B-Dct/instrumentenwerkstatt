@@ -35,8 +35,28 @@ def test_anlegen_ist_wiederholbar(db):
     demo_daten.anlegen(db)
     nachher = [_anzahl(db, m) for m in (Instrumentenklasse, Reparaturart, ReparaturVorgabewert, Kunde, Instrument, Auftrag)]
     assert vorher == nachher
-    assert _anzahl(db, Kunde, Kunde.kundennummer.startswith("DEMO-")) == 3
+    assert _anzahl(db, Kunde, Kunde.kundennummer.startswith("DEMO-")) == 4
     assert _anzahl(db, Auftrag, Auftrag.auftragsnummer.startswith("DEMO-01")) == 4
+
+
+def test_blechblas_kunde_zum_durchklicken_der_ausfuehrung(db):
+    """DEMO-004: Trompete ohne Ausführung, Flügelhorn mit Ausführung (falls die Preisliste sie kennt), Tuba."""
+    demo_daten.anlegen(db)
+    kunde = db.scalar(select(Kunde).where(Kunde.kundennummer == "DEMO-004"))
+    instrumente = {klasse: ausfuehrung for klasse, ausfuehrung in db.execute(
+        select(Instrumentenklasse.bezeichnung, Instrument.ausfuehrung)
+        .join(Instrumentenklasse, Instrument.instrumentenklasse_id == Instrumentenklasse.id)
+        .where(Instrument.kunde_id == kunde.id))}
+    assert set(instrumente) == {"Trompete", "Flügelhorn/Kornett", "B-Tuba (4 Ventile)"}
+    assert instrumente["Trompete"] is None and instrumente["B-Tuba (4 Ventile)"] is None
+    # Die Ausführung steht nur am Instrument, wenn es sie in der Preisliste der Klasse gibt
+    kornett = _id(db, Instrumentenklasse, "Flügelhorn/Kornett")
+    bekannt = _anzahl(db, ReparaturVorgabewert, ReparaturVorgabewert.instrumentenklasse_id == kornett,
+                      ReparaturVorgabewert.ausfuehrung == "Drehventile, lackiert", ReparaturVorgabewert.archiviert_am.is_(None))
+    assert instrumente["Flügelhorn/Kornett"] == ("Drehventile, lackiert" if bekannt else None)
+
+    assert demo_daten.entfernen(db)
+    assert _anzahl(db, Kunde, Kunde.kundennummer == "DEMO-004") == 0
 
 
 def test_schaetzungen_wie_im_spickzettel_angekuendigt(db):
