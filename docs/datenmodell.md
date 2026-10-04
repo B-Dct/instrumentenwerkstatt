@@ -121,12 +121,17 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | baujahr | INT | Optional, falls bekannt/schätzbar |
 | seriennummer | VARCHAR | Optional, hilfreich zur eindeutigen Identifikation bei Folgeaufträgen |
 | notizen | TEXT | z. B. Besonderheiten, bekannte Vorschäden |
-| ausführung | VARCHAR | Optional, freitextlich, z. B. "Perinet, lackiert" — physische Eigenschaft *dieses* Instruments (Oberfläche, Ventilmechanik), passend zu den `ausführung`-Werten der Vorgabewerte (2.6a). NULL = unbekannt/Standard. Anders als Hersteller/Typenbezeichnung ist dieses Feld direkt an die Werte gekoppelt, die bei der jeweiligen Instrumentenklasse als Vorgabewert-Ausführung existieren |
+| ausführung | VARCHAR | Optional, z. B. "Perinet, lackiert" — physische Eigenschaft *dieses* Instruments (Oberfläche, Ventilmechanik). Auswahl aus den Ausführungen, die es bei der Instrumentenklasse als Richtpreis-Ausführung gibt (2.6a), kein Freitext. NULL bedeutet *unbekannt*, nicht "Standard": Auch die Standardausführung trägt einen Namen und lässt sich am Instrument ausdrücklich eintragen |
 | archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `kunde` (2.1) |
 
 **Regeln:** Der Besitzer (`kunde_id`) lässt sich nach dem Anlegen nicht ändern; bei einem Besitzerwechsel wird das alte Instrument archiviert und ein neues angelegt, damit die Historie sauber bleibt. Instrumente mit offenen Aufträgen lassen sich nicht archivieren. Berechtigungen und Protokollierung wie bei `kunde`.
 
 **Warum `ausführung` am Instrument statt am Auftrag:** Oberfläche und Ventilmechanik ändern sich zwischen zwei Reparaturen desselben Instruments nicht — es ist eine Eigenschaft des physischen Objekts, wie Hersteller oder Baujahr, nicht des einzelnen Auftrags. Der Mitarbeiter trägt sie dadurch nur einmal ein, nicht bei jedem neuen Auftrag für dasselbe Instrument erneut. Ist bei einem Instrument noch keine Ausführung hinterlegt und gibt es für die bei einem neuen Auftrag gewählte Reparaturart mehrere aktive Vorgabewerte (`ausführung`, 2.6a) zu seiner Instrumentenklasse, fragt das Auftragsformular sie einmalig ab (genau wie bisher) — die Auswahl wird dabei zusätzlich auf dem Instrument gespeichert, damit künftige Aufträge für dasselbe Instrument nicht erneut danach fragen müssen.
+
+**Weitere Regeln zur Ausführung am Instrument:**
+- Ein Wechsel der Instrumentenklasse leert die Ausführung, da sie zur alten Klasse gehörte
+- Wird beim Anlegen eines Auftrags eine andere Ausführung mitgeschickt, als am Instrument hinterlegt ist, wird das mit einer Meldung am Feld abgelehnt, statt stillschweigend zu überschreiben
+- Wird eine Ausführung in der Preisliste umbenannt, werden die Instrumente dieser Klasse mit dem alten Namen in derselben Transaktion mitumbenannt und protokolliert, damit keine Instrumente unbemerkt auf den Standard zurückfallen. Vor dem Archivieren einer Ausführung zeigt die Preisliste, wie viele Instrumente sie verwenden
 
 **Reparaturhistorie (Option, geringe Priorität):** Da jeder Auftrag über `instrument_id` einem Instrument zugeordnet ist, lässt sich die Reparaturhistorie eines Instruments ohne Schemaänderung darstellen. Vorgesehen ist eine reine Leseansicht am Instrument mit den zugehörigen Aufträgen (Auftragsnummer, Datum, Reparaturart, Status, Arbeitszeit).
 
@@ -157,7 +162,8 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 | id | UUID / SERIAL | Primärschlüssel |
 | reparaturart_id | FK → reparaturart | |
 | instrumentenklasse_id | FK → instrumentenklasse | Optional (NULL = gilt allgemein für die Reparaturart, unabhängig von der Instrumentenklasse). Ein Eintrag mit gesetzter Instrumentenklasse überschreibt für diese Kombination den allgemeinen Wert (z. B. "Saitenwechsel" allgemein 0,5 Std., aber für "Kontrabass" spezifisch 1,5 Std.) |
-| ausführung | VARCHAR | Optional, freitextliche Verfeinerung *innerhalb* derselben Instrumentenklasse für reine Ausführungsunterschiede desselben Instruments (Oberfläche, Ventilmechanik), z. B. "Perinet, lackiert" / "Perinet, versilbert" / "Drehventile, lackiert" / "Drehventile, versilbert". NULL = Standardausführung (greift, wenn beim Auftrag keine Ausführung gewählt wurde oder keine passt). **Abgrenzung zur Instrumentenklasse:** Ein echtes anderes Instrument (andere Bauform/Tonlage, z. B. F-Tuba vs. B-Tuba, Tenorhorn mit 3 vs. 4 Ventilen) bekommt eine eigene Instrumentenklasse; eine reine Ausführungsvariante desselben Instruments (Oberfläche, Ventilmechanik) bekommt stattdessen dieses Feld — sonst zersplittert die Instrumentenklassen-Liste und mit ihr Auswahllisten, Gruppierungen (9.12) und die Auswertung "Verteilung nach Instrumentenklasse" (9.14.1) |
+| ausführung | VARCHAR | Optional, freitextliche Verfeinerung *innerhalb* derselben Instrumentenklasse für reine Ausführungsunterschiede desselben Instruments (Oberfläche, Ventilmechanik), z. B. "Perinet, lackiert" / "Perinet, versilbert" / "Drehventile, lackiert" / "Drehventile, versilbert". NULL bedeutet, dass es für diese Kombination keine Varianten gibt (ein einziger Wert). Sobald es mehrere Ausführungen gibt, trägt jede einen Namen (auch die Standardausführung, z. B. "Perinet, lackiert" oder "Normal"). **Abgrenzung zur Instrumentenklasse:** Ein echtes anderes Instrument (andere Bauform/Tonlage, z. B. F-Tuba vs. B-Tuba, Tenorhorn mit 3 vs. 4 Ventilen) bekommt eine eigene Instrumentenklasse; eine reine Ausführungsvariante desselben Instruments (Oberfläche, Ventilmechanik) bekommt stattdessen dieses Feld — sonst zersplittert die Instrumentenklassen-Liste und mit ihr Auswahllisten, Gruppierungen (9.12) und die Auswertung "Verteilung nach Instrumentenklasse" (9.14.1) |
+| ist_standard | BOOLEAN | Kennzeichnet bei mehreren Ausführungen derselben Kombination aus Reparaturart und Instrumentenklasse genau eine als Standard. Der Standard greift, wenn die Ausführung des Instruments unbekannt ist (2.5) oder keine eigene Zeile hat |
 | vorgabe_stunden | DECIMAL | Erwarteter Arbeitsaufwand in Stunden |
 | vorgabe_kosten | DECIMAL | Erwarteter Preis für den Kunden (Arbeits- + ggf. übliche Materialkosten als Pauschale) |
 | notiz | TEXT | Optional, z. B. "inkl. neuer Saiten, exkl. Spezialsaiten" |
@@ -169,7 +175,14 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 
 **Archivieren und Reaktivieren:** Nur Admin. Damit lässt sich ein versehentlich angelegter spezifischer Wert (z. B. für eine einzelne Instrumentenklasse) wieder zurücknehmen, sodass der allgemeine Wert nicht dauerhaft überschattet bleibt. Die Eindeutigkeit der Kombination aus Reparaturart, Instrumentenklasse **und Ausführung** gilt nur für aktive Einträge (per Datenbank-Index abgesichert).
 
-**Auswahl bei der Auftragserstellung:** Hat das gewählte Instrument bereits eine `ausführung` (2.5), wird automatisch der dazu passende Vorgabewert verwendet, ohne erneute Nachfrage. Nur wenn das Instrument noch keine Ausführung hat **und** es für die gewählte Kombination aus Reparaturart und Instrumentenklasse mehr als einen aktiven Vorgabewert gibt, erscheint einmalig ein zusätzliches Auswahlfeld "Ausführung" — die Wahl wird dabei auf dem Instrument gespeichert (siehe 2.5), nicht nur für diesen einen Auftrag verwendet. Ohne Auswahl oder bei nur einer Ausführung greift automatisch der Eintrag mit `ausführung = NULL` (Standardausführung).
+**Regeln zu Ausführungen und Standard:**
+- Eine Kombination aus Reparaturart und Instrumentenklasse hat entweder genau einen Wert ohne Ausführung (keine Varianten) oder mehrere Werte, die alle eine benannte Ausführung tragen, von denen genau einer `ist_standard` ist (je Kombination höchstens ein aktiver Standard, per Datenbank-Index abgesichert)
+- Legt der Admin zu einer Kombination mit nur einem unbenannten Wert eine zweite Ausführung an, verlangt der Editor, dem bestehenden Wert zuerst einen Namen zu geben; er wird dabei zum Standard
+- Der aktive Standard lässt sich nur archivieren, wenn zuvor eine andere Ausführung zum Standard erklärt wurde, oder wenn er die einzige verbleibende ist
+- Allgemeine Werte (ohne Instrumentenklasse) haben keine Ausführung
+- **Migration der bestehenden Daten:** Bei Trompete und Flügelhorn/Kornett erhält der bisher unbenannte Standardwert den Namen "Perinet, lackiert" und das Standard-Kennzeichen; bei B-Tuba (3 Ventile) / Reinigung wird die vom Admin benannte Ausführung "Normal" zum Standard. Findet die Migration eine Kombination mit mehreren benannten Ausführungen, aber ohne erkennbaren Standard, wird sie nicht geraten, sondern gemeldet
+
+**Auswahl bei der Auftragserstellung:** Hat das gewählte Instrument bereits eine `ausführung` (2.5), wird automatisch der dazu passende Vorgabewert verwendet, ohne erneute Nachfrage. Nur wenn das Instrument noch keine Ausführung hat **und** es für die gewählte Kombination aus Reparaturart und Instrumentenklasse mehr als einen aktiven Vorgabewert gibt, erscheint einmalig ein zusätzliches Auswahlfeld "Ausführung" — die Wahl wird dabei auf dem Instrument gespeichert (siehe 2.5), nicht nur für diesen einen Auftrag verwendet. Die Auswahl listet die Ausführungen mit Stunden und Preis, der Standard ist mit "(Standard)" gekennzeichnet, dazu kommt "Noch nicht festlegen" (Ausführung bleibt unbekannt). Bei unbekannter Ausführung greift der Standard.
 
 - Ein archivierter Vorgabewert lässt sich erst nach dem Reaktivieren bearbeiten
 - Reaktivieren wird abgelehnt, solange für dieselbe Kombination ein anderer Wert aktiv ist ("erst den aktiven Wert archivieren")
@@ -429,13 +442,18 @@ geschätzte_bandbreite = ± 20 % der benötigten Arbeitstage, mindestens ± 1 Ta
 
 `auftrag.geschätzte_arbeitsstunden` (die Grundlage für `benötigte_stunden`) wird wie in Abschnitt 4.1 beschrieben ermittelt: historischer Durchschnitt vergleichbarer abgeschlossener Aufträge, mit Fallback auf `reparatur_vorgabewert` (2.6a), solange zu wenig historische Daten vorliegen (Schwellenwert: 5 Vergleichsfälle).
 
-**Reihenfolge bei vorhandener `ausführung`** (hat das Instrument des Auftrags eine Ausführung gesetzt, 2.5): 
+**Reihenfolge bei bekannter `ausführung`** (hat das Instrument des Auftrags eine Ausführung gesetzt, 2.5):
 1. Historischer Durchschnitt für Reparaturart + Instrumentenklasse + Ausführung (ab 5 Vergleichsfällen mit **derselben** Ausführung)
 2. `reparatur_vorgabewert` für dieselbe Kombination inkl. Ausführung
-3. `reparatur_vorgabewert` für Reparaturart + Instrumentenklasse mit `ausführung = NULL` (Standard)
+3. `reparatur_vorgabewert` der Standardausführung (`ist_standard`) dieser Kombination
 4. `reparatur_vorgabewert` für die Reparaturart allgemein
 
-Bewusst **kein** Vermischen des historischen Durchschnitts über verschiedene Ausführungen hinweg (z. B. lackierte und versilberte Trompeten zusammen) — das würde die Schätzung verwässern, obwohl die Ausführung bekannt ist. Ohne gesetzte Ausführung am Instrument entfällt diese Verfeinerung, es gilt die allgemeine Reihenfolge ohne Schritt 1/2.
+**Reihenfolge bei unbekannter Ausführung** (am Instrument nichts hinterlegt):
+1. Historischer Durchschnitt für Reparaturart + Instrumentenklasse über alle Aufträge der Klasse (ab 5 Vergleichsfällen)
+2. `reparatur_vorgabewert` der Standardausführung (`ist_standard`) bzw., falls es keine Varianten gibt, der einzige Wert der Kombination
+3. `reparatur_vorgabewert` für die Reparaturart allgemein
+
+Bewusst **kein** Vermischen des historischen Durchschnitts über verschiedene Ausführungen hinweg, solange die Ausführung bekannt ist (z. B. lackierte und versilberte Trompeten zusammen) — das würde die Schätzung verwässern. Weil auch die Standardausführung einen Namen trägt, lässt sich ein Instrument mit bewusst eingetragener Standardausführung von einem mit unbekannter Ausführung unterscheiden.
 
 **Neuberechnung ausgelöst bei:** Auftragserstellung, Änderung von Zuweisung oder Priorität (über `PATCH /auftraege/{id}`, nur Werkstattleiter/Admin). Jede Berechnung wird in `schätzungs_log` protokolliert, inkl. Anlass und allen verwendeten Zahlen (z. B. "13,50 Std. Vorlauf (4 Aufträge davor) + 0,50 Std., 8,00 Std./Tag, 2 Arbeitstage").
 
@@ -1038,7 +1056,7 @@ Eine Seite statt drei getrennter Pflege-Listen. Fachlich ist die Preisliste eine
 
 **Präzisierungen aus der Umsetzung (Schritt A):**
 - Ganz oben steht eine Zeile "Allgemein (alle Instrumentenklassen)", in der die allgemeinen Werte (ohne Instrumentenklasse, 2.6a) gepflegt werden; ohne sie ließen sie sich in der Matrix nicht erreichen
-- Hat eine Zelle Ausführungen, aber keinen Standardwert, zeigt sie "ab [günstigster Preis]" und "n Ausführungen". Beachten: Ohne Standardwert greift bei einem Instrument ohne gesetzte Ausführung der allgemeine Wert der Reparaturart (siehe Abschnitt 4), nicht der günstigste. Der Editor weist deshalb darauf hin, dass kein Standardwert hinterlegt ist
+- Hat eine Zelle mehrere Ausführungen, zeigt sie den Preis des Standards (`ist_standard`, 2.6a) mit dem Zusatz "+ n Ausführungen". Im Editor ist je Ausführung ein Standard-Häkchen wählbar; genau eine Ausführung ist Standard. Solange Altdaten noch keinen Standard haben, weist der Editor darauf hin, dass dann der allgemeine Wert der Reparaturart gilt
 - Archivierte Werte sind in der Matrix nicht sichtbar, Reaktivieren geht über "Als Liste anzeigen"; dasselbe gilt für aktive Werte, deren Instrumentenklasse oder Reparaturart archiviert ist
 - Statt Auswahl-Filtern gibt es zwei Suchfelder (Instrumentenklasse, Reparaturart); für eine Matrix dieser Größe genügt das
 - Eingeklappte Oberkategorien werden nicht gemerkt, nach dem Neuladen ist alles aufgeklappt
@@ -1104,7 +1122,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.2 In Arbeit
 
-- **Ausführung am Instrument** (2.5, 2.6a, Abschnitt 4): Feld am Instrument, Auswahl nur noch einmalig, historischer Durchschnitt je Ausführung getrennt
+- **Ausführung am Instrument** (2.5, 2.6a, Abschnitt 4): Feld am Instrument, einmalige Abfrage, historischer Durchschnitt je Ausführung getrennt — gebaut, Commit steht an. Nachgezogen werden: Standard-Kennzeichen mit benannter Standardausführung (2.6a), Mitumbenennen der Instrumente beim Umbenennen einer Ausführung (2.5), Demo-Kunde mit Blechblasinstrument zum Durchklicken
 - **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1-4 (Menge, Zeit, Geld, Schätzgenauigkeit) fertig, Teilschritt 5 (Betrieb) steht aus
 - **Übersichtlichkeit der Stammdaten** (9.15 bis 9.17) in drei Schritten: (a) Preisliste als Matrix, Navigationsgruppen, Begriffe in der Oberfläche — fertig; (b) Endpunkt "Schätzung vorab" und (c) geführter Auftragsablauf stehen aus. Vorher nötig: Ausführung am Instrument (siehe oben), weil Vorschau und Instrumentenformular das Feld brauchen. Vor Instrumentenfamilie/Reparaturkategorie (9.12) sinnvoll, da diese dann nur noch die Gruppierung der Matrix liefern
 
