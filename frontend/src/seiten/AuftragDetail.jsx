@@ -20,8 +20,8 @@ const ZUWEISUNG = 'zuweisung'
 
 const QUELLEN = {
   historisch: 'historischer Durchschnitt',
-  vorgabe_instrumentenklasse: 'Vorgabewert der Instrumentenklasse',
-  vorgabe_allgemein: 'allgemeiner Vorgabewert',
+  vorgabe_instrumentenklasse: 'Preisliste (Wert der Instrumentenklasse)',
+  vorgabe_allgemein: 'Preisliste (allgemeiner Wert)',
   keine: 'keine Grundlage',
 }
 const METHODEN = { regelbasiert: 'Automatisch', manuelle_korrektur: 'Korrektur' }

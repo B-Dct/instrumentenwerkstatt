@@ -115,7 +115,7 @@ export default function AuftragNeu() {
                   </option>
                 ))}
               </select>
-              <small>Optional – bestimmt den Vorgabewert für die Schätzung. Ohne Auswahl gilt die Standardausführung.</small>
+              <small>Optional – bestimmt Richtpreis und Richtzeit für die Schätzung. Ohne Auswahl gilt die Standardausführung.</small>
             </label>
           )}
           <label className="feld">

@@ -400,3 +400,75 @@ th[aria-sort='ascending'] .sortierzeichen, th[aria-sort='descending'] .sortierze
 .tabelle .gruppe__kopf td { background: var(--farbe-flaeche-leise); }
 .tabelle .gruppe__unterzeile { padding-left: var(--abstand-6); }
 .tabelle .gruppe__unterzeile::before { content: '↳ '; color: var(--farbe-text-leise); }
+
+/* --- Seitenleiste: primäre Aktion und Untergruppe (9.2) ------------------------- */
+.seitenleiste { overflow-y: auto; }
+.seitenleiste__aktion { display: block; text-align: center; text-decoration: none; margin-bottom: var(--abstand-5); }
+.seitenleiste__aktion.active { background: var(--farbe-primaer-dunkel); }
+.seitenleiste__untertitel { margin-top: var(--abstand-3); }
+.seitenleiste__link--unter { padding-left: var(--abstand-5); }
+
+/* --- Preisliste als Matrix (9.15) ----------------------------------------------- */
+/* Die Matrix scrollt in ihrem eigenen Bereich; Kopfzeile und erste Spalte bleiben stehen */
+.preisliste {
+  overflow: auto;
+  max-height: var(--matrix-hoehe);
+  container-type: inline-size;
+  border: var(--randbreite) solid var(--farbe-rand);
+  border-radius: var(--radius);
+}
+.preisliste__tabelle { border-collapse: separate; border-spacing: 0; font-size: var(--groesse-14); }
+.preisliste__tabelle th, .preisliste__tabelle td {
+  border-bottom: var(--randbreite) solid var(--farbe-rand);
+  border-right: var(--randbreite) solid var(--farbe-rand);
+  background: var(--farbe-hintergrund);
+  padding: 0;
+}
+.preisliste__tabelle thead th {
+  position: sticky; top: 0; z-index: 2;
+  min-width: calc(var(--spalte-min-eng) - var(--abstand-5));
+  padding: var(--abstand-2) var(--abstand-3);
+  font-size: var(--groesse-12); font-weight: var(--gewicht-halbfett); color: var(--farbe-text-leise);
+  text-align: right; vertical-align: bottom;
+  border-bottom-color: var(--farbe-text);
+}
+.preisliste__tabelle th:first-child {
+  position: sticky; left: 0; z-index: 1;
+  min-width: calc(var(--spalte-min-eng) + var(--abstand-7));
+  text-align: left;
+}
+.preisliste__tabelle thead th:first-child { z-index: 3; }
+.preisliste__tabelle th[scope='row'] { padding: var(--abstand-2) var(--abstand-3); font-weight: var(--gewicht-normal); }
+.preisliste__gruppe th, .preisliste__gruppe td { background: var(--farbe-flaeche-leise); border-right: 0; }
+.preisliste__gruppe button {
+  font: inherit; font-weight: var(--gewicht-halbfett); color: inherit; background: none; border: 0; cursor: pointer;
+  width: 100%; text-align: left; padding: var(--abstand-2) var(--abstand-3); white-space: nowrap;
+}
+.preisliste__zelle button {
+  display: flex; flex-direction: column; align-items: flex-end; width: 100%; height: 100%;
+  min-height: var(--abstand-7);
+  padding: var(--abstand-2) var(--abstand-3);
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer; white-space: nowrap;
+}
+.preisliste__zelle button:hover { background: var(--farbe-flaeche-leise); }
+.preisliste__zelle--offen { box-shadow: inset 0 0 0 var(--fokusbreite) var(--farbe-primaer); }
+.preisliste__preis { font-variant-numeric: tabular-nums; }
+.preisliste__zeit, .preisliste__zusatz { font-size: var(--groesse-12); color: var(--farbe-text-leise); font-variant-numeric: tabular-nums; }
+.preisliste__leer { color: var(--farbe-text-leise); }
+/* Editor unter der Zeile: bleibt beim seitlichen Scrollen im sichtbaren Bereich */
+.preisliste__tabelle .preisliste__editor td { background: var(--farbe-flaeche-leise); border-right: 0; }
+.preisliste__editor-inhalt {
+  position: sticky; left: 0;
+  width: 100cqw; box-sizing: border-box;
+  padding: var(--abstand-3);
+}
+.preisliste__editor .fokus-formular { margin: 0; max-width: none; background: var(--farbe-hintergrund); }
+.preisliste__zeilen { width: 100%; border-collapse: collapse; }
+.preisliste__tabelle .preisliste__zeilen th, .preisliste__tabelle .preisliste__zeilen td {
+  position: static; min-width: 0; border: 0; padding: 0 var(--abstand-3) var(--abstand-2) 0;
+  text-align: left; vertical-align: top; font-size: var(--groesse-14); font-weight: var(--gewicht-normal); color: inherit;
+}
+.preisliste__zeilen input { width: 100%; }
+.preisliste__zeilen small { display: block; font-size: var(--groesse-12); color: var(--farbe-text-leise); }
+.preisliste__hinweis { padding: var(--abstand-3); margin: 0; }
+.preisliste__ohne-standard { margin: 0 0 var(--abstand-2); font-weight: var(--gewicht-halbfett); }

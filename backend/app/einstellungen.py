@@ -68,8 +68,8 @@ EINSTELLUNGEN: dict[str, Definition] = {
     ),
     "stundensatz": Definition(
         bezeichnung="Stundensatz",
-        beschreibung="Richtwert in Euro je Arbeitsstunde. Aus ihm sind die Stunden der Vorgabewerte abgeleitet, "
-                     "die aus einer Preisliste stammen (Preis ÷ Stundensatz). Die Schätzung rechnet nicht damit.",
+        beschreibung="Richtwert in Euro je Arbeitsstunde. Aus ihm schlägt die Preisliste die Richtzeit vor "
+                     "(Preis ÷ Stundensatz). Die Schätzung rechnet nicht damit.",
         zahl_bis=Decimal(1000), einheit="€/Std.",
     ),
 }

@@ -13,6 +13,7 @@ import Startseite from './seiten/Startseite.jsx'
 import Einstellungen from './seiten/verwaltung/Einstellungen.jsx'
 import Instrumentenklassen from './seiten/verwaltung/Instrumentenklassen.jsx'
 import Reparaturarten from './seiten/verwaltung/Reparaturarten.jsx'
+import Preisliste from './seiten/verwaltung/Preisliste.jsx'
 import Vorgabewerte from './seiten/verwaltung/Vorgabewerte.jsx'
 import Mitarbeiter from './seiten/verwaltung/Mitarbeiter.jsx'
 import MitarbeiterDetail from './seiten/verwaltung/MitarbeiterDetail.jsx'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       // Verwaltung: nur Admin (7.2)
       { path: '/verwaltung/instrumentenklassen', element: <NurRolle rolle="admin"><Instrumentenklassen /></NurRolle> },
       { path: '/verwaltung/reparaturarten', element: <NurRolle rolle="admin"><Reparaturarten /></NurRolle> },
+      { path: '/verwaltung/preisliste', element: <NurRolle rolle="admin"><Preisliste /></NurRolle> },
       { path: '/verwaltung/vorgabewerte', element: <NurRolle rolle="admin"><Vorgabewerte /></NurRolle> },
       { path: '/verwaltung/mitarbeiter', element: <NurRolle rolle="admin"><Mitarbeiter /></NurRolle> },
       { path: '/verwaltung/einstellungen', element: <NurRolle rolle="admin"><Einstellungen /></NurRolle> },

@@ -56,7 +56,7 @@ def _als_antwort(zeile) -> Vorgabewert:
 def _laden(db: Session, vorgabewert_id: uuid.UUID) -> Vorgabewert:
     zeile = db.execute(_abfrage().where(ReparaturVorgabewert.id == vorgabewert_id)).one_or_none()
     if zeile is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vorgabewert nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Richtpreis nicht gefunden")
     return _als_antwort(zeile)
 
 
@@ -83,7 +83,7 @@ def _ausfuehrung_pruefen(instrumentenklasse_id: uuid.UUID | None, ausfuehrung: s
 REAKTIVIEREN_MELDUNGEN = {
     "uq_reparatur_vorgabewert_kombination":
         "Für diese Kombination aus Reparaturart, Instrumentenklasse und Ausführung ist bereits ein anderer "
-        "Vorgabewert aktiv – diesen zuerst archivieren.",
+        "Richtpreis aktiv – diesen zuerst archivieren.",
 }
 
 
@@ -179,9 +179,9 @@ def vorgabewert_bearbeiten(
 ) -> Vorgabewert:
     eintrag = db.get(ReparaturVorgabewert, vorgabewert_id)
     if eintrag is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vorgabewert nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Richtpreis nicht gefunden")
     if eintrag.archiviert_am is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Vorgabewert ist archiviert – zum Bearbeiten erst reaktivieren")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Richtpreis ist archiviert – zum Bearbeiten erst reaktivieren")
 
     aenderungen = daten.model_dump(exclude_unset=True)
     leer = sorted(f for f in _PFLICHTFELDER if f in aenderungen and aenderungen[f] is None)
@@ -216,10 +216,10 @@ def vorgabewert_bearbeiten(
 def _archiv_umschalten(db: Session, vorgabewert_id: uuid.UUID, mitarbeiter_id: uuid.UUID, archivieren: bool) -> Vorgabewert:
     eintrag = db.get(ReparaturVorgabewert, vorgabewert_id, with_for_update=True)
     if eintrag is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vorgabewert nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Richtpreis nicht gefunden")
     if (eintrag.archiviert_am is not None) == archivieren:
         raise HTTPException(status.HTTP_409_CONFLICT,
-                            f"Vorgabewert ist {'bereits' if archivieren else 'nicht'} archiviert")
+                            f"Richtpreis ist {'bereits' if archivieren else 'nicht'} archiviert")
     alt = eintrag.archiviert_am
     zeitpunkt = db.scalar(select(func.clock_timestamp())) if archivieren else None
     # Beim Reaktivieren prüft die Datenbank, ob die Kombination schon aktiv vergeben ist

@@ -33,7 +33,7 @@ KONFLIKT_MELDUNGEN: dict[str, str] = {
         "Eine Reparaturart mit dieser Bezeichnung gibt es bereits (ggf. archiviert – dann reaktivieren)",
     "uq_reparatur_vorgabewert_kombination":
         "Für diese Kombination aus Reparaturart, Instrumentenklasse und Ausführung gibt es bereits einen aktiven "
-        "Vorgabewert – bitte den bestehenden bearbeiten",
+        "Richtpreis – bitte den bestehenden bearbeiten",
     "uq_kunde_kundennummer": "Diese Kundennummer ist bereits vergeben",
     "uq_kunde_externe_kundennummer": "Diese externe Kundennummer ist bereits einem anderen Kunden zugeordnet",
     "uq_mitarbeiter_email": "Diese E-Mail-Adresse ist bereits einem Mitarbeiter-Konto zugeordnet",

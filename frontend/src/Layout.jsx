@@ -14,10 +14,13 @@ function Seitenleiste({ nutzer }) {
   return (
     <aside className="seitenleiste">
       <Link to="/" className="seitenleiste__start">Instrumenten&shy;werkstatt</Link>
-      <nav className="seitenleiste__nav" aria-label="Hauptnavigation">
+      {/* Primäre Aktion, abgesetzt von der übrigen Navigation (9.2) */}
+      <NavLink to="/neu" className="btn btn--primaer seitenleiste__aktion">Neuer Auftrag</NavLink>
+      {/* Gliederung nach Tagesgeschäft und Verwaltung (9.2); ohne Verwaltung braucht es keine Überschrift */}
+      <nav className="seitenleiste__nav" aria-label="Tagesgeschäft">
+        {hatRolle('admin') && <span className="seitenleiste__titel">Tagesgeschäft</span>}
         {hatRolle('werkstattleiter') && <NavLink to="/" end className="seitenleiste__link">Übersicht</NavLink>}
         <NavLink to="/auftraege" className={aktivWenn(pathname === '/auftraege' || pathname.startsWith('/auftrag/'))}>Aufträge</NavLink>
-        <NavLink to="/neu" className="seitenleiste__link">Neuer Auftrag</NavLink>
         <NavLink to="/kunden" className="seitenleiste__link">Kunden</NavLink>
         {hatRolle('werkstattleiter') && <NavLink to="/abwesenheiten" className="seitenleiste__link">Abwesenheiten</NavLink>}
         {hatRolle('werkstattleiter') && <NavLink to="/auswertungen" className="seitenleiste__link">Auswertungen</NavLink>}
@@ -25,11 +28,15 @@ function Seitenleiste({ nutzer }) {
       {hatRolle('admin') && (
         <nav className="seitenleiste__nav seitenleiste__gruppe" aria-label="Verwaltung">
           <span className="seitenleiste__titel">Verwaltung</span>
-          <NavLink to="/verwaltung/instrumentenklassen" className="seitenleiste__link">Instrumentenklassen</NavLink>
-          <NavLink to="/verwaltung/reparaturarten" className="seitenleiste__link">Reparaturarten</NavLink>
-          <NavLink to="/verwaltung/vorgabewerte" className="seitenleiste__link">Vorgabewerte</NavLink>
+          <NavLink to="/verwaltung/preisliste"
+                   className={aktivWenn(pathname === '/verwaltung/preisliste' || pathname === '/verwaltung/vorgabewerte')}>
+            Preisliste
+          </NavLink>
           <NavLink to="/verwaltung/mitarbeiter" className="seitenleiste__link">Mitarbeiter</NavLink>
           <NavLink to="/verwaltung/einstellungen" className="seitenleiste__link">Einstellungen</NavLink>
+          <span className="seitenleiste__titel seitenleiste__untertitel">Stammdaten</span>
+          <NavLink to="/verwaltung/instrumentenklassen" className="seitenleiste__link seitenleiste__link--unter">Instrumentenklassen</NavLink>
+          <NavLink to="/verwaltung/reparaturarten" className="seitenleiste__link seitenleiste__link--unter">Reparaturarten</NavLink>
         </nav>
       )}
       <div className="seitenleiste__nutzer">

@@ -58,9 +58,10 @@ def test_die_liste_selbst_ist_vollstaendig():
 
 
 def test_nach_der_migration_ist_alles_vorhanden(db):
-    """Die Migration ist in dieser Datenbank bereits gelaufen."""
-    assert len(klassen(db)) == 15 and len(arten(db)) == 2 and len(vorgabewerte(db)) == 38
-    assert wert(db, "stundensatz") == "45"
+    """Die Migration ist in dieser Datenbank bereits gelaufen. Geprüft wird nur, was die Werkstatt nicht
+    selbst pflegt: Preise, Ausführungen und der Stundensatz dürfen sich seit der Migration geändert haben."""
+    assert len(klassen(db)) == 15 and len(arten(db)) == 2 and len(vorgabewerte(db)) > 0
+    assert wert(db, "stundensatz") is not None
     # Keine Trompeten- oder Flügelhorn-Varianten als eigene Klassen
     varianten = db.scalars(select(Instrumentenklasse.bezeichnung).where(
         Instrumentenklasse.bezeichnung.like("Trompete (%") | Instrumentenklasse.bezeichnung.like("Flügelhorn%("))).all()

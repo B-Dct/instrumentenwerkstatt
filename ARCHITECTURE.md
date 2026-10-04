@@ -112,6 +112,7 @@ Vollständige Liste: siehe Datenmodell-Dokument, Abschnitt 9.
 | Datum | Änderung |
 |---|---|
 | *(Datum ergänzen)* | Ersterstellung |
+| 04.10.2026 | Preisliste als Matrix (9.15): neue Seite `Preisliste.jsx`, reine Ansicht über die bestehenden Endpunkte für Instrumentenklassen, Reparaturarten und Vorgabewerte (kein neues Backend); Seitenleiste in Tagesgeschäft und Verwaltung gegliedert (9.2); in der Oberfläche heißt der Vorgabewert jetzt „Richtpreis/Richtzeit“ bzw. „Preisliste“ (9.17), im Code und in der Datenbank bleibt der Name `vorgabewert` |
 | 03.10.2026 | Vorgabewerte mit optionaler `ausfuehrung` (2.6a): Varianten desselben Instruments (Oberfläche, Ventilmechanik) sind keine eigenen Instrumentenklassen; Eindeutigkeit über Reparaturart + Instrumentenklasse + Ausführung; Auftragsformular zeigt bei mehreren Ausführungen ein Auswahlfeld; Vorgabewerte-Liste gruppiert Ausführungen als Unterzeilen |
 | 03.10.2026 | Grunddaten Blechblasinstrumente per Migration (`app/grunddaten/blechblas_2026_10.py`): 14 neue Instrumentenklassen (Trompete bleibt eine Klasse mit vier Ausführungen, Flügelhorn/Kornett mit zwei), Reparaturarten „Reinigung“/„Überholung“, 38 Vorgabewerte, Einstellung `stundensatz`; Einstellungen können jetzt auch Zahlen mit Einheit sein |
 | 03.10.2026 | Auswertungen (9.14), Teil 4 „Schätzgenauigkeit“: Ø Abweichung der ersten automatischen Schätzung von erfasster Arbeitszeit und abgerechnetem Betrag, mit Tendenz |

@@ -17,7 +17,7 @@ const SPALTEN = [
   { titel: 'Standard-Komplexität', spalte: 'standard_komplexitaet', wert: (e) => `${e.standard_komplexitaet} von 5` },
 ]
 
-function Felder({ werte, setze, felder }) {
+export function ArtFelder({ werte, setze, felder }) {
   return (
     <div className="spalten spalten--eng">
       <Feld label="Bezeichnung" fehler={felder.bezeichnung} hinweis="z. B. Saitenwechsel, Ventil-Überholung">
@@ -46,7 +46,7 @@ export default function Reparaturarten() {
       suchhinweis="Suchen: Bezeichnung"
       startwerte={(e) => ({ bezeichnung: e?.bezeichnung ?? '', standard_komplexitaet: String(e?.standard_komplexitaet ?? 2) })}
       zuDaten={(w) => ({ bezeichnung: w.bezeichnung, standard_komplexitaet: Number(w.standard_komplexitaet) })}
-      Felder={Felder}
+      Felder={ArtFelder}
     />
   )
 }

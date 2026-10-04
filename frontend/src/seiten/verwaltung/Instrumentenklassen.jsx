@@ -16,7 +16,7 @@ const SPALTEN = [
   { titel: 'Oberkategorie', spalte: 'oberkategorie', wert: (e) => e.oberkategorie },
 ]
 
-function Felder({ werte, setze, felder }) {
+export function KlasseFelder({ werte, setze, felder }) {
   return (
     <div className="spalten spalten--eng">
       <Feld label="Bezeichnung" fehler={felder.bezeichnung} hinweis="z. B. Violine, Trompete">
@@ -48,7 +48,7 @@ export default function Instrumentenklassen() {
       suchhinweis="Suchen: Bezeichnung, Oberkategorie"
       startwerte={(e) => ({ bezeichnung: e?.bezeichnung ?? '', oberkategorie: e?.oberkategorie ?? '' })}
       zuDaten={(w) => ({ bezeichnung: w.bezeichnung, oberkategorie: w.oberkategorie })}
-      Felder={Felder}
+      Felder={KlasseFelder}
     />
   )
 }

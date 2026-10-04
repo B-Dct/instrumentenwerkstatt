@@ -1,6 +1,8 @@
-// Vorgabewerte für Dauer und Kosten (2.6a) – nur Admin (7.2), nach 9.10 aufgebaut, Liste nach 9.11.
+// Preisliste als Liste: Richtpreise und Richtzeiten (2.6a, 9.17) – nur Admin (7.2), nach 9.10 aufgebaut,
+// Liste nach 9.11. Die Matrix-Ansicht derselben Daten ist Preisliste.jsx (9.15).
 // Ein Wert gilt allgemein für eine Reparaturart oder speziell für eine Instrumentenklasse.
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import { alleEintraege, api, datum, euro, zahl } from '../../api.js'
 import { AktionsButton, Feld, FokusFormular, FormularBereich } from '../../komponenten/FokusFormular.jsx'
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
@@ -76,9 +78,9 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
   const setze = (feld) => (e) => { feldGeaendert(feld); setWerte((w) => ({ ...w, [feld]: e.target.value })) }
 
   return (
-    <FokusFormular formular={formular} titel={eintrag ? 'Vorgabewert bearbeiten' : 'Neuer Vorgabewert'}
+    <FokusFormular formular={formular} titel={eintrag ? 'Richtpreis bearbeiten' : 'Neuer Richtpreis'}
                    onSpeichern={ausfuehren} sendet={sendet} fehler={fehler}
-                   speichernText={eintrag ? 'Speichern' : 'Vorgabewert anlegen'}>
+                   speichernText={eintrag ? 'Speichern' : 'Richtpreis anlegen'}>
       <div className="spalten spalten--eng">
         <Feld label="Reparaturart" fehler={felder.reparaturart_id}>
           <select value={werte.reparaturart_id} onChange={setze('reparaturart_id')} required>
@@ -99,10 +101,10 @@ function VorgabewertFormular({ formular, eintrag, arten, klassen, onGespeichert 
             <input value={werte.ausfuehrung} onChange={setze('ausfuehrung')} maxLength={100} autoComplete="off" />
           </Feld>
         )}
-        <Feld label="Arbeitsstunden" fehler={felder.vorgabe_stunden}>
+        <Feld label="Richtzeit in Stunden" fehler={felder.vorgabe_stunden}>
           <input type="number" min="0" step="0.25" value={werte.vorgabe_stunden} onChange={setze('vorgabe_stunden')} required />
         </Feld>
-        <Feld label="Kosten in Euro" fehler={felder.vorgabe_kosten} hinweis="Preis für den Kunden inkl. üblicher Materialpauschale">
+        <Feld label="Richtpreis in Euro" fehler={felder.vorgabe_kosten} hinweis="Preis für den Kunden inkl. üblicher Materialpauschale">
           <input type="number" min="0" step="0.01" value={werte.vorgabe_kosten} onChange={setze('vorgabe_kosten')} required />
         </Feld>
       </div>
@@ -140,7 +142,7 @@ export default function Vorgabewerte() {
   function gespeichert(eintrag, neu) {
     formular.gespeichert()
     const fuer = geltung(eintrag)
-    rueckmeldung(`Vorgabewert ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}`)
+    rueckmeldung(`Richtpreis ${eintrag.reparaturart_bezeichnung} (${fuer}) ${neu ? 'angelegt' : 'gespeichert'}`)
     liste.neuLaden()
     hervorheben(eintrag.id)
   }
@@ -156,8 +158,8 @@ export default function Vorgabewerte() {
     try {
       await (archiv ? api.admin.vorgabewertArchivieren(eintrag.id) : api.admin.vorgabewertReaktivieren(eintrag.id))
       rueckmeldung(archiv
-        ? `Vorgabewert ${name} archiviert – die Schätzung ignoriert ihn, er kann reaktiviert werden`
-        : `Vorgabewert ${name} reaktiviert`)
+        ? `Richtpreis ${name} archiviert – die Schätzung ignoriert ihn, er kann reaktiviert werden`
+        : `Richtpreis ${name} reaktiviert`)
       liste.neuLaden()
       hervorheben(eintrag.id)
     } catch (err) {
@@ -169,15 +171,15 @@ export default function Vorgabewerte() {
 
   return (
     <>
-      <div className="kopf"><h1>Vorgabewerte</h1></div>
+      <div className="kopf"><h1>Preisliste als Liste</h1></div>
       <p className="leise seitenbeschreibung">
-        Erwartete Arbeitsstunden und Kosten je Reparaturart. Sie gelten, solange es weniger als fünf abgeschlossene
+        Richtpreis und Richtzeit je Reparaturart. Sie gelten, solange es weniger als fünf abgeschlossene
         Vergleichsaufträge gibt; danach rechnet die Schätzung mit dem historischen Durchschnitt. Archivierte Werte
-        ignoriert die Schätzung.
+        ignoriert die Schätzung. <Link to="/verwaltung/preisliste">Als Matrix anzeigen</Link>
       </p>
 
       <div className="aktionsleiste">
-        <AktionsButton formular={formular} schluessel={NEU} primaer>Neuer Vorgabewert</AktionsButton>
+        <AktionsButton formular={formular} schluessel={NEU} primaer>Neuer Richtpreis</AktionsButton>
       </div>
       {aktionsfehler && <p className="meldung meldung--fehler" role="alert">{aktionsfehler}</p>}
       <FormularBereich formular={formular}>
@@ -195,7 +197,7 @@ export default function Vorgabewerte() {
 
       {fehler && <p className="meldung meldung--fehler">{fehler}</p>}
       {!liste.daten && !fehler && <p className="leise">Lädt …</p>}
-      <ListeLeer liste={liste} leerText="Noch keine Vorgabewerte angelegt – über „Neuer Vorgabewert“ anlegen." />
+      <ListeLeer liste={liste} leerText="Noch keine Richtpreise angelegt – über „Neuer Richtpreis“ anlegen." />
       {eintraege?.length > 0 && (
         <div className="tabelle-rahmen">
           <table className="tabelle tabelle--klickbar">
@@ -203,8 +205,8 @@ export default function Vorgabewerte() {
               <tr>
                 <SortierKopf liste={liste} spalte="reparaturart">Reparaturart</SortierKopf>
                 <SortierKopf liste={liste} spalte="gilt_fuer">Gilt für</SortierKopf>
-                <SortierKopf liste={liste} spalte="vorgabe_stunden" zahl>Std.</SortierKopf>
-                <SortierKopf liste={liste} spalte="vorgabe_kosten" zahl>Kosten</SortierKopf>
+                <SortierKopf liste={liste} spalte="vorgabe_stunden" zahl>Richtzeit (Std.)</SortierKopf>
+                <SortierKopf liste={liste} spalte="vorgabe_kosten" zahl>Richtpreis</SortierKopf>
                 <th>Notiz</th>
                 <SortierKopf liste={liste} spalte="geaendert_am">Geändert</SortierKopf>
                 <th></th>

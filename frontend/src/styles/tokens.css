@@ -59,4 +59,5 @@
   --login-max: 360px;
   --spalte-min: 320px;
   --spalte-min-eng: 160px;
+  --matrix-hoehe: 75vh;           /* Preisliste (9.15): scrollt in ihrem eigenen Bereich */
 }
