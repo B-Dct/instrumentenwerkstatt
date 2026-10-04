@@ -121,9 +121,12 @@ Erfasst das konkrete Instrument eines Kunden — getrennt von der Klasse (2.4), 
 | baujahr | INT | Optional, falls bekannt/schätzbar |
 | seriennummer | VARCHAR | Optional, hilfreich zur eindeutigen Identifikation bei Folgeaufträgen |
 | notizen | TEXT | z. B. Besonderheiten, bekannte Vorschäden |
+| ausführung | VARCHAR | Optional, freitextlich, z. B. "Perinet, lackiert" — physische Eigenschaft *dieses* Instruments (Oberfläche, Ventilmechanik), passend zu den `ausführung`-Werten der Vorgabewerte (2.6a). NULL = unbekannt/Standard. Anders als Hersteller/Typenbezeichnung ist dieses Feld direkt an die Werte gekoppelt, die bei der jeweiligen Instrumentenklasse als Vorgabewert-Ausführung existieren |
 | archiviert_am | TIMESTAMP | NULL = aktiv, sonst wie bei `kunde` (2.1) |
 
 **Regeln:** Der Besitzer (`kunde_id`) lässt sich nach dem Anlegen nicht ändern; bei einem Besitzerwechsel wird das alte Instrument archiviert und ein neues angelegt, damit die Historie sauber bleibt. Instrumente mit offenen Aufträgen lassen sich nicht archivieren. Berechtigungen und Protokollierung wie bei `kunde`.
+
+**Warum `ausführung` am Instrument statt am Auftrag:** Oberfläche und Ventilmechanik ändern sich zwischen zwei Reparaturen desselben Instruments nicht — es ist eine Eigenschaft des physischen Objekts, wie Hersteller oder Baujahr, nicht des einzelnen Auftrags. Der Mitarbeiter trägt sie dadurch nur einmal ein, nicht bei jedem neuen Auftrag für dasselbe Instrument erneut. Ist bei einem Instrument noch keine Ausführung hinterlegt und gibt es für die bei einem neuen Auftrag gewählte Reparaturart mehrere aktive Vorgabewerte (`ausführung`, 2.6a) zu seiner Instrumentenklasse, fragt das Auftragsformular sie einmalig ab (genau wie bisher) — die Auswahl wird dabei zusätzlich auf dem Instrument gespeichert, damit künftige Aufträge für dasselbe Instrument nicht erneut danach fragen müssen.
 
 **Reparaturhistorie (Option, geringe Priorität):** Da jeder Auftrag über `instrument_id` einem Instrument zugeordnet ist, lässt sich die Reparaturhistorie eines Instruments ohne Schemaänderung darstellen. Vorgesehen ist eine reine Leseansicht am Instrument mit den zugehörigen Aufträgen (Auftragsnummer, Datum, Reparaturart, Status, Arbeitszeit).
 
@@ -166,7 +169,7 @@ Vorgabedaten je Reparaturart (optional zusätzlich verfeinert je Instrumentenkla
 
 **Archivieren und Reaktivieren:** Nur Admin. Damit lässt sich ein versehentlich angelegter spezifischer Wert (z. B. für eine einzelne Instrumentenklasse) wieder zurücknehmen, sodass der allgemeine Wert nicht dauerhaft überschattet bleibt. Die Eindeutigkeit der Kombination aus Reparaturart, Instrumentenklasse **und Ausführung** gilt nur für aktive Einträge (per Datenbank-Index abgesichert).
 
-**Auswahl bei der Auftragserstellung:** Gibt es für die gewählte Kombination aus Reparaturart und Instrumentenklasse mehr als einen aktiven Vorgabewert (unterschieden durch `ausführung`), erscheint ein zusätzliches, optionales Auswahlfeld "Ausführung" — nur dann, sonst nicht. Wird keine Ausführung gewählt oder gibt es nur eine, greift automatisch der Eintrag mit `ausführung = NULL` (Standardausführung).
+**Auswahl bei der Auftragserstellung:** Hat das gewählte Instrument bereits eine `ausführung` (2.5), wird automatisch der dazu passende Vorgabewert verwendet, ohne erneute Nachfrage. Nur wenn das Instrument noch keine Ausführung hat **und** es für die gewählte Kombination aus Reparaturart und Instrumentenklasse mehr als einen aktiven Vorgabewert gibt, erscheint einmalig ein zusätzliches Auswahlfeld "Ausführung" — die Wahl wird dabei auf dem Instrument gespeichert (siehe 2.5), nicht nur für diesen einen Auftrag verwendet. Ohne Auswahl oder bei nur einer Ausführung greift automatisch der Eintrag mit `ausführung = NULL` (Standardausführung).
 
 - Ein archivierter Vorgabewert lässt sich erst nach dem Reaktivieren bearbeiten
 - Reaktivieren wird abgelehnt, solange für dieselbe Kombination ein anderer Wert aktiv ist ("erst den aktiven Wert archivieren")
@@ -425,6 +428,14 @@ geschätzte_bandbreite = ± 20 % der benötigten Arbeitstage, mindestens ± 1 Ta
 ```
 
 `auftrag.geschätzte_arbeitsstunden` (die Grundlage für `benötigte_stunden`) wird wie in Abschnitt 4.1 beschrieben ermittelt: historischer Durchschnitt vergleichbarer abgeschlossener Aufträge, mit Fallback auf `reparatur_vorgabewert` (2.6a), solange zu wenig historische Daten vorliegen (Schwellenwert: 5 Vergleichsfälle).
+
+**Reihenfolge bei vorhandener `ausführung`** (hat das Instrument des Auftrags eine Ausführung gesetzt, 2.5): 
+1. Historischer Durchschnitt für Reparaturart + Instrumentenklasse + Ausführung (ab 5 Vergleichsfällen mit **derselben** Ausführung)
+2. `reparatur_vorgabewert` für dieselbe Kombination inkl. Ausführung
+3. `reparatur_vorgabewert` für Reparaturart + Instrumentenklasse mit `ausführung = NULL` (Standard)
+4. `reparatur_vorgabewert` für die Reparaturart allgemein
+
+Bewusst **kein** Vermischen des historischen Durchschnitts über verschiedene Ausführungen hinweg (z. B. lackierte und versilberte Trompeten zusammen) — das würde die Schätzung verwässern, obwohl die Ausführung bekannt ist. Ohne gesetzte Ausführung am Instrument entfällt diese Verfeinerung, es gilt die allgemeine Reihenfolge ohne Schritt 1/2.
 
 **Neuberechnung ausgelöst bei:** Auftragserstellung, Änderung von Zuweisung oder Priorität (über `PATCH /auftraege/{id}`, nur Werkstattleiter/Admin). Jede Berechnung wird in `schätzungs_log` protokolliert, inkl. Anlass und allen verwendeten Zahlen (z. B. "13,50 Std. Vorlauf (4 Aufträge davor) + 0,50 Std., 8,00 Std./Tag, 2 Arbeitstage").
 
