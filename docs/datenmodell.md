@@ -1036,6 +1036,14 @@ Eine Seite statt drei getrennter Pflege-Listen. Fachlich ist die Preisliste eine
 
 **Bedienung (wie 9.13 eine bewusste Ausnahme von Regel 9.10, da ein Raster ein eigenständiges Bedienmuster ist):** Ein Klick auf eine Zelle öffnet darunter eingebettet den Editor: Richtpreis, Richtzeit, Notiz. Bei mehreren Ausführungen steht dort je Ausführung eine Zeile, dazu "Ausführung hinzufügen" und Archivieren je Zeile. Gibt der Admin nur den Preis ein und lässt die Richtzeit leer, wird die Richtzeit als Vorschlag aus dem Preis und dem Stundensatz aus den Einstellungen (7.5) berechnet (Preis ÷ Stundensatz, auf 0,25 Std. gerundet) und bleibt änderbar.
 
+**Präzisierungen aus der Umsetzung (Schritt A):**
+- Ganz oben steht eine Zeile "Allgemein (alle Instrumentenklassen)", in der die allgemeinen Werte (ohne Instrumentenklasse, 2.6a) gepflegt werden; ohne sie ließen sie sich in der Matrix nicht erreichen
+- Hat eine Zelle Ausführungen, aber keinen Standardwert, zeigt sie "ab [günstigster Preis]" und "n Ausführungen". Beachten: Ohne Standardwert greift bei einem Instrument ohne gesetzte Ausführung der allgemeine Wert der Reparaturart (siehe Abschnitt 4), nicht der günstigste. Der Editor weist deshalb darauf hin, dass kein Standardwert hinterlegt ist
+- Archivierte Werte sind in der Matrix nicht sichtbar, Reaktivieren geht über "Als Liste anzeigen"; dasselbe gilt für aktive Werte, deren Instrumentenklasse oder Reparaturart archiviert ist
+- Statt Auswahl-Filtern gibt es zwei Suchfelder (Instrumentenklasse, Reparaturart); für eine Matrix dieser Größe genügt das
+- Eingeklappte Oberkategorien werden nicht gemerkt, nach dem Neuladen ist alles aufgeklappt
+- Die Seitenleisten-Überschrift "Tagesgeschäft" erscheint nur, wenn es auch die Gruppe "Verwaltung" gibt (also nur für Admins); eine einzelne Überschrift wäre überflüssig
+
 **Direkt auf der Seite anlegen:** "Instrumentenklasse hinzufügen" (Bezeichnung, Oberkategorie/Familie) und "Reparaturart hinzufügen" (Bezeichnung, Standard-Komplexität) öffnen jeweils ein eingebettetes Formular; neue Zeilen bzw. Spalten erscheinen sofort in der Matrix. Umbenennen, Archivieren und Reaktivieren bleiben auf den Seiten "Instrumentenklassen" und "Reparaturarten" (Verweise darauf stehen oben auf der Preisliste).
 
 ### 9.16 Geführter Auftragsablauf ("Neuer Auftrag")
@@ -1098,7 +1106,7 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 - **Ausführung am Instrument** (2.5, 2.6a, Abschnitt 4): Feld am Instrument, Auswahl nur noch einmalig, historischer Durchschnitt je Ausführung getrennt
 - **Auswertungen/Jahresstatistik** (9.14): Teilschritte 1-4 (Menge, Zeit, Geld, Schätzgenauigkeit) fertig, Teilschritt 5 (Betrieb) steht aus
-- **Übersichtlichkeit der Stammdaten** (9.15 bis 9.17, neu ausgearbeitet): in drei Schritten — (a) Preisliste als Matrix, Navigation nach Tagesgeschäft und Verwaltung, Begriffe in der Oberfläche; (b) Endpunkt "Schätzung vorab"; (c) geführter Auftragsablauf. Reihenfolge relativ zu Teilschritt 5 der Auswertungen offen; vor Instrumentenfamilie/Reparaturkategorie (9.12) sinnvoll, da diese dann nur noch die Gruppierung der Matrix liefern
+- **Übersichtlichkeit der Stammdaten** (9.15 bis 9.17) in drei Schritten: (a) Preisliste als Matrix, Navigationsgruppen, Begriffe in der Oberfläche — fertig; (b) Endpunkt "Schätzung vorab" und (c) geführter Auftragsablauf stehen aus. Vorher nötig: Ausführung am Instrument (siehe oben), weil Vorschau und Instrumentenformular das Feld brauchen. Vor Instrumentenfamilie/Reparaturkategorie (9.12) sinnvoll, da diese dann nur noch die Gruppierung der Matrix liefern
 
 ### 10.4 Offen, vor dem Echtbetrieb wichtig
 
@@ -1111,13 +1119,15 @@ Stand der Umsetzung. Die Reihenfolge der offenen Punkte ist ein Vorschlag und ka
 
 ### 10.5 Offen, Funktionsausbau
 
-9. Internes Mitarbeiter-Dashboard nach 9.4 (Liste existiert, Dashboard-Charakter fehlt) — zurückgestellt, Werkstattleiter-Dashboard (Punkt 10) zuerst
-10. **Werkstattleiter-Dashboard als Startseite** (9.5): vier Kennzahl-Kacheln, "Nächste fällige Aufträge", kompakte Auslastungsliste, Hinweis auf heutige Abwesenheiten — konkret ausgearbeitet, bereit für die Umsetzung
-11. Kapazitäts-Dashboard, ausführliche Wochenansicht (9.9) — spätere Erweiterung der kompakten Auslastungsliste aus Punkt 10, kein eigener Schritt von Anfang an
-12. Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
-12a. Auswertungen/Jahresstatistik (Abschnitt 9.14): Menge, Zeit, Geld, Schätzgenauigkeit, Betrieb — konkret ausgearbeitet, bereit für die Umsetzung, nach der Werkstattleiter-Startseite (Punkt 10) sinnvoll
-13. Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
-14. Gliederung der Stammdaten (Abschnitt 9.12), in drei Schritten: (a) Instrumentenfamilien und Reparaturkategorien im Datenmodell und Backend inkl. Migration, (b) gegliederte Verwaltungslisten, (c) gruppierte Auswahl mit "Häufig verwendet" im Auftragsformular
+- **Einklappbare Seitenleiste mit Icons** (9.2): Umschalt-Knopf, eingeklappt nur Icons mit Tooltip und `aria-label`, Zustand pro Gerät gemerkt. Bisher gebaut sind nur der abgesetzte Knopf "Neuer Auftrag" und die Gruppen Tagesgeschäft/Verwaltung; das Einklappen mit Icons steht aus
+- **Auftragsdetailseite: Stift-Symbole statt Aktionsleiste** (9.10, Ausnahme Auftragsdetailseite), inklusive nachträglicher Korrektur des abgerechneten Betrags nur für Werkstattleitung/Admin (9.8). Beschlossen und dokumentiert, noch nicht gebaut
+- Auswertungen, Teilschritt 5 "Betrieb" (9.14.5), siehe 10.2
+- Internes Mitarbeiter-Dashboard nach 9.4 (Liste existiert, Dashboard-Charakter fehlt) — zurückgestellt
+- Kapazitäts-Dashboard, ausführliche Wochenansicht (9.9) — spätere Erweiterung der kompakten Auslastungsliste auf der Übersicht (9.5), kein eigener Schritt von Anfang an
+- Kunden-Dashboard mit Auftragsnummer + Zugriffstoken (Abschnitt 6), inkl. Druckansicht des Abgabebelegs mit Token/QR-Code (9.7) und Schutz gegen Durchprobieren
+- Gleitzeit-Anpassungen (2.14) und Qualifikationen (2.13) pflegen
+- Gliederung der Stammdaten (Abschnitt 9.12), in drei Schritten: (a) Instrumentenfamilien und Reparaturkategorien im Datenmodell und Backend inkl. Migration, (b) gegliederte Verwaltungslisten, (c) gruppierte Auswahl mit "Häufig verwendet" im Auftragsformular bzw. geführten Ablauf (9.16)
+- Durchsuchbare Kundenauswahl im Auftragsformular, sobald es mehr als rund 100 aktive Kunden gibt (wird mit dem geführten Ablauf 9.16 gelöst, dessen Schritt 1 eine Suche ist)
 
 ### 10.6 Optionen, geringe Priorität
 
