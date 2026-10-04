@@ -51,12 +51,13 @@ Transaktion, die danach zurückgerollt wird. Es bleiben keine Testdaten zurück.
 | POST | `/admin/vorgabewerte` | Vorgabewert anlegen (optional mit `ausfuehrung` für Varianten derselben Instrumentenklasse; 409, falls Reparaturart + Instrumentenklasse + Ausführung schon aktiv existiert) |
 | PATCH | `/admin/vorgabewerte/{id}` | Vorgabewert ändern (nur mitgeschickte Felder) |
 | POST | `/admin/vorgabewerte/{id}/archivieren`, `/…/reaktivieren` | Vorgabewert zurücknehmen/zurückholen (Schätzung ignoriert archivierte) |
-| GET | `/ausfuehrungen?reparaturart_id=…&instrumentenklasse_id=…` | Wählbare Ausführungen samt Vorgabewerten für das Auftragsformular (Standardausführung zuerst); `POST /auftraege` nimmt dazu optional `ausfuehrung` |
+| GET | `/ausfuehrungen?reparaturart_id=…&instrumentenklasse_id=…` | Wählbare Ausführungen samt Vorgabewerten für das Auftragsformular (Standardausführung zuerst); `POST /auftraege` nimmt dazu optional `ausfuehrung` – nur nötig, solange das Instrument keine hat; die Wahl wird am Instrument gespeichert (2.5) |
+| GET | `/instrumentenklassen/ausfuehrungen` | Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (für das Instrumentenformular) |
 | GET | `/kunden?suche=…&status=…&sortierung=…&seite=…`, `/kunden/{id}` | Kundenliste nach 9.11 (Suche auch nach externer Kundennummer; `status` archiviert/alle nur Leitung), Kunde mit Instrumenten |
 | POST, PATCH | `/kunden`, `/kunden/{id}` | Kunde anlegen/bearbeiten (alle Angemeldeten; Kundennummer wird vergeben; `externe_kundennummer` optional, eindeutig falls gesetzt) |
 | POST | `/kunden/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin; nicht bei offenen Aufträgen) |
 | GET | `/instrumente?kunde_id=…&archivierte=…`, `/instrumente/{id}` | Instrumente auflisten/abrufen |
-| POST, PATCH | `/instrumente`, `/instrumente/{id}` | Instrument anlegen/bearbeiten (alle Angemeldeten) |
+| POST, PATCH | `/instrumente`, `/instrumente/{id}` | Instrument anlegen/bearbeiten (alle Angemeldeten); optional `ausfuehrung`, muss es bei der Instrumentenklasse geben |
 | POST | `/instrumente/{id}/archivieren`, `/…/reaktivieren` | Archivieren/Zurückholen (Werkstattleitung/Admin) |
 | GET | `/instrumentenklassen`, `/reparaturarten`, `/auftragsstatus`, `/mitarbeiter` | Auswahllisten (nur lesen, nur aktive, für alle Angemeldeten) |
 | GET, POST, PATCH | `/admin/instrumentenklassen`, `/admin/reparaturarten` (+ `/{id}`) | Stammdaten pflegen (nur Admin); Listen nach 9.11 mit `suche`, `status` (aktiv/archiviert/alle), `sortierung`, `seite` |

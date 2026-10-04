@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter, aktueller_mitarbeiter_id, darf_auftrag_bearbeiten, rolle_mindestens
 from app.db import get_db
 from app.eingabe import feldfehler
+from app.ereignisse import protokollieren
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.models import (
     Arbeitszeiterfassung,
@@ -313,13 +314,21 @@ def auftrag_anlegen(
         raise RuntimeError(f"Startstatus '{STARTSTATUS}' fehlt in auftragsstatus")
 
     # Stufe-1-Schätzung (Datenmodell 4 / 4.1)
-    # Eine gewählte Ausführung muss es als aktiven Vorgabewert für genau diese Kombination geben (2.6a)
-    if daten.ausfuehrung is not None and daten.ausfuehrung not in {
-        a.ausfuehrung for a in ausfuehrungen(db, reparaturart.id, instrument.instrumentenklasse_id)
-    }:
-        raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die gewählte Reparaturart und das Instrument nicht")
-    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id, daten.ausfuehrung)
-    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id, daten.ausfuehrung)
+    # Die Ausführung ist eine Eigenschaft des Instruments (2.5): Ist sie dort hinterlegt, gilt sie ohne Nachfrage.
+    # Sonst darf einmalig eine gewählt werden – sie muss es als aktiven Vorgabewert für genau diese
+    # Kombination geben (2.6a) und wird am Instrument gespeichert.
+    if instrument.ausfuehrung is not None:
+        if daten.ausfuehrung is not None and daten.ausfuehrung != instrument.ausfuehrung:
+            raise feldfehler(ausfuehrung=f"Am Instrument ist bereits die Ausführung „{instrument.ausfuehrung}“ hinterlegt")
+    elif daten.ausfuehrung is not None:
+        if daten.ausfuehrung not in {a.ausfuehrung for a in ausfuehrungen(db, reparaturart.id, instrument.instrumentenklasse_id)}:
+            raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die gewählte Reparaturart und das Instrument nicht")
+        instrument.ausfuehrung = daten.ausfuehrung
+        protokollieren(db, mitarbeiter_id, "instrument_geaendert", "instrument", instrument.id,
+                       {"alt": {"ausfuehrung": None}, "neu": {"ausfuehrung": daten.ausfuehrung}, "anlass": "auftrag_angelegt"})
+    ausfuehrung = instrument.ausfuehrung
+    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung)
+    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung)
 
     auftrag = Auftrag(
         auftragsnummer=_neue_auftragsnummer(db),
@@ -354,7 +363,7 @@ def auftrag_anlegen(
         geschaetztes_datum=termin.datum,
         eingabefaktoren={
             "anlass": "auftrag_angelegt",
-            "ausfuehrung": daten.ausfuehrung,  # None = Standardausführung
+            "ausfuehrung": ausfuehrung,  # Ausführung des Instruments; None = unbekannt/Standard
             "instrumentenklasse_id": str(instrument.instrumentenklasse_id),
             "reparaturart_id": str(reparaturart.id),
             "komplexitaet": auftrag.komplexitaet,

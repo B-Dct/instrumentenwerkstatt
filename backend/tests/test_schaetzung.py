@@ -109,3 +109,40 @@ def test_kosten_fallback_allgemein_ohne_spezifischen_wert(db):
 def test_kosten_keine_daten_keine_vorgabe(db):
     s = Werkstatt(db).kosten()
     assert (s.quelle, s.wert) == (Quelle.keine, None)
+
+
+# --- Ausführung des Instruments (Abschnitt 4, "Reihenfolge bei vorhandener ausführung") ---
+
+@pytest.fixture
+def ausfuehrungen(w):
+    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
+    w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung="lackiert")
+    return w
+
+
+def test_durchschnitt_bleibt_je_ausfuehrung_getrennt(ausfuehrungen):
+    w = ausfuehrungen
+    for _ in range(5):
+        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung="versilbert")
+    for _ in range(4):
+        w.auftrag(minuten=(60,), kosten="40.00", ausfuehrung="lackiert")
+
+    # versilbert: 5 eigene Fälle → eigener Durchschnitt, die lackierten zählen nicht mit
+    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.historisch, Decimal("4.00"))
+    assert (w.kosten("versilbert").quelle, w.kosten("versilbert").wert) == (Quelle.historisch, Decimal("200.00"))
+    # lackiert: nur 4 eigene Fälle → Richtpreis dieser Ausführung, obwohl es in der Klasse 9 Fälle gibt
+    s, k = w.stunden("lackiert"), w.kosten("lackiert")
+    assert (s.quelle, s.wert, s.anzahl_vergleichsfaelle) == (Quelle.vorgabe_instrumentenklasse, Decimal("2.00"), 4)
+    assert (k.quelle, k.wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("80.00"))
+    # Ohne Ausführung gilt die allgemeine Reihenfolge: alle 9 Fälle der Klasse
+    assert (w.stunden().quelle, w.stunden().anzahl_vergleichsfaelle) == (Quelle.historisch, 9)
+
+
+def test_reihenfolge_mit_ausfuehrung_ohne_historie(db):
+    w = Werkstatt(db)
+    w.vorgabe(stunden="0.50", kosten="20.00")
+    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
+    w.vorgabe(w.kontrabass, stunden="1.50", kosten="60.00")               # Standard der Klasse
+    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("1.50"))
+    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
+    assert w.stunden("versilbert").wert == Decimal("3.00") and w.kosten("versilbert").wert == Decimal("120.00")

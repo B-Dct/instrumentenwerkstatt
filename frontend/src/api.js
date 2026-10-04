@@ -138,6 +138,8 @@ export const api = {
   instrumentArchivieren: (id) => anfrage(`/instrumente/${id}/archivieren`, { methode: 'POST' }),
   instrumentReaktivieren: (id) => anfrage(`/instrumente/${id}/reaktivieren`, { methode: 'POST' }),
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
+  // Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5): { klasseId: [Name, …] }
+  klassenAusfuehrungen: () => anfrage('/instrumentenklassen/ausfuehrungen'),
   // Abwesenheiten (nur Werkstattleitung/Admin)
   abwesenheiten: (filter = {}) => anfrage('/abwesenheiten?' + new URLSearchParams(filter)),
   abwesenheitenRaster: (parameter) => anfrage('/abwesenheiten/raster?' + new URLSearchParams(parameter)),

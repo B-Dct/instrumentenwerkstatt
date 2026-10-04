@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter
 from app.db import get_db
 from app.models import Auftragsstatus, Instrumentenklasse, Mitarbeiter, Reparaturart
-from app.schaetzung import ausfuehrungen
+from app.schaetzung import ausfuehrungen, ausfuehrungen_je_klasse
 from app.schemas import AusfuehrungAuswahl, InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
 
 router = APIRouter(tags=["Auswahllisten"], dependencies=[Depends(aktueller_mitarbeiter)])
@@ -24,6 +24,13 @@ router = APIRouter(tags=["Auswahllisten"], dependencies=[Depends(aktueller_mitar
 def instrumentenklassen_auflisten(db: Session = Depends(get_db)) -> list[Instrumentenklasse]:
     return list(db.scalars(select(Instrumentenklasse).where(Instrumentenklasse.archiviert_am.is_(None))
                            .order_by(Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung)))
+
+
+@router.get("/instrumentenklassen/ausfuehrungen", response_model=dict[uuid.UUID, list[str]])
+def ausfuehrungen_der_klassen(db: Session = Depends(get_db)) -> dict[uuid.UUID, list[str]]:
+    """Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5). Klassen ohne
+    Ausführungen fehlen – das Instrumentenformular zeigt das Feld dann nicht."""
+    return ausfuehrungen_je_klasse(db)
 
 
 @router.get("/reparaturarten", response_model=list[ReparaturartKurz])

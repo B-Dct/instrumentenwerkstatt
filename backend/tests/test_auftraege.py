@@ -8,7 +8,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app.models import Arbeitszeiterfassung, Auftrag, Instrument, Kunde, ReparaturVorgabewert, SchaetzungsLog, Systemrolle
+from app.models import (
+    Arbeitszeiterfassung, Auftrag, Instrument, Kunde, ReparaturVorgabewert, SchaetzungsLog, SystemEreignisLog, Systemrolle,
+)
 from app.routers.auftraege import _neue_auftragsnummer  # Original (Tests nutzen Ersatz)
 from tests.beispieldaten import Werkstatt
 from tests.conftest import OHNE_ANMELDUNG, angemeldet_als, konto_anlegen
@@ -28,7 +30,7 @@ def w(db, client):
 
 def neuer_auftrag(w, **extra):
     """Standardmäßig dem angemeldeten Test-Mitarbeiter zugewiesen."""
-    instrument = w.instrument(extra.pop("klasse", None))
+    instrument = extra.pop("instrument", None) or w.instrument(extra.pop("klasse", None))
     return {
         "kunde_id": str(w.kunde.id),
         "instrument_id": str(instrument.id),
@@ -140,6 +142,45 @@ def test_anlegen_mit_und_ohne_ausfuehrung(client, w, db, versilbert):
     for daten in (neuer_auftrag(w, ausfuehrung="vergoldet"), neuer_auftrag(w, klasse=w.violine, ausfuehrung="versilbert")):
         antwort = client.post(URL, json=daten)
         assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+
+
+def test_gewaehlte_ausfuehrung_wird_am_instrument_gespeichert(client, w, db, versilbert):
+    """Instrument ohne Ausführung: einmal wählen, danach gilt sie ohne erneute Angabe (2.5)."""
+    instrument = w.instrument()
+    erster = client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="versilbert"))
+    assert erster.status_code == 201 and erster.json()["geschaetzte_kosten"] == 120.0
+    db.refresh(instrument)
+    assert instrument.ausfuehrung == "versilbert"
+    log = db.scalars(select(SystemEreignisLog).where(SystemEreignisLog.betroffene_id == instrument.id)).one()
+    assert (log.aktion, log.details["neu"]) == ("instrument_geaendert", {"ausfuehrung": "versilbert"})
+
+    zweiter = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()   # keine Angabe nötig
+    assert (zweiter["geschaetzte_arbeitsstunden"], zweiter["geschaetzte_kosten"]) == (3.0, 120.0)
+    assert client.get(f"/instrumente/{instrument.id}").json()["ausfuehrung"] == "versilbert"
+
+
+def test_instrument_mit_ausfuehrung_nutzt_seinen_wert_ohne_nachfrage(client, w, db, versilbert):
+    instrument = w.instrument(ausfuehrung="versilbert")
+    auftrag = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()
+    assert (auftrag["geschaetzte_arbeitsstunden"], auftrag["geschaetzte_kosten"]) == (3.0, 120.0)
+    log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(auftrag["id"]))).one()
+    assert log.eingabefaktoren["ausfuehrung"] == "versilbert"
+    # Dieselbe Ausführung mitzuschicken ist in Ordnung, eine andere wird am Feld abgelehnt
+    assert client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="versilbert")).status_code == 201
+    db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.kontrabass.id,
+                                ausfuehrung="lackiert", vorgabe_stunden=Decimal("2.00"), vorgabe_kosten=Decimal("80.00")))
+    db.flush()
+    andere = client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="lackiert"))
+    assert andere.status_code == 422 and andere.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+    db.refresh(instrument)
+    assert instrument.ausfuehrung == "versilbert"
+
+
+def test_ausfuehrung_ohne_eigenen_wert_faellt_auf_standard_zurueck(client, w, db):
+    """Die Ausführung des Instruments hat für diese Reparaturart keinen eigenen Wert → Standard der Klasse."""
+    instrument = w.instrument(ausfuehrung="versilbert")
+    auftrag = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()
+    assert (auftrag["geschaetzte_arbeitsstunden"], auftrag["geschaetzte_kosten"]) == (1.5, 60.0)
 
 
 def test_archivierte_ausfuehrung_nicht_waehlbar(client, w, db, versilbert):

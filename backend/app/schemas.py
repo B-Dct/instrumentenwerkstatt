@@ -76,7 +76,8 @@ class AuftragNeu(BaseModel):
     kunde_id: uuid.UUID
     instrument_id: uuid.UUID  # muss dem Kunden gehören
     reparaturart_id: uuid.UUID
-    # Nur wenn es für Reparaturart + Instrumentenklasse mehrere Vorgabewerte gibt (2.6a); None = Standard
+    # Nur wenn das Instrument noch keine Ausführung hat und es für Reparaturart + Instrumentenklasse mehrere
+    # Vorgabewerte gibt (2.6a). Die Wahl wird am Instrument gespeichert (2.5); None = Standard
     ausfuehrung: Ausfuehrung = None
     zugewiesener_mitarbeiter_id: uuid.UUID | None = None
     prioritaet: Prioritaet = Prioritaet.normal
@@ -210,6 +211,7 @@ class InstrumentKurz(BaseModel):
     baujahr: int | None
     seriennummer: str | None
     notizen: str | None
+    ausfuehrung: str | None  # None = unbekannt/Standard (2.5)
     archiviert_am: datetime | None
 
 
@@ -298,6 +300,7 @@ class InstrumentNeu(BaseModel):
     baujahr: int | None = Field(None, ge=1500, le=2100)
     seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
     notizen: str | None = None
+    ausfuehrung: Ausfuehrung = None  # muss es bei der Instrumentenklasse als Ausführung eines Richtpreises geben
 
 
 class InstrumentAenderung(BaseModel):
@@ -309,6 +312,7 @@ class InstrumentAenderung(BaseModel):
     baujahr: int | None = Field(None, ge=1500, le=2100)
     seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
     notizen: str | None = None
+    ausfuehrung: Ausfuehrung = None  # leer = unbekannt/Standard
 
 
 class KundeDetail(KundeEintrag):

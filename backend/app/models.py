@@ -241,6 +241,8 @@ class Instrument(Base):
     baujahr: Mapped[int | None] = mapped_column(Integer)
     seriennummer: Mapped[str | None] = mapped_column(String(100))
     notizen: Mapped[str | None] = mapped_column(Text)
+    # Oberfläche/Ventilmechanik dieses Instruments, passend zu den Ausführungen der Vorgabewerte (2.6a); NULL = unbekannt
+    ausfuehrung: Mapped[str | None] = mapped_column(String(100))
     archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 

@@ -37,26 +37,27 @@ class Werkstatt:
             self.status["fertig"], self.status["abgeholt"], self.status["in_bearbeitung"]
         )
 
-    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00"):
+    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00", ausfuehrung=None):
         self.db.add(ReparaturVorgabewert(
             reparaturart_id=self.saitenwechsel.id,
             instrumentenklasse_id=klasse.id if klasse else None,
+            ausfuehrung=ausfuehrung,
             vorgabe_stunden=Decimal(stunden),
             vorgabe_kosten=Decimal(kosten),
         ))
         self.db.flush()
 
-    def instrument(self, klasse=None):
+    def instrument(self, klasse=None, ausfuehrung=None):
         instrument = Instrument(
-            kunde_id=self.kunde.id, instrumentenklasse_id=(klasse or self.kontrabass).id
+            kunde_id=self.kunde.id, instrumentenklasse_id=(klasse or self.kontrabass).id, ausfuehrung=ausfuehrung
         )
         self.db.add(instrument)
         self.db.flush()
         return instrument
 
-    def auftrag(self, klasse=None, status=None, minuten=(), kosten=None, zugewiesen=None, stunden=None):
+    def auftrag(self, klasse=None, status=None, minuten=(), kosten=None, zugewiesen=None, stunden=None, ausfuehrung=None):
         """Ein Auftrag; `minuten` = Zeiteinträge (mehrere Sitzungen möglich). Gibt den Auftrag zurück."""
-        instrument = self.instrument(klasse)
+        instrument = self.instrument(klasse, ausfuehrung)
         auftrag = Auftrag(
             auftragsnummer=f"T-{secrets.token_hex(5)}",
             zugriffstoken=secrets.token_urlsafe(12),
@@ -78,8 +79,8 @@ class Werkstatt:
         self.db.flush()
         return auftrag
 
-    def stunden(self):
-        return schaetze_arbeitsstunden(self.db, self.kontrabass.id, self.saitenwechsel.id)
+    def stunden(self, ausfuehrung=None):
+        return schaetze_arbeitsstunden(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung)
 
-    def kosten(self):
-        return schaetze_kosten(self.db, self.kontrabass.id, self.saitenwechsel.id)
+    def kosten(self, ausfuehrung=None):
+        return schaetze_kosten(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung)

@@ -9,6 +9,12 @@ Vorgehen für eine Kombination aus Instrumentenklasse + Reparaturart:
 2. Sonst Vorgabewert (reparatur_vorgabewert): erst der spezifische Wert für die
    Instrumentenklasse, sonst der allgemeine Wert der Reparaturart.
 3. Sonst: keine Schätzung möglich (wert = None).
+
+Hat das Instrument eine Ausführung (2.5), gilt die Reihenfolge aus Abschnitt 4:
+historischer Durchschnitt nur über Aufträge mit Instrumenten DERSELBEN Ausführung,
+sonst der Vorgabewert dieser Ausführung, sonst der Standardwert der Instrumentenklasse
+(ausfuehrung = NULL), sonst der allgemeine Wert. Verschiedene Ausführungen werden im
+Durchschnitt nie vermischt. Ohne Ausführung zählen wie bisher alle Aufträge der Klasse.
 """
 
 import enum
@@ -51,18 +57,22 @@ class Schaetzung:
 
 
 def _passende_abgeschlossene_auftraege(
-    instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID
+    instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
 ) -> list[ColumnElement[bool]]:
-    """Filter: gleiche Kombination und Auftrag steht in einem abgeschlossenen Status."""
-    return [
+    """Filter: gleiche Kombination und Auftrag steht in einem abgeschlossenen Status.
+    Mit Ausführung zählen nur Aufträge, deren Instrument dieselbe Ausführung hat."""
+    filter_ = [
         Instrument.instrumentenklasse_id == instrumentenklasse_id,
         Auftrag.reparaturart_id == reparaturart_id,
         Auftragsstatus.ist_abgeschlossen.is_(True),
     ]
+    if ausfuehrung is not None:
+        filter_.append(Instrument.ausfuehrung == ausfuehrung)
+    return filter_
 
 
 def _historisch_stunden(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
 ) -> tuple[int, Decimal | None]:
     # Erst je Auftrag alle Zeiteinträge aufsummieren (mehrere Sitzungen/Mitarbeiter),
     # dann über die Aufträge mitteln – sonst würden Einzeleinträge gemittelt.
@@ -72,7 +82,7 @@ def _historisch_stunden(
         .join(Arbeitszeiterfassung, Arbeitszeiterfassung.auftrag_id == Auftrag.id)
         .join(Instrument, Auftrag.instrument_id == Instrument.id)
         .join(Auftragsstatus, Auftrag.status_aktuell_id == Auftragsstatus.id)
-        .where(*_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id))
+        .where(*_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung))
         .group_by(Auftrag.id)
         .subquery()
     )
@@ -83,14 +93,14 @@ def _historisch_stunden(
 
 
 def _historisch_kosten(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
 ) -> tuple[int, Decimal | None]:
     anzahl, durchschnitt = db.execute(
         select(func.count(), func.avg(Auftrag.tatsaechliche_kosten))
         .join(Instrument, Auftrag.instrument_id == Instrument.id)
         .join(Auftragsstatus, Auftrag.status_aktuell_id == Auftragsstatus.id)
         .where(
-            *_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id),
+            *_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung),
             Auftrag.tatsaechliche_kosten.is_not(None),
         )
     ).one()
@@ -139,8 +149,9 @@ def schaetze_arbeitsstunden(
     db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
 ) -> Schaetzung:
     """Geschätzter reiner Arbeitsaufwand in Stunden (Grundlage für auftrag.geschaetzte_arbeitsstunden).
-    `ausfuehrung` wählt nur den Vorgabewert (2.6a); der historische Durchschnitt gilt je Instrumentenklasse."""
-    anzahl, durchschnitt = _historisch_stunden(db, instrumentenklasse_id, reparaturart_id)
+    `ausfuehrung` ist die Ausführung des Instruments (2.5): Sie grenzt den historischen Durchschnitt ein
+    und wählt den Vorgabewert (2.6a)."""
+    anzahl, durchschnitt = _historisch_stunden(db, instrumentenklasse_id, reparaturart_id, ausfuehrung)
     vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_stunden", ausfuehrung)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
 
@@ -149,7 +160,7 @@ def schaetze_kosten(
     db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
 ) -> Schaetzung:
     """Geschätzter Preis in Euro (Grundlage für auftrag.geschaetzte_kosten)."""
-    anzahl, durchschnitt = _historisch_kosten(db, instrumentenklasse_id, reparaturart_id)
+    anzahl, durchschnitt = _historisch_kosten(db, instrumentenklasse_id, reparaturart_id, ausfuehrung)
     vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_kosten", ausfuehrung)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
 
@@ -164,3 +175,19 @@ def ausfuehrungen(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id
             ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
         ).order_by(ReparaturVorgabewert.ausfuehrung.asc().nulls_first())
     ))
+
+
+def ausfuehrungen_je_klasse(db: Session, instrumentenklasse_id: uuid.UUID | None = None) -> dict[uuid.UUID, list[str]]:
+    """Benannte Ausführungen je Instrumentenklasse (über alle Reparaturarten, nur aktive Vorgabewerte),
+    alphabetisch. Das sind die Werte, die ein Instrument als Ausführung tragen kann (2.5)."""
+    abfrage = select(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung).where(
+        ReparaturVorgabewert.archiviert_am.is_(None),
+        ReparaturVorgabewert.instrumentenklasse_id.is_not(None),
+        ReparaturVorgabewert.ausfuehrung.is_not(None),
+    ).distinct().order_by(ReparaturVorgabewert.ausfuehrung)
+    if instrumentenklasse_id is not None:
+        abfrage = abfrage.where(ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
+    ergebnis: dict[uuid.UUID, list[str]] = {}
+    for klasse_id, ausfuehrung in db.execute(abfrage):
+        ergebnis.setdefault(klasse_id, []).append(ausfuehrung)
+    return ergebnis

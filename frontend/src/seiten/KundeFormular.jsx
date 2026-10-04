@@ -1,5 +1,5 @@
 // Formulare für Kunde und Instrument – eingebettet über FokusFormular (9.10).
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { Feld, FokusFormular } from '../komponenten/FokusFormular.jsx'
 import { leerZuNull, useSpeichern } from '../komponenten/speichern.js'
@@ -56,7 +56,12 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
     baujahr: instrument?.baujahr ?? '',
     seriennummer: instrument?.seriennummer ?? '',
     notizen: instrument?.notizen ?? '',
+    ausfuehrung: instrument?.ausfuehrung ?? '',
   })
+  // Ausführungen je Klasse (2.5): Das Feld erscheint nur, wenn die gewählte Klasse welche kennt
+  const [ausfuehrungenJeKlasse, setAusfuehrungenJeKlasse] = useState({})
+  useEffect(() => { api.klassenAusfuehrungen().then(setAusfuehrungenJeKlasse).catch(() => {}) }, [])
+  const ausfuehrungen = ausfuehrungenJeKlasse[werte.instrumentenklasse_id] ?? []
   const { sendet, fehler, felder, ausfuehren, feldGeaendert } = useSpeichern(() => {
     const daten = {
       instrumentenklasse_id: werte.instrumentenklasse_id || null,
@@ -65,10 +70,15 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
       baujahr: werte.baujahr === '' ? null : Number(werte.baujahr),
       seriennummer: leerZuNull(werte.seriennummer),
       notizen: leerZuNull(werte.notizen),
+      ausfuehrung: leerZuNull(werte.ausfuehrung),
     }
     return instrument ? api.instrumentAendern(instrument.id, daten) : api.instrumentAnlegen({ ...daten, kunde_id: kundeId })
   }, onGespeichert)
-  const setze = (feld) => (e) => { feldGeaendert(feld); setWerte((w) => ({ ...w, [feld]: e.target.value })) }
+  // Andere Klasse: Die bisherige Ausführung gehört zur alten Klasse
+  const setze = (feld) => (e) => {
+    feldGeaendert(feld)
+    setWerte((w) => ({ ...w, [feld]: e.target.value, ...(feld === 'instrumentenklasse_id' ? { ausfuehrung: '' } : {}) }))
+  }
 
   // Eine inzwischen archivierte Klasse des bestehenden Instruments trotzdem anzeigen
   const klassenAuswahl = instrument && !klassen.some((k) => k.id === instrument.instrumentenklasse_id)
@@ -79,12 +89,21 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
     <FokusFormular formular={formular} titel={instrument ? 'Instrument bearbeiten' : 'Instrument hinzufügen'}
                    onSpeichern={ausfuehren} sendet={sendet} fehler={fehler} zusatz={zusatz}
                    speichernText={instrument ? 'Speichern' : 'Instrument hinzufügen'}>
-      <Feld label="Instrumentenklasse" fehler={felder.instrumentenklasse_id}>
+      <Feld label="Instrumentenklasse" fehler={felder.instrumentenklasse_id} hinweis="z. B. Trompete">
         <select value={werte.instrumentenklasse_id} onChange={setze('instrumentenklasse_id')} required>
           <option value="">Bitte wählen</option>
           {klassenAuswahl.map((k) => <option key={k.id} value={k.id}>{k.bezeichnung}</option>)}
         </select>
       </Feld>
+      {(ausfuehrungen.length > 0 || werte.ausfuehrung) && (
+        <Feld label="Ausführung" fehler={felder.ausfuehrung}
+              hinweis="Optional – Oberfläche bzw. Ventilmechanik dieses Instruments. Bestimmt Richtpreis und Richtzeit neuer Aufträge.">
+          <select value={werte.ausfuehrung} onChange={setze('ausfuehrung')}>
+            <option value="">Unbekannt / Standard</option>
+            {[...new Set([...ausfuehrungen, werte.ausfuehrung].filter(Boolean))].map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </Feld>
+      )}
       <div className="spalten spalten--eng">
         <Feld label="Hersteller" fehler={felder.hersteller}>
           <input value={werte.hersteller} onChange={setze('hersteller')} maxLength={150} autoComplete="off" />

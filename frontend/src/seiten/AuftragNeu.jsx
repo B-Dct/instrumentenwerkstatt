@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { angemeldeterNutzer, api, euro, zahl } from '../api.js'
 
 const instrumentName = (i) =>
-  [i.instrumentenklasse_bezeichnung, i.hersteller, i.typenbezeichnung].filter(Boolean).join(' · ')
+  [i.instrumentenklasse_bezeichnung, i.ausfuehrung, i.hersteller, i.typenbezeichnung].filter(Boolean).join(' · ')
 
 export default function AuftragNeu() {
   const navigate = useNavigate()
@@ -28,10 +28,12 @@ export default function AuftragNeu() {
     if (form.kunde_id) api.instrumente(form.kunde_id).then(setInstrumente).catch((e) => setFehler(e.message))
   }, [form.kunde_id])
 
-  // Ausführungen (2.6a): Gibt es für Reparaturart + Instrumentenklasse mehrere Vorgabewerte, erscheint
-  // ein zusätzliches Auswahlfeld – sonst nicht. Ohne Auswahl gilt die Standardausführung.
+  // Ausführungen (2.5, 2.6a): Hat das Instrument schon eine Ausführung, gilt sie ohne Nachfrage. Sonst erscheint
+  // ein Auswahlfeld, wenn es für Reparaturart + Instrumentenklasse mehrere Richtpreise gibt – die Wahl wird
+  // am Instrument gespeichert. Ohne Auswahl gilt die Standardausführung.
   const [ausfuehrungen, setAusfuehrungen] = useState([])
-  const klasseId = instrumente.find((i) => i.id === form.instrument_id)?.instrumentenklasse_id
+  const instrument = instrumente.find((i) => i.id === form.instrument_id)
+  const klasseId = instrument?.instrumentenklasse_id
   useEffect(() => {
     let abgebrochen = false
     if (!klasseId || !form.reparaturart_id) return undefined
@@ -40,7 +42,8 @@ export default function AuftragNeu() {
       .catch(() => {})
     return () => { abgebrochen = true }
   }, [klasseId, form.reparaturart_id])
-  const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1
+  const standard = ausfuehrungen.find((a) => !a.ausfuehrung)
+  const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1 && !instrument?.ausfuehrung
 
   const setze = (feld) => (e) => {
     if (feld === 'kunde_id') setInstrumente([])
@@ -109,14 +112,20 @@ export default function AuftragNeu() {
             <label className="feld">
               <span>Ausführung</span>
               <select value={form.ausfuehrung} onChange={setze('ausfuehrung')}>
-                {ausfuehrungen.map((a) => (
-                  <option key={a.ausfuehrung ?? ''} value={a.ausfuehrung ?? ''}>
-                    {a.ausfuehrung ?? 'Standard'} ({zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)})
+                <option value="">
+                  {standard ? `Standard (${zahl(standard.vorgabe_stunden)} Std., ${euro(standard.vorgabe_kosten)})` : 'Noch nicht festlegen'}
+                </option>
+                {ausfuehrungen.filter((a) => a.ausfuehrung).map((a) => (
+                  <option key={a.ausfuehrung} value={a.ausfuehrung}>
+                    {a.ausfuehrung} ({zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)})
                   </option>
                 ))}
               </select>
-              <small>Optional – bestimmt Richtpreis und Richtzeit für die Schätzung. Ohne Auswahl gilt die Standardausführung.</small>
+              <small>Optional – bestimmt Richtpreis und Richtzeit. Die Auswahl wird am Instrument gespeichert und gilt dann auch für künftige Aufträge.</small>
             </label>
+          )}
+          {instrument?.ausfuehrung && (
+            <p className="leise">Ausführung: {instrument.ausfuehrung} (am Instrument hinterlegt)</p>
           )}
           <label className="feld">
             <span>Zugewiesen an</span>

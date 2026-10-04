@@ -134,6 +134,33 @@ def test_instrument_ungueltig(client, w, daten):
     assert client.patch(f"/instrumente/{i['id']}", json=daten).status_code == 422
 
 
+def test_instrument_ausfuehrung(client, w, db):
+    """Die Ausführung muss es bei der Klasse als Ausführung eines Richtpreises geben (2.5)."""
+    from decimal import Decimal
+    from app.models import ReparaturVorgabewert
+    for name in ("versilbert", "lackiert"):
+        db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.violine.id, ausfuehrung=name,
+                                    vorgabe_stunden=Decimal("1.00"), vorgabe_kosten=Decimal("40.00")))
+    db.flush()
+    liste = client.get("/instrumentenklassen/ausfuehrungen").json()
+    assert liste[str(w.violine.id)] == ["lackiert", "versilbert"] and str(w.kontrabass.id) not in liste
+
+    kunde = kunde_anlegen(client)
+    instrument = instrument_anlegen(client, w, kunde["id"], ausfuehrung=" versilbert ")
+    assert instrument["ausfuehrung"] == "versilbert"
+    unbekannt = client.post("/instrumente", json={"kunde_id": kunde["id"], "instrumentenklasse_id": str(w.violine.id),
+                                                  "ausfuehrung": "vergoldet"})
+    assert unbekannt.status_code == 422 and unbekannt.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+
+    url = f"/instrumente/{instrument['id']}"
+    assert client.patch(url, json={"ausfuehrung": "lackiert"}).json()["ausfuehrung"] == "lackiert"
+    assert client.patch(url, json={"hersteller": "Stainer"}).json()["ausfuehrung"] == "lackiert"   # bleibt erhalten
+    assert client.patch(url, json={"ausfuehrung": ""}).json()["ausfuehrung"] is None               # leeren
+    client.patch(url, json={"ausfuehrung": "lackiert"})
+    # Andere Klasse: Die Ausführung gehört zur alten Klasse und wird geleert
+    assert client.patch(url, json={"instrumentenklasse_id": str(w.kontrabass.id)}).json()["ausfuehrung"] is None
+
+
 def test_instrument_archivieren(client, w, leitung):
     k = kunde_anlegen(client)
     i = instrument_anlegen(client, w, k["id"])
