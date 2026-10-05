@@ -158,6 +158,28 @@ class Instrumentenklasse(Base):
     archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 
+class Ausfuehrung(Base):
+    """Variante innerhalb einer Instrumentenklasse (Oberfläche, Ventilmechanik), z. B. "Perinet, versilbert"
+    (Datenmodell 2.4b). Richtpreise und Instrumente verweisen darauf. Hat eine Klasse Ausführungen, ist
+    genau eine aktive der Standard: Er gilt, wenn die Ausführung eines Instruments unbekannt ist."""
+
+    __tablename__ = "ausfuehrung"
+    __table_args__ = (
+        # Bezeichnung je Klasse eindeutig unter den aktiven, ohne Beachtung der Groß-/Kleinschreibung
+        # (überzählige Leerzeichen entfernt die Eingabeprüfung vor dem Speichern)
+        Index("uq_ausfuehrung_bezeichnung", "instrumentenklasse_id", func.lower(text("bezeichnung")),
+              unique=True, postgresql_where=text("archiviert_am IS NULL")),
+        Index("uq_ausfuehrung_standard", "instrumentenklasse_id",
+              unique=True, postgresql_where=text("archiviert_am IS NULL AND ist_standard")),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    instrumentenklasse_id: Mapped[uuid.UUID] = fk("instrumentenklasse")
+    bezeichnung: Mapped[str] = mapped_column(String(100))
+    ist_standard: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
+
+
 class Reparaturart(Base):
     __tablename__ = "reparaturart"
     __table_args__ = (
@@ -179,16 +201,11 @@ class ReparaturVorgabewert(Base):
 
     __tablename__ = "reparatur_vorgabewert"
     __table_args__ = (
-        # Jede Kombination aus Reparaturart, Instrumentenklasse und Ausführung (auch "allgemein"/
-        # "Standard" = NULL) höchstens einmal unter den AKTIVEN Einträgen
+        # Jede Kombination aus Reparaturart, Instrumentenklasse und Ausführung (auch "allgemein" bzw.
+        # "ohne Ausführung" = NULL) höchstens einmal unter den AKTIVEN Einträgen
         Index(
-            "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id", "ausfuehrung",
+            "uq_reparatur_vorgabewert_kombination", "reparaturart_id", "instrumentenklasse_id", "ausfuehrung_id",
             unique=True, postgresql_nulls_not_distinct=True, postgresql_where=text("archiviert_am IS NULL"),
-        ),
-        # Je Reparaturart + Instrumentenklasse höchstens ein aktiver Standard (2.6a)
-        Index(
-            "uq_reparatur_vorgabewert_standard", "reparaturart_id", "instrumentenklasse_id",
-            unique=True, postgresql_where=text("archiviert_am IS NULL AND ist_standard"),
         ),
         CheckConstraint("vorgabe_stunden >= 0", name="stunden_nicht_negativ"),
         CheckConstraint("vorgabe_kosten >= 0", name="kosten_nicht_negativ"),
@@ -197,12 +214,9 @@ class ReparaturVorgabewert(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     reparaturart_id: Mapped[uuid.UUID] = fk("reparaturart")
     instrumentenklasse_id: Mapped[uuid.UUID | None] = fk("instrumentenklasse", nullable=True, index=False)
-    # Verfeinerung innerhalb derselben Instrumentenklasse für reine Ausführungsunterschiede
-    # (Oberfläche, Ventilmechanik), z. B. "Perinet, versilbert". NULL = die Kombination hat keine Varianten.
-    ausfuehrung: Mapped[str | None] = mapped_column(String(100))
-    # Bei mehreren (benannten) Ausführungen ist genau eine der Standard: Er greift, wenn die Ausführung
-    # des Instruments unbekannt ist oder keine eigene Zeile hat
-    ist_standard: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Verfeinert den Wert auf eine Ausführung der Instrumentenklasse (2.4b). NULL = die Klasse hat keine
+    # Ausführungen oder der Wert gilt allgemein. Hat die Klasse Ausführungen, verweist jeder ihrer Werte auf eine.
+    ausfuehrung_id: Mapped[uuid.UUID | None] = fk("ausfuehrung", nullable=True)
     vorgabe_stunden: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     vorgabe_kosten: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # in Euro
     notiz: Mapped[str | None] = mapped_column(Text)
@@ -249,8 +263,9 @@ class Instrument(Base):
     baujahr: Mapped[int | None] = mapped_column(Integer)
     seriennummer: Mapped[str | None] = mapped_column(String(100))
     notizen: Mapped[str | None] = mapped_column(Text)
-    # Oberfläche/Ventilmechanik dieses Instruments, passend zu den Ausführungen der Vorgabewerte (2.6a); NULL = unbekannt
-    ausfuehrung: Mapped[str | None] = mapped_column(String(100))
+    # Oberfläche/Ventilmechanik dieses Instruments: eine Ausführung seiner Instrumentenklasse (2.4b).
+    # NULL = unbekannt (nicht "Standard" – auch der Standard lässt sich ausdrücklich eintragen)
+    ausfuehrung_id: Mapped[uuid.UUID | None] = fk("ausfuehrung", nullable=True)
     archiviert_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # NULL = aktiv
 
 

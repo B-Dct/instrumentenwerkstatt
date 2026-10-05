@@ -5,18 +5,17 @@ ignoriert, z. B. um einen versehentlich angelegten spezifischen Wert zurückzune
 Jede Kombination Reparaturart + Instrumentenklasse + Ausführung gibt es höchstens einmal unter den
 AKTIVEN Einträgen; archivierte Einträge lassen sich nur bearbeiten, nachdem sie reaktiviert wurden.
 
-Ausführungen und Standard (2.6a): Eine Kombination aus Reparaturart und Instrumentenklasse hat entweder
-genau einen Wert ohne Ausführung (keine Varianten) oder mehrere, die alle einen Namen tragen
-(z. B. "Perinet, versilbert") – genau einer davon ist der Standard (ist_standard). Wird eine Ausführung
-umbenannt, ziehen die übrigen Richtpreise der Klasse mit diesem Namen und die Instrumente der Klasse
-in derselben Transaktion mit (2.5).
+Ausführungen (2.4b, 2.6a): Hat die Instrumentenklasse Ausführungen, verweist jeder ihrer Richtpreise auf
+eine davon (ausfuehrung_id); hat sie keine, verweisen ihre Richtpreise auf keine. Allgemeine Werte haben
+nie eine Ausführung. Benennen, Standard und Archivieren geschehen an der Ausführung selbst
+(routers/admin/ausfuehrungen.py), nicht am einzelnen Richtpreis.
 """
 
 import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.auth import aktueller_mitarbeiter_id
@@ -24,8 +23,8 @@ from app.db import get_db
 from app.eingabe import feldfehler
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
 from app.speichern import sicher_speichern
-from app.ereignisse import protokollieren
-from app.models import Instrument, Instrumentenklasse, Reparaturart, ReparaturVorgabewert, SystemEreignisLog
+from app.models import Ausfuehrung, Instrumentenklasse, Reparaturart, ReparaturVorgabewert, SystemEreignisLog
+from app.schaetzung import aktive_ausfuehrungen
 from app.schemas import Vorgabewert, VorgabewertAenderung, VorgabewertNeu
 
 router = APIRouter(prefix="/vorgabewerte", tags=["Admin: Vorgabewerte"])
@@ -34,47 +33,40 @@ router = APIRouter(prefix="/vorgabewerte", tags=["Admin: Vorgabewerte"])
 _PFLICHTFELDER = {"reparaturart_id", "vorgabe_stunden", "vorgabe_kosten"}
 
 
-# Aktive Instrumente der Klasse, an denen genau diese Ausführung hinterlegt ist (2.5)
-_INSTRUMENTE = (
-    select(func.count()).select_from(Instrument)
-    .where(Instrument.instrumentenklasse_id == ReparaturVorgabewert.instrumentenklasse_id,
-           Instrument.ausfuehrung == ReparaturVorgabewert.ausfuehrung,
-           Instrument.archiviert_am.is_(None))
-    .correlate(ReparaturVorgabewert).scalar_subquery()
-)
-
-
 def _abfrage() -> Select:
-    """Vorgabewerte inkl. Bezeichnungen von Reparaturart und Instrumentenklasse."""
+    """Vorgabewerte inkl. Bezeichnungen von Reparaturart, Instrumentenklasse und Ausführung."""
     return (
         select(
             ReparaturVorgabewert,
             Reparaturart.bezeichnung.label("reparaturart_bezeichnung"),
             Instrumentenklasse.bezeichnung.label("instrumentenklasse_bezeichnung"),
-            _INSTRUMENTE.label("instrumente_mit_ausfuehrung"),
+            Ausfuehrung,
         )
         .join(Reparaturart, ReparaturVorgabewert.reparaturart_id == Reparaturart.id)
         .outerjoin(Instrumentenklasse, ReparaturVorgabewert.instrumentenklasse_id == Instrumentenklasse.id)
+        .outerjoin(Ausfuehrung, ReparaturVorgabewert.ausfuehrung_id == Ausfuehrung.id)
     )
 
 
 def _als_antwort(zeile) -> Vorgabewert:
-    eintrag, reparaturart, instrumentenklasse, instrumente = zeile
+    eintrag, reparaturart, instrumentenklasse, ausfuehrung = zeile
     return Vorgabewert.model_validate(
         {
             **{c.key: getattr(eintrag, c.key) for c in ReparaturVorgabewert.__table__.columns},
             "reparaturart_bezeichnung": reparaturart,
             "instrumentenklasse_bezeichnung": instrumentenklasse,
-            "instrumente_mit_ausfuehrung": instrumente,
+            "ausfuehrung": ausfuehrung.bezeichnung if ausfuehrung else None,
+            "ausfuehrung_ist_standard": bool(ausfuehrung and ausfuehrung.ist_standard and ausfuehrung.archiviert_am is None),
+            "ausfuehrung_archiviert": bool(ausfuehrung and ausfuehrung.archiviert_am),
         }
     )
 
 
-def _laden(db: Session, vorgabewert_id: uuid.UUID, **zusatz) -> Vorgabewert:
+def _laden(db: Session, vorgabewert_id: uuid.UUID) -> Vorgabewert:
     zeile = db.execute(_abfrage().where(ReparaturVorgabewert.id == vorgabewert_id)).one_or_none()
     if zeile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Richtpreis nicht gefunden")
-    return _als_antwort(zeile).model_copy(update=zusatz)
+    return _als_antwort(zeile)
 
 
 def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrumentenklasse_id: uuid.UUID | None) -> None:
@@ -90,62 +82,17 @@ def _verweise_pruefen(db: Session, reparaturart_id: uuid.UUID | None, instrument
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 
-def _ausfuehrung_pruefen(instrumentenklasse_id: uuid.UUID | None, ausfuehrung: str | None) -> None:
-    """Eine Ausführung verfeinert innerhalb einer Instrumentenklasse – ohne Klasse ergibt sie keinen Sinn."""
-    if ausfuehrung is not None and instrumentenklasse_id is None:
-        raise feldfehler(ausfuehrung="Eine Ausführung ist nur zusammen mit einer Instrumentenklasse möglich")
-
-
-def _andere_aktive(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID,
-                   ausser: uuid.UUID | None = None) -> list[ReparaturVorgabewert]:
-    """Die übrigen aktiven Werte derselben Kombination aus Reparaturart und Instrumentenklasse (gesperrt)."""
-    abfrage = select(ReparaturVorgabewert).where(
-        ReparaturVorgabewert.archiviert_am.is_(None),
-        ReparaturVorgabewert.reparaturart_id == reparaturart_id,
-        ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
-    ).with_for_update()
-    if ausser is not None:
-        abfrage = abfrage.where(ReparaturVorgabewert.id != ausser)
-    return list(db.scalars(abfrage))
-
-
-def _namen_pruefen(ausfuehrung: str | None, andere: list[ReparaturVorgabewert]) -> None:
-    """Sobald es mehrere Ausführungen gibt, trägt jede einen Namen (2.6a)."""
-    if ausfuehrung is None and andere:
-        raise feldfehler(ausfuehrung="Diese Kombination hat mehrere Ausführungen – bitte einen Namen angeben")
-    if ausfuehrung is not None and any(a.ausfuehrung is None for a in andere):
-        raise feldfehler(ausfuehrung="Der bestehende Wert dieser Kombination hat noch keinen Namen – "
-                                     "bitte zuerst ihm eine Ausführung geben (er wird der Standard)")
-
-
-def _standard_uebernehmen(db: Session, andere: list[ReparaturVorgabewert], mitarbeiter_id: uuid.UUID) -> None:
-    """Der bisherige Standard verliert das Kennzeichen – vor dem Speichern des neuen (Datenbank-Index)."""
-    for a in andere:
-        if a.ist_standard:
-            a.ist_standard = False
-            a.geaendert_von_mitarbeiter_id = mitarbeiter_id
-    db.flush()
-
-
-def _ausfuehrung_umbenennen(db: Session, eintrag: ReparaturVorgabewert, alt: str, neu: str,
-                            mitarbeiter_id: uuid.UUID) -> dict[str, int]:
-    """Eine Ausführung heißt in der ganzen Instrumentenklasse gleich: Die übrigen aktiven Richtpreise der
-    Klasse mit dem alten Namen und die Instrumente der Klasse ziehen mit, damit kein Instrument unbemerkt
-    auf den Standard zurückfällt (2.5)."""
-    richtpreise = db.execute(
-        update(ReparaturVorgabewert).where(
-            ReparaturVorgabewert.instrumentenklasse_id == eintrag.instrumentenklasse_id,
-            ReparaturVorgabewert.ausfuehrung == alt, ReparaturVorgabewert.archiviert_am.is_(None),
-            ReparaturVorgabewert.id != eintrag.id,
-        ).values(ausfuehrung=neu, geaendert_von_mitarbeiter_id=mitarbeiter_id)
-    ).rowcount
-    instrumente = list(db.scalars(select(Instrument).where(
-        Instrument.instrumentenklasse_id == eintrag.instrumentenklasse_id, Instrument.ausfuehrung == alt)))
-    for instrument in instrumente:
-        instrument.ausfuehrung = neu
-        protokollieren(db, mitarbeiter_id, "instrument_geaendert", "instrument", instrument.id,
-                       {"alt": {"ausfuehrung": alt}, "neu": {"ausfuehrung": neu}, "anlass": "ausfuehrung_umbenannt"})
-    return {"umbenannte_instrumente": len(instrumente), "umbenannte_richtpreise": richtpreise}
+def _ausfuehrung_pruefen(db: Session, instrumentenklasse_id: uuid.UUID | None, ausfuehrung_id: uuid.UUID | None) -> None:
+    """Hat die Klasse (aktive) Ausführungen, gehört jeder ihrer Richtpreise zu einer davon – sonst zu keiner (2.4b)."""
+    if instrumentenklasse_id is None:
+        if ausfuehrung_id is not None:
+            raise feldfehler(ausfuehrung_id="Eine Ausführung ist nur zusammen mit einer Instrumentenklasse möglich")
+        return
+    aktive = {a.id for a in aktive_ausfuehrungen(db, instrumentenklasse_id)}
+    if ausfuehrung_id is None and aktive:
+        raise feldfehler(ausfuehrung_id="Diese Instrumentenklasse hat Ausführungen – bitte eine auswählen")
+    if ausfuehrung_id is not None and ausfuehrung_id not in aktive:
+        raise feldfehler(ausfuehrung_id="Diese Ausführung gibt es für die Instrumentenklasse nicht (oder sie ist archiviert)")
 
 
 # Passendere Meldung beim Reaktivieren (sonst gilt die zentrale aus app/speichern.py)
@@ -161,8 +108,7 @@ def _werte(eintrag: ReparaturVorgabewert) -> dict:
     return {
         "reparaturart_id": str(eintrag.reparaturart_id),
         "instrumentenklasse_id": str(eintrag.instrumentenklasse_id) if eintrag.instrumentenklasse_id else None,
-        "ausfuehrung": eintrag.ausfuehrung,
-        "ist_standard": eintrag.ist_standard,
+        "ausfuehrung_id": str(eintrag.ausfuehrung_id) if eintrag.ausfuehrung_id else None,
         "vorgabe_stunden": f"{eintrag.vorgabe_stunden:.2f}",
         "vorgabe_kosten": f"{eintrag.vorgabe_kosten:.2f}",
         "notiz": eintrag.notiz,
@@ -174,8 +120,8 @@ _GILT_FUER = func.coalesce(Instrumentenklasse.bezeichnung, "")
 # Bei gleicher Kombination (nur mit "alle"/"archiviert" möglich): der aktive vor den archivierten
 _AKTIVE_ZUERST = ReparaturVorgabewert.archiviert_am.is_not(None)
 
-_AUSFUEHRUNG = func.coalesce(ReparaturVorgabewert.ausfuehrung, "")
-_STANDARD_ZUERST = ReparaturVorgabewert.ist_standard.is_(False)
+_AUSFUEHRUNG = func.coalesce(func.lower(Ausfuehrung.bezeichnung), "")
+_STANDARD_ZUERST = func.coalesce(Ausfuehrung.ist_standard, False).is_(False)
 
 SORTIERUNG = {
     # Innerhalb der Instrumentenklasse: Standardausführung zuerst, dann die Ausführungen alphabetisch
@@ -201,7 +147,7 @@ def vorgabewerte_auflisten(
     gefiltert = basis
     if (muster := liste.suchmuster()) is not None:
         gefiltert = gefiltert.where(enthaelt(muster, Reparaturart.bezeichnung, Instrumentenklasse.bezeichnung,
-                                             ReparaturVorgabewert.ausfuehrung, ReparaturVorgabewert.notiz))
+                                             Ausfuehrung.bezeichnung, ReparaturVorgabewert.notiz))
     if status_ == "aktiv":
         gefiltert = gefiltert.where(ReparaturVorgabewert.archiviert_am.is_(None))
     elif status_ == "archiviert":
@@ -226,18 +172,9 @@ def vorgabewert_anlegen(
     mitarbeiter_id: uuid.UUID = Depends(aktueller_mitarbeiter_id),
 ) -> Vorgabewert:
     _verweise_pruefen(db, daten.reparaturart_id, daten.instrumentenklasse_id)
-    _ausfuehrung_pruefen(daten.instrumentenklasse_id, daten.ausfuehrung)
+    _ausfuehrung_pruefen(db, daten.instrumentenklasse_id, daten.ausfuehrung_id)
     eintrag = ReparaturVorgabewert(**daten.model_dump(), geaendert_von_mitarbeiter_id=mitarbeiter_id)
-    eintrag.ist_standard = False
     with sicher_speichern(db):
-        if daten.instrumentenklasse_id is not None:
-            andere = _andere_aktive(db, daten.reparaturart_id, daten.instrumentenklasse_id)
-            if not (daten.ausfuehrung is None and any(a.ausfuehrung is None for a in andere)):  # sonst: "gibt es bereits"
-                _namen_pruefen(daten.ausfuehrung, andere)
-            # Die erste benannte Ausführung einer Kombination ist ihr Standard
-            eintrag.ist_standard = daten.ausfuehrung is not None and (daten.ist_standard or not andere)
-            if eintrag.ist_standard:
-                _standard_uebernehmen(db, andere, mitarbeiter_id)
         db.add(eintrag)  # erzeugt beim Speichern die ID
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,
@@ -274,37 +211,16 @@ def vorgabewert_bearbeiten(
         aenderungen.get("instrumentenklasse_id")
         if aenderungen.get("instrumentenklasse_id") != eintrag.instrumentenklasse_id else None,
     )
-    art_id = aenderungen.get("reparaturart_id", eintrag.reparaturart_id)
     klasse_id = aenderungen.get("instrumentenklasse_id", eintrag.instrumentenklasse_id)
-    ausfuehrung = aenderungen.get("ausfuehrung", eintrag.ausfuehrung)
-    _ausfuehrung_pruefen(klasse_id, ausfuehrung)
-    gewuenscht = aenderungen.pop("ist_standard", None)
-    verschoben = (art_id, klasse_id) != (eintrag.reparaturart_id, eintrag.instrumentenklasse_id)
+    ausfuehrung_id = aenderungen.get("ausfuehrung_id", eintrag.ausfuehrung_id)
+    # Nur prüfen, wenn sich an Klasse oder Ausführung etwas ändert – Preis und Notiz bleiben auch dann
+    # bearbeitbar, wenn die Ausführung inzwischen archiviert ist
+    if (klasse_id, ausfuehrung_id) != (eintrag.instrumentenklasse_id, eintrag.ausfuehrung_id):
+        _ausfuehrung_pruefen(db, klasse_id, ausfuehrung_id)
     alt = _werte(eintrag)
-    umbenannt: dict[str, int] = {}
     with sicher_speichern(db):
-        if verschoben and eintrag.ist_standard and _andere_aktive(
-                db, eintrag.reparaturart_id, eintrag.instrumentenklasse_id, ausser=eintrag.id):
-            raise HTTPException(status.HTTP_409_CONFLICT,
-                                "Das ist die Standardausführung – bitte zuerst eine andere Ausführung zum Standard machen")
-        andere = _andere_aktive(db, art_id, klasse_id, ausser=eintrag.id) if klasse_id is not None else []
-        if klasse_id is not None:
-            _namen_pruefen(ausfuehrung, andere)
-        if ausfuehrung is None:
-            ist_standard = False
-        elif not andere or gewuenscht:
-            ist_standard = True  # die einzige benannte Ausführung ist zwangsläufig der Standard
-        elif gewuenscht is False and eintrag.ist_standard and not verschoben:
-            raise feldfehler(ist_standard="Genau eine Ausführung ist Standard – bitte stattdessen eine andere zum Standard machen")
-        else:
-            ist_standard = eintrag.ist_standard and not verschoben
-        if ist_standard and not (eintrag.ist_standard and not verschoben):
-            _standard_uebernehmen(db, andere, mitarbeiter_id)
-        if not verschoben and eintrag.ausfuehrung is not None and ausfuehrung not in (None, eintrag.ausfuehrung):
-            umbenannt = _ausfuehrung_umbenennen(db, eintrag, eintrag.ausfuehrung, ausfuehrung, mitarbeiter_id)
         for feld, wert in aenderungen.items():
             setattr(eintrag, feld, wert)
-        eintrag.ist_standard = ist_standard
         eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
 
     db.add(SystemEreignisLog(
@@ -312,10 +228,10 @@ def vorgabewert_bearbeiten(
         aktion="vorgabewert_geaendert",
         betroffene_entitaet="reparatur_vorgabewert",
         betroffene_id=eintrag.id,
-        details={"alt": alt, "neu": _werte(eintrag), **umbenannt},
+        details={"alt": alt, "neu": _werte(eintrag)},
     ))
     db.commit()
-    return _laden(db, eintrag.id, **umbenannt)
+    return _laden(db, eintrag.id)
 
 
 def _archiv_umschalten(db: Session, vorgabewert_id: uuid.UUID, mitarbeiter_id: uuid.UUID, archivieren: bool) -> Vorgabewert:
@@ -326,22 +242,17 @@ def _archiv_umschalten(db: Session, vorgabewert_id: uuid.UUID, mitarbeiter_id: u
         raise HTTPException(status.HTTP_409_CONFLICT,
                             f"Richtpreis ist {'bereits' if archivieren else 'nicht'} archiviert")
     alt = eintrag.archiviert_am
-    andere = (_andere_aktive(db, eintrag.reparaturart_id, eintrag.instrumentenklasse_id, ausser=eintrag.id)
-              if eintrag.instrumentenklasse_id is not None else [])
-    if archivieren and eintrag.ist_standard and andere:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            "Das ist die Standardausführung – bitte zuerst eine andere Ausführung zum Standard machen")
-    if not archivieren and andere and not any(a.ausfuehrung == eintrag.ausfuehrung for a in andere):  # sonst: Index-Meldung
-        if eintrag.ausfuehrung is None or any(a.ausfuehrung is None for a in andere):
+    if not archivieren:  # die Regeln aus 2.4b müssen auch für den zurückgeholten Wert gelten
+        try:
+            _ausfuehrung_pruefen(db, eintrag.instrumentenklasse_id, eintrag.ausfuehrung_id)
+        except HTTPException:
             raise HTTPException(status.HTTP_409_CONFLICT,
-                                "Für diese Kombination gibt es inzwischen andere aktive Werte – bei mehreren "
-                                "Ausführungen muss jede einen Namen tragen. Bitte dort als neue Ausführung anlegen.")
+                                "Die Ausführungen dieser Instrumentenklasse haben sich inzwischen geändert – "
+                                "bitte den Wert in der Preisliste neu anlegen") from None
     zeitpunkt = db.scalar(select(func.clock_timestamp())) if archivieren else None
     # Beim Reaktivieren prüft die Datenbank, ob die Kombination schon aktiv vergeben ist
     with sicher_speichern(db, None if archivieren else REAKTIVIEREN_MELDUNGEN):
         eintrag.archiviert_am = zeitpunkt
-        if not archivieren:  # als einzige benannte Ausführung Standard, neben anderen nicht
-            eintrag.ist_standard = eintrag.ausfuehrung is not None and not andere
         eintrag.geaendert_von_mitarbeiter_id = mitarbeiter_id
     db.add(SystemEreignisLog(
         ausgefuehrt_von_mitarbeiter_id=mitarbeiter_id,

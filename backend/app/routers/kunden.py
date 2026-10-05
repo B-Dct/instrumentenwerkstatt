@@ -22,9 +22,8 @@ from app.db import get_db
 from app.eingabe import feldfehler
 from app.ereignisse import protokollieren, werte
 from app.listen import ListenParameter, Seite, enthaelt, listen_parameter, seite_abfragen
-from app.schaetzung import ausfuehrungen_je_klasse
 from app.speichern import sicher_speichern
-from app.models import Auftrag, Auftragsstatus, Instrument, Instrumentenklasse, Kunde, Mitarbeiter, Systemrolle
+from app.models import Auftrag, Auftragsstatus, Ausfuehrung, Instrument, Instrumentenklasse, Kunde, Mitarbeiter, Systemrolle
 from app.schemas import (
     InstrumentAenderung,
     InstrumentKurz,
@@ -40,7 +39,7 @@ nur_leitung = Depends(rolle_mindestens(Systemrolle.werkstattleiter))
 
 KUNDE_FELDER = ["name", "externe_kundennummer", "email", "telefon"]
 INSTRUMENT_FELDER = ["instrumentenklasse_id", "hersteller", "typenbezeichnung", "baujahr", "seriennummer", "notizen",
-                     "ausfuehrung"]
+                     "ausfuehrung_id"]
 
 
 def _externe_nummer_vergeben(db: Session, nummer: str | None, eigene_id: uuid.UUID | None = None):
@@ -197,8 +196,9 @@ def kunde_reaktivieren(
 def _instrumente(db: Session, kunde_id: uuid.UUID | None = None, archivierte: bool = False,
                  instrument_id: uuid.UUID | None = None) -> list[InstrumentKurz]:
     abfrage = (
-        select(Instrument, Instrumentenklasse.bezeichnung)
+        select(Instrument, Instrumentenklasse.bezeichnung, Ausfuehrung)
         .join(Instrumentenklasse, Instrument.instrumentenklasse_id == Instrumentenklasse.id)
+        .outerjoin(Ausfuehrung, Instrument.ausfuehrung_id == Ausfuehrung.id)
         .order_by(Instrumentenklasse.bezeichnung, Instrument.hersteller, Instrument.typenbezeichnung)
     )
     if kunde_id is not None:
@@ -211,10 +211,11 @@ def _instrumente(db: Session, kunde_id: uuid.UUID | None = None, archivierte: bo
         InstrumentKurz(
             id=i.id, kunde_id=i.kunde_id, instrumentenklasse_id=i.instrumentenklasse_id,
             instrumentenklasse_bezeichnung=klasse, hersteller=i.hersteller, typenbezeichnung=i.typenbezeichnung,
-            baujahr=i.baujahr, seriennummer=i.seriennummer, notizen=i.notizen, ausfuehrung=i.ausfuehrung,
+            baujahr=i.baujahr, seriennummer=i.seriennummer, notizen=i.notizen, ausfuehrung_id=i.ausfuehrung_id,
+            ausfuehrung=a.bezeichnung if a else None, ausfuehrung_archiviert=bool(a and a.archiviert_am),
             archiviert_am=i.archiviert_am,
         )
-        for i, klasse in db.execute(abfrage).all()
+        for i, klasse, a in db.execute(abfrage).all()
     ]
 
 
@@ -235,10 +236,13 @@ def _klasse_pruefen(db: Session, klasse_id: uuid.UUID) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Instrumentenklasse existiert nicht oder ist archiviert")
 
 
-def _ausfuehrung_pruefen(db: Session, klasse_id: uuid.UUID, ausfuehrung: str | None) -> None:
-    """Die Ausführung eines Instruments muss es bei seiner Klasse als Ausführung eines Richtpreises geben (2.5)."""
-    if ausfuehrung is not None and ausfuehrung not in {name for name, _ in ausfuehrungen_je_klasse(db, klasse_id).get(klasse_id, [])}:
-        raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die Instrumentenklasse nicht")
+def _ausfuehrung_pruefen(db: Session, klasse_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None) -> None:
+    """Die Ausführung eines Instruments ist eine aktive Ausführung seiner Instrumentenklasse (2.4b, 2.5)."""
+    if ausfuehrung_id is None:
+        return
+    ausfuehrung = db.get(Ausfuehrung, ausfuehrung_id)
+    if ausfuehrung is None or ausfuehrung.instrumentenklasse_id != klasse_id or ausfuehrung.archiviert_am is not None:
+        raise feldfehler(ausfuehrung_id="Diese Ausführung gibt es für die Instrumentenklasse nicht (oder sie ist archiviert)")
 
 
 @router.get("/instrumente", response_model=list[InstrumentKurz])
@@ -263,7 +267,7 @@ def instrument_anlegen(
     if kunde is None or kunde.archiviert_am is not None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kunde existiert nicht oder ist archiviert")
     _klasse_pruefen(db, daten.instrumentenklasse_id)
-    _ausfuehrung_pruefen(db, daten.instrumentenklasse_id, daten.ausfuehrung)
+    _ausfuehrung_pruefen(db, daten.instrumentenklasse_id, daten.ausfuehrung_id)
     instrument = Instrument(**daten.model_dump())
     db.add(instrument)
     db.flush()
@@ -286,10 +290,12 @@ def instrument_bearbeiten(
         if aenderungen["instrumentenklasse_id"] != instrument.instrumentenklasse_id:
             _klasse_pruefen(db, aenderungen["instrumentenklasse_id"])
             # Die Ausführung gehört zur bisherigen Klasse – ohne neue Angabe wird sie geleert
-            aenderungen.setdefault("ausfuehrung", None)
-    if aenderungen.get("ausfuehrung") is not None:
-        _ausfuehrung_pruefen(db, aenderungen.get("instrumentenklasse_id", instrument.instrumentenklasse_id),
-                             aenderungen["ausfuehrung"])
+            aenderungen.setdefault("ausfuehrung_id", None)
+    # Nur eine neu gewählte Ausführung prüfen – eine inzwischen archivierte darf am Instrument stehen bleiben
+    klasse_id = aenderungen.get("instrumentenklasse_id", instrument.instrumentenklasse_id)
+    neue_ausfuehrung = aenderungen.get("ausfuehrung_id")
+    if neue_ausfuehrung is not None and (neue_ausfuehrung, klasse_id) != (instrument.ausfuehrung_id, instrument.instrumentenklasse_id):
+        _ausfuehrung_pruefen(db, klasse_id, neue_ausfuehrung)
     alt = werte(instrument, INSTRUMENT_FELDER)
     for feld, wert in aenderungen.items():
         setattr(instrument, feld, wert)

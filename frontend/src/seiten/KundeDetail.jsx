@@ -144,7 +144,7 @@ export default function KundeDetail() {
                               {i.instrumentenklasse_bezeichnung}
                             </button>
                           : i.instrumentenklasse_bezeichnung}
-                        {i.ausfuehrung && <div className="leise klein">{i.ausfuehrung}</div>}
+                        {i.ausfuehrung && <div className="leise klein">{i.ausfuehrung}{i.ausfuehrung_archiviert ? ' (archiviert)' : ''}</div>}
                       </td>
                       <td>{instrumentName(i)}</td>
                       <td>{i.baujahr ?? '–'}</td>

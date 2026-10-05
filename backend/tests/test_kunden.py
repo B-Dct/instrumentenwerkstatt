@@ -135,33 +135,42 @@ def test_instrument_ungueltig(client, w, daten):
 
 
 def test_instrument_ausfuehrung(client, w, db):
-    """Die Ausführung muss es bei der Klasse als Ausführung eines Richtpreises geben (2.5)."""
-    from decimal import Decimal
-    from app.models import ReparaturVorgabewert
-    for name in ("versilbert", "lackiert"):
-        db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.violine.id, ausfuehrung=name,
-                                    ist_standard=name == "versilbert",
-                                    vorgabe_stunden=Decimal("1.00"), vorgabe_kosten=Decimal("40.00")))
-    db.flush()
+    """Die Ausführung eines Instruments ist eine aktive Ausführung seiner Instrumentenklasse (2.4b, 2.5)."""
+    from datetime import datetime, timezone
+    versilbert, lackiert = w.ausfuehrung("versilbert", w.violine, standard=True), w.ausfuehrung("lackiert", w.violine)
+    fremd = w.ausfuehrung("natur", w.kontrabass, standard=True)
     liste = client.get("/instrumentenklassen/ausfuehrungen").json()
-    assert liste[str(w.violine.id)] == [{"ausfuehrung": "versilbert", "ist_standard": True},      # Standard zuerst
-                                        {"ausfuehrung": "lackiert", "ist_standard": False}]
-    assert str(w.kontrabass.id) not in liste
+    assert [(e["bezeichnung"], e["ist_standard"]) for e in liste[str(w.violine.id)]] == [("versilbert", True), ("lackiert", False)]
+    assert liste[str(w.violine.id)][0]["id"] == str(versilbert.id)
 
     kunde = kunde_anlegen(client)
-    instrument = instrument_anlegen(client, w, kunde["id"], ausfuehrung=" versilbert ")
-    assert instrument["ausfuehrung"] == "versilbert"
-    unbekannt = client.post("/instrumente", json={"kunde_id": kunde["id"], "instrumentenklasse_id": str(w.violine.id),
-                                                  "ausfuehrung": "vergoldet"})
-    assert unbekannt.status_code == 422 and unbekannt.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+    instrument = instrument_anlegen(client, w, kunde["id"], ausfuehrung_id=str(versilbert.id))
+    assert (instrument["ausfuehrung"], instrument["ausfuehrung_id"]) == ("versilbert", str(versilbert.id))
+    for unpassend in (str(fremd.id), str(uuid.uuid4())):                                  # andere Klasse / gibt es nicht
+        antwort = client.post("/instrumente", json={"kunde_id": kunde["id"], "instrumentenklasse_id": str(w.violine.id),
+                                                    "ausfuehrung_id": unpassend})
+        assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung_id"
 
     url = f"/instrumente/{instrument['id']}"
-    assert client.patch(url, json={"ausfuehrung": "lackiert"}).json()["ausfuehrung"] == "lackiert"
+    assert client.patch(url, json={"ausfuehrung_id": str(lackiert.id)}).json()["ausfuehrung"] == "lackiert"
     assert client.patch(url, json={"hersteller": "Stainer"}).json()["ausfuehrung"] == "lackiert"   # bleibt erhalten
-    assert client.patch(url, json={"ausfuehrung": ""}).json()["ausfuehrung"] is None               # leeren
-    client.patch(url, json={"ausfuehrung": "lackiert"})
+    assert client.patch(url, json={"ausfuehrung_id": None}).json()["ausfuehrung"] is None          # wieder unbekannt
+    client.patch(url, json={"ausfuehrung_id": str(lackiert.id)})
+
+    # Umbenennen der Ausführung: Das Instrument folgt automatisch, ohne dass es angefasst wird
+    lackiert.bezeichnung = "Lack, matt"
+    db.flush()
+    assert client.get(url).json()["ausfuehrung"] == "Lack, matt"
+    # Archivierte Ausführung: Verweis bleibt und wird gekennzeichnet; andere Felder bleiben bearbeitbar, neu wählbar ist sie nicht
+    lackiert.archiviert_am = datetime.now(timezone.utc)
+    db.flush()
+    geaendert = client.patch(url, json={"hersteller": "Klotz"}).json()
+    assert (geaendert["ausfuehrung"], geaendert["ausfuehrung_archiviert"]) == ("Lack, matt", True)
+    anderes = instrument_anlegen(client, w, kunde["id"])
+    assert client.patch(f"/instrumente/{anderes['id']}", json={"ausfuehrung_id": str(lackiert.id)}).status_code == 422
+    assert str(lackiert.id) not in [e["id"] for e in client.get("/instrumentenklassen/ausfuehrungen").json()[str(w.violine.id)]]
     # Andere Klasse: Die Ausführung gehört zur alten Klasse und wird geleert
-    assert client.patch(url, json={"instrumentenklasse_id": str(w.kontrabass.id)}).json()["ausfuehrung"] is None
+    assert client.patch(url, json={"instrumentenklasse_id": str(w.kontrabass.id)}).json()["ausfuehrung_id"] is None
 
 
 def test_instrument_archivieren(client, w, leitung):

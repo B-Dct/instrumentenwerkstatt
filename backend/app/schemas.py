@@ -20,33 +20,55 @@ Euro = Annotated[
 
 # --- Reparatur-Vorgabewerte (Datenmodell 2.6a) ------------------------------
 
-# Leere Eingabe = Standardausführung
-Ausfuehrung = Annotated[
-    str | None, StringConstraints(strip_whitespace=True, max_length=100), AfterValidator(lambda w: w or None)
+# Bezeichnung einer Ausführung: Leerzeichen am Rand und überzählige dazwischen werden entfernt (2.4b)
+AusfuehrungName = Annotated[
+    str, BeforeValidator(lambda w: " ".join(w.split()) if isinstance(w, str) else w),
+    StringConstraints(min_length=1, max_length=100),
 ]
 
 
-class AusfuehrungAuswahl(BaseModel):
-    """Eine wählbare Ausführung im Auftragsformular samt ihrer Vorgabewerte."""
+class AusfuehrungKurz(BaseModel):
+    """Eine aktive Ausführung zur Auswahl am Instrument (2.5)."""
 
-    ausfuehrung: str | None  # None = die Kombination hat keine Varianten (ein einziger Wert)
+    id: uuid.UUID
+    bezeichnung: str
     ist_standard: bool
-    vorgabe_stunden: Stunden
-    vorgabe_kosten: Euro
 
 
-class AusfuehrungDerKlasse(BaseModel):
-    """Eine Ausführung, die ein Instrument dieser Klasse tragen kann (2.5)."""
+class AusfuehrungAuswahl(AusfuehrungKurz):
+    """Eine wählbare Ausführung im Auftragsformular, mit ihrem Richtpreis für die gewählte Reparaturart
+    (None, wenn sie dafür keinen eigenen hat – dann gilt der des Standards)."""
 
-    ausfuehrung: str
-    ist_standard: bool
+    vorgabe_stunden: Stunden | None
+    vorgabe_kosten: Euro | None
+
+
+class AusfuehrungNeu(BaseModel):
+    instrumentenklasse_id: uuid.UUID
+    bezeichnung: AusfuehrungName
+    ist_standard: bool = False  # die erste Ausführung einer Klasse wird ohnehin Standard
+
+
+class AusfuehrungAenderung(BaseModel):
+    """Nur mitgeschickte Felder werden geändert."""
+
+    bezeichnung: AusfuehrungName | None = None
+    ist_standard: bool | None = None  # true = wird Standard der Klasse, die bisherige verliert das Kennzeichen
+
+
+class AusfuehrungEintrag(AusfuehrungKurz):
+    instrumentenklasse_id: uuid.UUID
+    archiviert_am: datetime | None  # NULL = aktiv
+    # Was die Ausführung verwendet – wird vor dem Archivieren angezeigt (2.4b)
+    instrumente: int
+    richtpreise: int
 
 
 class VorgabewertNeu(BaseModel):
     reparaturart_id: uuid.UUID
     instrumentenklasse_id: uuid.UUID | None = None  # None = gilt allgemein für die Reparaturart
-    ausfuehrung: Ausfuehrung = None  # None = keine Varianten; nur zusammen mit einer Instrumentenklasse
-    ist_standard: bool = False  # die erste benannte Ausführung einer Kombination wird ohnehin Standard
+    # Pflicht, wenn die Instrumentenklasse Ausführungen hat – sonst leer (2.4b)
+    ausfuehrung_id: uuid.UUID | None = None
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None = None
@@ -57,8 +79,7 @@ class VorgabewertAenderung(BaseModel):
 
     reparaturart_id: uuid.UUID | None = None
     instrumentenklasse_id: uuid.UUID | None = None  # explizit null = auf "allgemein" setzen
-    ausfuehrung: Ausfuehrung = None  # explizit null/leer = ohne Namen (nur als einziger Wert der Kombination)
-    ist_standard: bool | None = None  # true = diese Ausführung wird Standard, die bisherige verliert das Kennzeichen
+    ausfuehrung_id: uuid.UUID | None = None
     vorgabe_stunden: Stunden | None = None
     vorgabe_kosten: Euro | None = None
     notiz: str | None = None
@@ -72,16 +93,13 @@ class Vorgabewert(BaseModel):
     reparaturart_bezeichnung: str
     instrumentenklasse_id: uuid.UUID | None
     instrumentenklasse_bezeichnung: str | None
-    ausfuehrung: str | None  # None = die Kombination hat keine Varianten
-    ist_standard: bool
+    ausfuehrung_id: uuid.UUID | None  # None = die Klasse hat keine Ausführungen bzw. allgemeiner Wert
+    ausfuehrung: str | None  # Bezeichnung der Ausführung
+    ausfuehrung_ist_standard: bool = False
+    ausfuehrung_archiviert: bool = False  # dann ignoriert die Schätzung den Wert (2.4b)
     vorgabe_stunden: Stunden
     vorgabe_kosten: Euro
     notiz: str | None
-    # Aktive Instrumente der Klasse, an denen diese Ausführung hinterlegt ist (Hinweis vor dem Archivieren, 2.5)
-    instrumente_mit_ausfuehrung: int = 0
-    # Nur direkt nach dem Umbenennen einer Ausführung gefüllt: was in derselben Transaktion mitumbenannt wurde
-    umbenannte_instrumente: int = 0
-    umbenannte_richtpreise: int = 0
     archiviert_am: datetime | None  # NULL = aktiv
     geaendert_von_mitarbeiter_id: uuid.UUID | None
     geaendert_am: datetime
@@ -93,9 +111,9 @@ class AuftragNeu(BaseModel):
     kunde_id: uuid.UUID
     instrument_id: uuid.UUID  # muss dem Kunden gehören
     reparaturart_id: uuid.UUID
-    # Nur wenn das Instrument noch keine Ausführung hat und es für Reparaturart + Instrumentenklasse mehrere
-    # Vorgabewerte gibt (2.6a). Die Wahl wird am Instrument gespeichert (2.5); None = Standard
-    ausfuehrung: Ausfuehrung = None
+    # Nur wenn das Instrument noch keine Ausführung hat und seine Klasse mehrere kennt (2.4b).
+    # Die Wahl wird am Instrument gespeichert (2.5); None = bleibt unbekannt, es gilt der Standard
+    ausfuehrung_id: uuid.UUID | None = None
     zugewiesener_mitarbeiter_id: uuid.UUID | None = None
     prioritaet: Prioritaet = Prioritaet.normal
     # Weggelassen = Standard-Komplexität der Reparaturart
@@ -228,7 +246,9 @@ class InstrumentKurz(BaseModel):
     baujahr: int | None
     seriennummer: str | None
     notizen: str | None
-    ausfuehrung: str | None  # None = unbekannt/Standard (2.5)
+    ausfuehrung_id: uuid.UUID | None  # None = unbekannt (2.5)
+    ausfuehrung: str | None  # Bezeichnung der Ausführung
+    ausfuehrung_archiviert: bool = False  # dann gilt das Instrument bei der Schätzung als "unbekannt"
     archiviert_am: datetime | None
 
 
@@ -317,7 +337,7 @@ class InstrumentNeu(BaseModel):
     baujahr: int | None = Field(None, ge=1500, le=2100)
     seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
     notizen: str | None = None
-    ausfuehrung: Ausfuehrung = None  # muss es bei der Instrumentenklasse als Ausführung eines Richtpreises geben
+    ausfuehrung_id: uuid.UUID | None = None  # eine aktive Ausführung der Instrumentenklasse (2.4b)
 
 
 class InstrumentAenderung(BaseModel):
@@ -329,7 +349,7 @@ class InstrumentAenderung(BaseModel):
     baujahr: int | None = Field(None, ge=1500, le=2100)
     seriennummer: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
     notizen: str | None = None
-    ausfuehrung: Ausfuehrung = None  # leer = unbekannt/Standard
+    ausfuehrung_id: uuid.UUID | None = None  # explizit null = unbekannt
 
 
 class KundeDetail(KundeEintrag):

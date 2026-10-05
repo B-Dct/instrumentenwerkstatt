@@ -12,12 +12,15 @@ Vorgehen für eine Kombination aus Instrumentenklasse + Reparaturart:
 
 Zwei Reihenfolgen (Abschnitt 4), je nachdem ob am Instrument eine Ausführung hinterlegt ist (2.5):
 - Bekannte Ausführung: historischer Durchschnitt nur über Aufträge mit Instrumenten DERSELBEN
-  Ausführung, sonst der Vorgabewert dieser Ausführung, sonst der Standard der Kombination
-  (ist_standard), sonst der allgemeine Wert. Verschiedene Ausführungen werden nie vermischt.
+  Ausführung, sonst der Vorgabewert dieser Ausführung, sonst der Vorgabewert der Standardausführung
+  der Klasse (2.4b), sonst der allgemeine Wert. Verschiedene Ausführungen werden nie vermischt.
 - Unbekannte Ausführung: historischer Durchschnitt über alle Aufträge der Klasse, sonst der
-  Standard der Kombination bzw. ihr einziger Wert, sonst der allgemeine Wert.
+  Vorgabewert der Standardausführung bzw. – hat die Klasse keine Ausführungen – ihr einziger Wert,
+  sonst der allgemeine Wert.
 Auch die Standardausführung trägt einen Namen – ein Instrument mit bewusst eingetragener
 Standardausführung ist deshalb etwas anderes als eines mit unbekannter Ausführung.
+Ist die Ausführung eines Instruments archiviert, gilt es als "unbekannt"; Vorgabewerte archivierter
+Ausführungen werden ignoriert (siehe `bekannte_ausfuehrung`).
 """
 
 import enum
@@ -32,6 +35,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.models import (
     Arbeitszeiterfassung,
     Auftrag,
+    Ausfuehrung,
     Auftragsstatus,
     Instrument,
     ReparaturVorgabewert,
@@ -60,7 +64,7 @@ class Schaetzung:
 
 
 def _passende_abgeschlossene_auftraege(
-    instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
+    instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None
 ) -> list[ColumnElement[bool]]:
     """Filter: gleiche Kombination und Auftrag steht in einem abgeschlossenen Status.
     Mit Ausführung zählen nur Aufträge, deren Instrument dieselbe Ausführung hat."""
@@ -69,13 +73,13 @@ def _passende_abgeschlossene_auftraege(
         Auftrag.reparaturart_id == reparaturart_id,
         Auftragsstatus.ist_abgeschlossen.is_(True),
     ]
-    if ausfuehrung is not None:
-        filter_.append(Instrument.ausfuehrung == ausfuehrung)
+    if ausfuehrung_id is not None:
+        filter_.append(Instrument.ausfuehrung_id == ausfuehrung_id)
     return filter_
 
 
 def _historisch_stunden(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None
 ) -> tuple[int, Decimal | None]:
     # Erst je Auftrag alle Zeiteinträge aufsummieren (mehrere Sitzungen/Mitarbeiter),
     # dann über die Aufträge mitteln – sonst würden Einzeleinträge gemittelt.
@@ -85,7 +89,7 @@ def _historisch_stunden(
         .join(Arbeitszeiterfassung, Arbeitszeiterfassung.auftrag_id == Auftrag.id)
         .join(Instrument, Auftrag.instrument_id == Instrument.id)
         .join(Auftragsstatus, Auftrag.status_aktuell_id == Auftragsstatus.id)
-        .where(*_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung))
+        .where(*_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung_id))
         .group_by(Auftrag.id)
         .subquery()
     )
@@ -96,44 +100,55 @@ def _historisch_stunden(
 
 
 def _historisch_kosten(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None
 ) -> tuple[int, Decimal | None]:
     anzahl, durchschnitt = db.execute(
         select(func.count(), func.avg(Auftrag.tatsaechliche_kosten))
         .join(Instrument, Auftrag.instrument_id == Instrument.id)
         .join(Auftragsstatus, Auftrag.status_aktuell_id == Auftragsstatus.id)
         .where(
-            *_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung),
+            *_passende_abgeschlossene_auftraege(instrumentenklasse_id, reparaturart_id, ausfuehrung_id),
             Auftrag.tatsaechliche_kosten.is_not(None),
         )
     ).one()
     return anzahl, durchschnitt
 
 
+def bekannte_ausfuehrung(db: Session, ausfuehrung_id: uuid.UUID | None) -> uuid.UUID | None:
+    """Die Ausführung eines Instruments, wie die Schätzung sie sieht: Eine archivierte gilt als unbekannt (2.4b)."""
+    if ausfuehrung_id is None:
+        return None
+    ausfuehrung = db.get(Ausfuehrung, ausfuehrung_id)
+    return ausfuehrung.id if ausfuehrung is not None and ausfuehrung.archiviert_am is None else None
+
+
 def _vorgabe(
     db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, spalte: str,
-    ausfuehrung: str | None = None,
+    ausfuehrung_id: uuid.UUID | None = None,
 ) -> tuple[Quelle, Decimal] | None:
     """Spezifischen Vorgabewert der Instrumentenklasse bevorzugen, sonst den allgemeinen.
-    Innerhalb der Instrumentenklasse: die Ausführung des Instruments, sonst der Standard (ist_standard),
-    sonst der Wert ohne Namen (einziger Wert der Kombination bzw. Altdaten ohne Kennzeichen)."""
-    eintraege = db.scalars(
-        select(ReparaturVorgabewert).where(
+    Innerhalb der Instrumentenklasse: die Ausführung des Instruments, sonst die Standardausführung der
+    Klasse, sonst der Wert ohne Ausführung (Klasse ohne Ausführungen)."""
+    eintraege = db.execute(
+        select(ReparaturVorgabewert, func.coalesce(Ausfuehrung.ist_standard, False))
+        .outerjoin(Ausfuehrung, ReparaturVorgabewert.ausfuehrung_id == Ausfuehrung.id)
+        .where(
             ReparaturVorgabewert.archiviert_am.is_(None),  # archivierte Vorgabewerte zählen nicht
+            Ausfuehrung.archiviert_am.is_(None),           # … und auch nicht die archivierter Ausführungen
             ReparaturVorgabewert.reparaturart_id == reparaturart_id,
             (ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
             | ReparaturVorgabewert.instrumentenklasse_id.is_(None),
         )
     ).all()
-    der_klasse = [e for e in eintraege if e.instrumentenklasse_id is not None]
+    der_klasse = [(e, standard) for e, standard in eintraege if e.instrumentenklasse_id is not None]
     spezifisch = (
-        next((e for e in der_klasse if ausfuehrung is not None and e.ausfuehrung == ausfuehrung), None)
-        or next((e for e in der_klasse if e.ist_standard), None)
-        or next((e for e in der_klasse if e.ausfuehrung is None), None)
+        next((e for e, _ in der_klasse if ausfuehrung_id is not None and e.ausfuehrung_id == ausfuehrung_id), None)
+        or next((e for e, standard in der_klasse if standard), None)
+        or next((e for e, _ in der_klasse if e.ausfuehrung_id is None), None)
     )
     if spezifisch is not None:
         return Quelle.vorgabe_instrumentenklasse, getattr(spezifisch, spalte)
-    allgemein = next((e for e in eintraege if e.instrumentenklasse_id is None and e.ausfuehrung is None), None)
+    allgemein = next((e for e, _ in eintraege if e.instrumentenklasse_id is None), None)
     if allgemein is not None:
         return Quelle.vorgabe_allgemein, getattr(allgemein, spalte)
     return None
@@ -151,53 +166,43 @@ def _schaetzen(
 
 
 def schaetze_arbeitsstunden(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None = None
 ) -> Schaetzung:
     """Geschätzter reiner Arbeitsaufwand in Stunden (Grundlage für auftrag.geschaetzte_arbeitsstunden).
-    `ausfuehrung` ist die Ausführung des Instruments (2.5): Sie grenzt den historischen Durchschnitt ein
-    und wählt den Vorgabewert (2.6a)."""
-    anzahl, durchschnitt = _historisch_stunden(db, instrumentenklasse_id, reparaturart_id, ausfuehrung)
-    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_stunden", ausfuehrung)
+    `ausfuehrung_id` ist die Ausführung des Instruments (2.5): Sie grenzt den historischen Durchschnitt ein
+    und wählt den Vorgabewert (2.6a). None oder eine archivierte Ausführung = unbekannt."""
+    ausfuehrung_id = bekannte_ausfuehrung(db, ausfuehrung_id)
+    anzahl, durchschnitt = _historisch_stunden(db, instrumentenklasse_id, reparaturart_id, ausfuehrung_id)
+    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_stunden", ausfuehrung_id)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
 
 
 def schaetze_kosten(
-    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung: str | None = None
+    db: Session, instrumentenklasse_id: uuid.UUID, reparaturart_id: uuid.UUID, ausfuehrung_id: uuid.UUID | None = None
 ) -> Schaetzung:
     """Geschätzter Preis in Euro (Grundlage für auftrag.geschaetzte_kosten)."""
-    anzahl, durchschnitt = _historisch_kosten(db, instrumentenklasse_id, reparaturart_id, ausfuehrung)
-    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_kosten", ausfuehrung)
+    ausfuehrung_id = bekannte_ausfuehrung(db, ausfuehrung_id)
+    anzahl, durchschnitt = _historisch_kosten(db, instrumentenklasse_id, reparaturart_id, ausfuehrung_id)
+    vorgabe = _vorgabe(db, instrumentenklasse_id, reparaturart_id, "vorgabe_kosten", ausfuehrung_id)
     return _schaetzen(anzahl, durchschnitt, vorgabe)
 
 
-def ausfuehrungen(db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID) -> list[ReparaturVorgabewert]:
-    """Aktive Vorgabewerte genau dieser Kombination – der Standard zuerst, dann alphabetisch.
-    Gibt es mehr als einen, kann beim Anlegen eines Auftrags eine Ausführung gewählt werden (2.6a)."""
-    return list(db.scalars(
-        select(ReparaturVorgabewert).where(
-            ReparaturVorgabewert.archiviert_am.is_(None),
-            ReparaturVorgabewert.reparaturart_id == reparaturart_id,
-            ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
-        ).order_by(ReparaturVorgabewert.ist_standard.desc(), ReparaturVorgabewert.ausfuehrung.asc().nulls_first())
-    ))
-
-
-def ausfuehrungen_je_klasse(
-    db: Session, instrumentenklasse_id: uuid.UUID | None = None
-) -> dict[uuid.UUID, list[tuple[str, bool]]]:
-    """Benannte Ausführungen je Instrumentenklasse als (Name, ist Standard) – über alle Reparaturarten,
-    nur aktive Vorgabewerte; der Standard zuerst, dann alphabetisch. Das sind die Werte, die ein
-    Instrument als Ausführung tragen kann (2.5)."""
-    standard = func.bool_or(ReparaturVorgabewert.ist_standard)
-    abfrage = select(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung, standard).where(
-        ReparaturVorgabewert.archiviert_am.is_(None),
-        ReparaturVorgabewert.instrumentenklasse_id.is_not(None),
-        ReparaturVorgabewert.ausfuehrung.is_not(None),
-    ).group_by(ReparaturVorgabewert.instrumentenklasse_id, ReparaturVorgabewert.ausfuehrung).order_by(
-        standard.desc(), ReparaturVorgabewert.ausfuehrung)
+def aktive_ausfuehrungen(db: Session, instrumentenklasse_id: uuid.UUID | None = None) -> list[Ausfuehrung]:
+    """Aktive Ausführungen (einer Klasse oder aller Klassen) – der Standard zuerst, dann alphabetisch (2.4b)."""
+    abfrage = select(Ausfuehrung).where(Ausfuehrung.archiviert_am.is_(None)).order_by(
+        Ausfuehrung.instrumentenklasse_id, Ausfuehrung.ist_standard.desc(), func.lower(Ausfuehrung.bezeichnung))
     if instrumentenklasse_id is not None:
-        abfrage = abfrage.where(ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id)
-    ergebnis: dict[uuid.UUID, list[tuple[str, bool]]] = {}
-    for klasse_id, ausfuehrung, ist_standard in db.execute(abfrage):
-        ergebnis.setdefault(klasse_id, []).append((ausfuehrung, ist_standard))
-    return ergebnis
+        abfrage = abfrage.where(Ausfuehrung.instrumentenklasse_id == instrumentenklasse_id)
+    return list(db.scalars(abfrage))
+
+
+def richtpreise_je_ausfuehrung(
+    db: Session, reparaturart_id: uuid.UUID, instrumentenklasse_id: uuid.UUID
+) -> dict[uuid.UUID, ReparaturVorgabewert]:
+    """Die aktiven Vorgabewerte genau dieser Kombination je Ausführung (für die Auswahl im Auftragsformular)."""
+    return {v.ausfuehrung_id: v for v in db.scalars(select(ReparaturVorgabewert).where(
+        ReparaturVorgabewert.archiviert_am.is_(None),
+        ReparaturVorgabewert.reparaturart_id == reparaturart_id,
+        ReparaturVorgabewert.instrumentenklasse_id == instrumentenklasse_id,
+        ReparaturVorgabewert.ausfuehrung_id.is_not(None),
+    ))}

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import passwort_hashen
 from app.db import Base, SessionLocal
-from app.schaetzung import ausfuehrungen_je_klasse
+from app.schaetzung import aktive_ausfuehrungen
 from app.models import (
     Abwesenheit,
     ArbeitszeitAnpassung,
@@ -100,7 +100,7 @@ KUNDEN = [  # (Kundennummer, Name, E-Mail, Telefon, [(Klasse, Hersteller, Typ, B
 ]
 
 # Blechblas-Kunde: (Klasse, Hersteller, Typ, Baujahr, Seriennummer, Ausführung oder None = unbekannt).
-# Die Ausführung wird nur gesetzt, wenn die Preisliste sie für die Klasse kennt (2.5).
+# Die Ausführung wird nur gesetzt, wenn die Klasse sie als aktive Ausführung kennt (2.4b).
 BLECHBLAS_OBERKATEGORIE = "Blechblasinstrument"
 BLECHBLAS_KUNDE = ("DEMO-004", "Stadtkapelle Rebental", "noten.rebental@example.com", "07000 000004", [
     ("Trompete", "Bach", "TR650", 2018, "TR-650114", None),
@@ -163,11 +163,11 @@ def _blechblas_kunde_anlegen(db: Session) -> None:
     kunde = _get_or_create(db, Kunde, {"kundennummer": nummer}, name=name, email=email, telefon=telefon)
     for klasse, hersteller, typ, baujahr, seriennr, ausfuehrung in instrumente:
         klasse_id = _get_or_create(db, Instrumentenklasse, {"bezeichnung": klasse}, oberkategorie=BLECHBLAS_OBERKATEGORIE).id
-        bekannt = {name for name, _ in ausfuehrungen_je_klasse(db, klasse_id).get(klasse_id, [])}
+        bekannt = {a.bezeichnung: a.id for a in aktive_ausfuehrungen(db, klasse_id)}
         _get_or_create(
             db, Instrument, {"kunde_id": kunde.id, "instrumentenklasse_id": klasse_id, "typenbezeichnung": typ},
             hersteller=hersteller, baujahr=baujahr, seriennummer=seriennr,
-            ausfuehrung=ausfuehrung if ausfuehrung in bekannt else None,
+            ausfuehrung_id=bekannt.get(ausfuehrung),
         )
 
 

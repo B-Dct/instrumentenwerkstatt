@@ -9,6 +9,7 @@ from app.models import (
     Arbeitszeiterfassung,
     Auftrag,
     Auftragsstatus,
+    Ausfuehrung,
     Instrument,
     Instrumentenklasse,
     Kunde,
@@ -37,12 +38,18 @@ class Werkstatt:
             self.status["fertig"], self.status["abgeholt"], self.status["in_bearbeitung"]
         )
 
-    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00", ausfuehrung=None, ist_standard=False):
+    def ausfuehrung(self, bezeichnung, klasse=None, standard=False):
+        """Eine Ausführung der Klasse (2.4b), Standard nur auf Wunsch."""
+        ausfuehrung = Ausfuehrung(instrumentenklasse_id=(klasse or self.kontrabass).id, bezeichnung=bezeichnung, ist_standard=standard)
+        self.db.add(ausfuehrung)
+        self.db.flush()
+        return ausfuehrung
+
+    def vorgabe(self, klasse=None, stunden="0.50", kosten="20.00", ausfuehrung=None):
         self.db.add(ReparaturVorgabewert(
             reparaturart_id=self.saitenwechsel.id,
             instrumentenklasse_id=klasse.id if klasse else None,
-            ausfuehrung=ausfuehrung,
-            ist_standard=ist_standard,
+            ausfuehrung_id=ausfuehrung.id if ausfuehrung else None,
             vorgabe_stunden=Decimal(stunden),
             vorgabe_kosten=Decimal(kosten),
         ))
@@ -50,7 +57,8 @@ class Werkstatt:
 
     def instrument(self, klasse=None, ausfuehrung=None):
         instrument = Instrument(
-            kunde_id=self.kunde.id, instrumentenklasse_id=(klasse or self.kontrabass).id, ausfuehrung=ausfuehrung
+            kunde_id=self.kunde.id, instrumentenklasse_id=(klasse or self.kontrabass).id,
+            ausfuehrung_id=ausfuehrung.id if ausfuehrung else None,
         )
         self.db.add(instrument)
         self.db.flush()
@@ -81,7 +89,7 @@ class Werkstatt:
         return auftrag
 
     def stunden(self, ausfuehrung=None):
-        return schaetze_arbeitsstunden(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung)
+        return schaetze_arbeitsstunden(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung.id if ausfuehrung else None)
 
     def kosten(self, ausfuehrung=None):
-        return schaetze_kosten(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung)
+        return schaetze_kosten(self.db, self.kontrabass.id, self.saitenwechsel.id, ausfuehrung.id if ausfuehrung else None)

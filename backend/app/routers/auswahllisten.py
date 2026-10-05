@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.auth import aktueller_mitarbeiter
 from app.db import get_db
 from app.models import Auftragsstatus, Instrumentenklasse, Mitarbeiter, Reparaturart
-from app.schaetzung import ausfuehrungen, ausfuehrungen_je_klasse
-from app.schemas import AusfuehrungAuswahl, AusfuehrungDerKlasse, InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
+from app.schaetzung import aktive_ausfuehrungen, richtpreise_je_ausfuehrung
+from app.schemas import AusfuehrungAuswahl, AusfuehrungKurz, InstrumentenklasseEintrag, MitarbeiterKurz, ReparaturartKurz, StatusEintrag
 
 router = APIRouter(tags=["Auswahllisten"], dependencies=[Depends(aktueller_mitarbeiter)])
 
@@ -26,12 +26,15 @@ def instrumentenklassen_auflisten(db: Session = Depends(get_db)) -> list[Instrum
                            .order_by(Instrumentenklasse.oberkategorie, Instrumentenklasse.bezeichnung)))
 
 
-@router.get("/instrumentenklassen/ausfuehrungen", response_model=dict[uuid.UUID, list[AusfuehrungDerKlasse]])
-def ausfuehrungen_der_klassen(db: Session = Depends(get_db)) -> dict[uuid.UUID, list[AusfuehrungDerKlasse]]:
-    """Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5), der Standard zuerst.
-    Klassen ohne Ausführungen fehlen – das Instrumentenformular zeigt das Feld dann nicht."""
-    return {klasse: [AusfuehrungDerKlasse(ausfuehrung=name, ist_standard=standard) for name, standard in liste]
-            for klasse, liste in ausfuehrungen_je_klasse(db).items()}
+@router.get("/instrumentenklassen/ausfuehrungen", response_model=dict[uuid.UUID, list[AusfuehrungKurz]])
+def ausfuehrungen_der_klassen(db: Session = Depends(get_db)) -> dict[uuid.UUID, list[AusfuehrungKurz]]:
+    """Je Instrumentenklasse ihre aktiven Ausführungen (2.4b), der Standard zuerst. Klassen ohne
+    Ausführungen fehlen – das Instrumentenformular zeigt das Feld dann nicht."""
+    ergebnis: dict[uuid.UUID, list[AusfuehrungKurz]] = {}
+    for a in aktive_ausfuehrungen(db):
+        ergebnis.setdefault(a.instrumentenklasse_id, []).append(
+            AusfuehrungKurz(id=a.id, bezeichnung=a.bezeichnung, ist_standard=a.ist_standard))
+    return ergebnis
 
 
 @router.get("/reparaturarten", response_model=list[ReparaturartKurz])
@@ -43,10 +46,15 @@ def reparaturarten_auflisten(db: Session = Depends(get_db)) -> list[Reparaturart
 def ausfuehrungen_auflisten(
     reparaturart_id: uuid.UUID = Query(), instrumentenklasse_id: uuid.UUID = Query(), db: Session = Depends(get_db),
 ) -> list[AusfuehrungAuswahl]:
-    """Wählbare Ausführungen für Reparaturart + Instrumentenklasse (2.6a). Das Auftragsformular
-    zeigt die Auswahl nur, wenn es mehr als einen Eintrag gibt; der Standard steht zuerst."""
-    return [AusfuehrungAuswahl(ausfuehrung=v.ausfuehrung, ist_standard=v.ist_standard, vorgabe_stunden=v.vorgabe_stunden, vorgabe_kosten=v.vorgabe_kosten)
-            for v in ausfuehrungen(db, reparaturart_id, instrumentenklasse_id)]
+    """Die aktiven Ausführungen der Instrumentenklasse (Standard zuerst) mit ihrem Richtpreis für die
+    Reparaturart, soweit vorhanden (2.6a). Das Auftragsformular fragt nur, wenn das Instrument noch keine
+    Ausführung hat und es mehr als eine gibt."""
+    richtpreise = richtpreise_je_ausfuehrung(db, reparaturart_id, instrumentenklasse_id)
+    return [AusfuehrungAuswahl(
+        id=a.id, bezeichnung=a.bezeichnung, ist_standard=a.ist_standard,
+        vorgabe_stunden=richtpreise[a.id].vorgabe_stunden if a.id in richtpreise else None,
+        vorgabe_kosten=richtpreise[a.id].vorgabe_kosten if a.id in richtpreise else None,
+    ) for a in aktive_ausfuehrungen(db, instrumentenklasse_id)]
 
 
 @router.get("/auftragsstatus", response_model=list[StatusEintrag])

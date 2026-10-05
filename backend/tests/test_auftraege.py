@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.models import (
     Arbeitszeiterfassung, Auftrag, Instrument, Kunde, ReparaturVorgabewert, SchaetzungsLog, SystemEreignisLog, Systemrolle,
@@ -106,116 +106,118 @@ def test_auftragsnummer_format():
     assert _neue_auftragsnummer(FakeDb()) == f"{date.today().year}-00042"
 
 
-# --- Ausführung beim Anlegen (2.6a) -------------------------------------------
+# --- Ausführung beim Anlegen (2.4b, 2.5) --------------------------------------
 
 @pytest.fixture
-def versilbert(w, db):
-    """Zweiter Vorgabewert für Kontrabass + Saitenwechsel: Der bisherige wird zur benannten
-    Standardausführung "lackiert" (1,5 Std. / 60 €), dazu kommt "versilbert" (3 Std. / 120 €)."""
-    standard = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
-    standard.ausfuehrung, standard.ist_standard = "lackiert", True
-    db.add(ReparaturVorgabewert(reparaturart_id=w.saitenwechsel.id, instrumentenklasse_id=w.kontrabass.id,
-                                ausfuehrung="versilbert", vorgabe_stunden=Decimal("3.00"), vorgabe_kosten=Decimal("120.00")))
-    db.flush()
+def a(w, db):
+    """Der Kontrabass bekommt Ausführungen: Der bisherige Wert (1,5 Std. / 60 €) gehört zum Standard "lackiert",
+    dazu "versilbert" (3 Std. / 120 €) und "vergoldet" ohne eigenen Richtpreis."""
+    lackiert = w.ausfuehrung("lackiert", standard=True)
+    db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id)).ausfuehrung_id = lackiert.id
+    versilbert, vergoldet = w.ausfuehrung("versilbert"), w.ausfuehrung("vergoldet")
+    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung=versilbert)
+    return {"lackiert": lackiert, "versilbert": versilbert, "vergoldet": vergoldet}
 
 
-def test_auswahlliste_der_ausfuehrungen(client, w, versilbert):
+def _anlegen(client, w, **extra):
+    if "ausfuehrung" in extra:
+        extra["ausfuehrung_id"] = str(extra.pop("ausfuehrung").id)
+    return client.post(URL, json=neuer_auftrag(w, **extra))
+
+
+def _schaetzung(antwort):
+    assert antwort.status_code == 201, antwort.json()
+    return antwort.json()["geschaetzte_arbeitsstunden"], antwort.json()["geschaetzte_kosten"]
+
+
+def test_auswahlliste_der_ausfuehrungen(client, w, a):
     def auswahl(klasse):
         return client.get("/ausfuehrungen", params={"reparaturart_id": str(w.saitenwechsel.id),
                                                     "instrumentenklasse_id": str(klasse.id)}).json()
-    assert auswahl(w.kontrabass) == [
-        {"ausfuehrung": "lackiert", "ist_standard": True, "vorgabe_stunden": 1.5, "vorgabe_kosten": 60.0},   # Standard zuerst
-        {"ausfuehrung": "versilbert", "ist_standard": False, "vorgabe_stunden": 3.0, "vorgabe_kosten": 120.0},
+    assert [(e["bezeichnung"], e["ist_standard"], e["vorgabe_stunden"], e["vorgabe_kosten"]) for e in auswahl(w.kontrabass)] == [
+        ("lackiert", True, 1.5, 60.0),            # Standard zuerst
+        ("vergoldet", False, None, None),         # kein eigener Richtpreis für diese Reparaturart
+        ("versilbert", False, 3.0, 120.0),
     ]
-    assert auswahl(w.violine) == []                                                    # nur der allgemeine Wert: keine Auswahl
+    assert auswahl(w.kontrabass)[0]["id"] == str(a["lackiert"].id)
+    assert auswahl(w.violine) == []                                                    # Klasse ohne Ausführungen: keine Auswahl
     assert client.get("/ausfuehrungen", headers=OHNE_ANMELDUNG,
                       params={"reparaturart_id": str(w.saitenwechsel.id), "instrumentenklasse_id": str(w.violine.id)}).status_code == 401
 
 
-def test_anlegen_mit_und_ohne_ausfuehrung(client, w, db, versilbert):
-    ohne = client.post(URL, json=neuer_auftrag(w)).json()
-    assert (ohne["geschaetzte_arbeitsstunden"], ohne["geschaetzte_kosten"]) == (1.5, 60.0)   # Standardausführung
+def test_anlegen_mit_und_ohne_ausfuehrung(client, w, db, a):
+    assert _schaetzung(_anlegen(client, w)) == (1.5, 60.0)                             # unbekannt: Standard
+    mit = _anlegen(client, w, ausfuehrung=a["versilbert"])
+    assert _schaetzung(mit) == (3.0, 120.0)
+    log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(mit.json()["id"]))).one()
+    assert (log.eingabefaktoren["ausfuehrung"], log.eingabefaktoren["ausfuehrung_id"]) == ("versilbert", str(a["versilbert"].id))
 
-    mit = client.post(URL, json=neuer_auftrag(w, ausfuehrung="versilbert")).json()
-    assert (mit["geschaetzte_arbeitsstunden"], mit["geschaetzte_kosten"]) == (3.0, 120.0)
-    log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(mit["id"]))).one()
-    assert log.eingabefaktoren["ausfuehrung"] == "versilbert"
-
-    # Unbekannte Ausführung bzw. Klasse ohne Ausführungen: am Feld abgelehnt
-    for daten in (neuer_auftrag(w, ausfuehrung="vergoldet"), neuer_auftrag(w, klasse=w.violine, ausfuehrung="versilbert")):
+    # Unbekannte Ausführung bzw. die einer anderen Klasse: am Feld abgelehnt
+    for daten in (neuer_auftrag(w, ausfuehrung_id=str(uuid.uuid4())),
+                  neuer_auftrag(w, klasse=w.violine, ausfuehrung_id=str(a["versilbert"].id))):
         antwort = client.post(URL, json=daten)
-        assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+        assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung_id"
 
 
-def test_gewaehlte_ausfuehrung_wird_am_instrument_gespeichert(client, w, db, versilbert):
+def test_gewaehlte_ausfuehrung_wird_am_instrument_gespeichert(client, w, db, a):
     """Instrument ohne Ausführung: einmal wählen, danach gilt sie ohne erneute Angabe (2.5)."""
     instrument = w.instrument()
-    erster = client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="versilbert"))
-    assert erster.status_code == 201 and erster.json()["geschaetzte_kosten"] == 120.0
+    assert _schaetzung(_anlegen(client, w, instrument=instrument, ausfuehrung=a["versilbert"])) == (3.0, 120.0)
     db.refresh(instrument)
-    assert instrument.ausfuehrung == "versilbert"
+    assert instrument.ausfuehrung_id == a["versilbert"].id
     log = db.scalars(select(SystemEreignisLog).where(SystemEreignisLog.betroffene_id == instrument.id)).one()
-    assert (log.aktion, log.details["neu"]) == ("instrument_geaendert", {"ausfuehrung": "versilbert"})
+    assert (log.aktion, log.details["neu"]["ausfuehrung"], log.details["anlass"]) == ("instrument_geaendert", "versilbert", "auftrag_angelegt")
 
-    zweiter = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()   # keine Angabe nötig
-    assert (zweiter["geschaetzte_arbeitsstunden"], zweiter["geschaetzte_kosten"]) == (3.0, 120.0)
-    assert client.get(f"/instrumente/{instrument.id}").json()["ausfuehrung"] == "versilbert"
+    assert _schaetzung(_anlegen(client, w, instrument=instrument)) == (3.0, 120.0)     # keine Angabe nötig
+    abgerufen = client.get(f"/instrumente/{instrument.id}").json()
+    assert (abgerufen["ausfuehrung"], abgerufen["ausfuehrung_id"]) == ("versilbert", str(a["versilbert"].id))
 
 
-def test_instrument_mit_ausfuehrung_nutzt_seinen_wert_ohne_nachfrage(client, w, db, versilbert):
-    instrument = w.instrument(ausfuehrung="versilbert")
-    auftrag = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()
-    assert (auftrag["geschaetzte_arbeitsstunden"], auftrag["geschaetzte_kosten"]) == (3.0, 120.0)
-    log = db.scalars(select(SchaetzungsLog).where(SchaetzungsLog.auftrag_id == uuid.UUID(auftrag["id"]))).one()
-    assert log.eingabefaktoren["ausfuehrung"] == "versilbert"
+def test_instrument_mit_ausfuehrung_nutzt_seinen_wert_ohne_nachfrage(client, w, db, a):
+    instrument = w.instrument(ausfuehrung=a["versilbert"])
+    assert _schaetzung(_anlegen(client, w, instrument=instrument)) == (3.0, 120.0)
     # Dieselbe Ausführung mitzuschicken ist in Ordnung, eine andere wird am Feld abgelehnt
-    assert client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="versilbert")).status_code == 201
-    andere = client.post(URL, json=neuer_auftrag(w, instrument=instrument, ausfuehrung="lackiert"))  # der Standard
-    assert andere.status_code == 422 and andere.json()["detail"][0]["loc"][-1] == "ausfuehrung"
+    assert _anlegen(client, w, instrument=instrument, ausfuehrung=a["versilbert"]).status_code == 201
+    andere = _anlegen(client, w, instrument=instrument, ausfuehrung=a["lackiert"])
+    assert andere.status_code == 422 and andere.json()["detail"][0]["loc"][-1] == "ausfuehrung_id"
     db.refresh(instrument)
-    assert instrument.ausfuehrung == "versilbert"
+    assert instrument.ausfuehrung_id == a["versilbert"].id
 
 
-def test_ausfuehrung_ohne_eigenen_wert_faellt_auf_standard_zurueck(client, w, db, versilbert):
-    """Die Ausführung des Instruments hat für diese Reparaturart keine eigene Zeile → Standard der Kombination.
-    Gibt es gar keine Varianten, gilt der einzige Wert."""
-    instrument = w.instrument(ausfuehrung="vergoldet")
-    auftrag = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()
-    assert (auftrag["geschaetzte_arbeitsstunden"], auftrag["geschaetzte_kosten"]) == (1.5, 60.0)
-    db.execute(delete(ReparaturVorgabewert).where(ReparaturVorgabewert.ausfuehrung == "versilbert"))
-    einziger = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
-    einziger.ausfuehrung, einziger.ist_standard = None, False
-    db.flush()
-    auftrag = client.post(URL, json=neuer_auftrag(w, instrument=instrument)).json()
-    assert (auftrag["geschaetzte_arbeitsstunden"], auftrag["geschaetzte_kosten"]) == (1.5, 60.0)
+def test_ausfuehrung_ohne_eigenen_richtpreis_nutzt_den_des_standards(client, w, a):
+    assert _schaetzung(_anlegen(client, w, instrument=w.instrument(ausfuehrung=a["vergoldet"]))) == (1.5, 60.0)
 
 
-def test_bewusste_standardausfuehrung_ist_etwas_anderes_als_unbekannt(client, w, db, versilbert):
+def test_bewusste_standardausfuehrung_ist_etwas_anderes_als_unbekannt(client, w, db, a):
     """Abschnitt 4: Bei bekannter Ausführung zählt nur die Historie derselben Ausführung – auch beim Standard.
     Bei unbekannter Ausführung zählen alle Aufträge der Klasse."""
     for _ in range(5):
-        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung="versilbert")
-    unbekannt = client.post(URL, json=neuer_auftrag(w, instrument=w.instrument())).json()
-    assert (unbekannt["geschaetzte_arbeitsstunden"], unbekannt["geschaetzte_kosten"]) == (4.0, 200.0)   # Durchschnitt der Klasse
-    standard = w.instrument(ausfuehrung="lackiert")
-    bewusst = client.post(URL, json=neuer_auftrag(w, instrument=standard)).json()
-    assert (bewusst["geschaetzte_arbeitsstunden"], bewusst["geschaetzte_kosten"]) == (1.5, 60.0)        # Richtpreis des Standards
+        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung=a["versilbert"])
+    assert _schaetzung(_anlegen(client, w, instrument=w.instrument())) == (4.0, 200.0)                       # Durchschnitt der Klasse
+    assert _schaetzung(_anlegen(client, w, instrument=w.instrument(ausfuehrung=a["lackiert"]))) == (1.5, 60.0)  # Richtpreis des Standards
     # "Noch nicht festlegen": Ohne Angabe bleibt das Instrument unbekannt; den Standard ausdrücklich wählen speichert ihn
     offen = w.instrument()
-    client.post(URL, json=neuer_auftrag(w, instrument=offen))
+    _anlegen(client, w, instrument=offen)
     db.refresh(offen)
-    assert offen.ausfuehrung is None
-    assert client.post(URL, json=neuer_auftrag(w, instrument=offen, ausfuehrung="lackiert")).status_code == 201
+    assert offen.ausfuehrung_id is None
+    assert _anlegen(client, w, instrument=offen, ausfuehrung=a["lackiert"]).status_code == 201
     db.refresh(offen)
-    assert offen.ausfuehrung == "lackiert"
+    assert offen.ausfuehrung_id == a["lackiert"].id
 
 
-def test_archivierte_ausfuehrung_nicht_waehlbar(client, w, db, versilbert):
-    v = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.ausfuehrung == "versilbert",
-                                                     ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
-    v.archiviert_am = datetime.now(timezone.utc)
+def test_archivierte_ausfuehrung(client, w, db, a):
+    """2.4b: nicht mehr wählbar; ein Instrument behält den Verweis, wird aber wie "unbekannt" geschätzt
+    und darf dann eine neue Ausführung bekommen."""
+    instrument = w.instrument(ausfuehrung=a["versilbert"])
+    a["versilbert"].archiviert_am = datetime.now(timezone.utc)
     db.flush()
-    assert client.post(URL, json=neuer_auftrag(w, ausfuehrung="versilbert")).status_code == 422
+    assert _anlegen(client, w, ausfuehrung=a["versilbert"]).status_code == 422
+    assert _schaetzung(_anlegen(client, w, instrument=instrument)) == (1.5, 60.0)      # Standard statt 3 Std. / 120 €
+    db.refresh(instrument)
+    assert instrument.ausfuehrung_id == a["versilbert"].id                             # Verweis bleibt
+    assert _anlegen(client, w, instrument=instrument, ausfuehrung=a["lackiert"]).status_code == 201
+    db.refresh(instrument)
+    assert instrument.ausfuehrung_id == a["lackiert"].id
 
 
 # --- Auflisten / Abrufen -----------------------------------------------------

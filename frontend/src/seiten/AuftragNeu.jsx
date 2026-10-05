@@ -10,7 +10,7 @@ export default function AuftragNeu() {
   const [listen, setListen] = useState(null)
   const [instrumente, setInstrumente] = useState([])
   const [form, setForm] = useState({
-    kunde_id: '', instrument_id: '', reparaturart_id: '', ausfuehrung: '',
+    kunde_id: '', instrument_id: '', reparaturart_id: '', ausfuehrung_id: '',
     zugewiesener_mitarbeiter_id: angemeldeterNutzer()?.id ?? '',
     prioritaet: 'normal', komplexitaet: '', notizen: '',
   })
@@ -42,7 +42,9 @@ export default function AuftragNeu() {
       .catch(() => {})
     return () => { abgebrochen = true }
   }, [klasseId, form.reparaturart_id])
-  const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1 && !instrument?.ausfuehrung
+  // Eine archivierte Ausführung am Instrument gilt als unbekannt – dann wird wieder gefragt (2.4b)
+  const hinterlegt = instrument?.ausfuehrung_id && !instrument.ausfuehrung_archiviert
+  const mehrereAusfuehrungen = klasseId && form.reparaturart_id && ausfuehrungen.length > 1 && !hinterlegt
 
   const setze = (feld) => (e) => {
     if (feld === 'kunde_id') setInstrumente([])
@@ -51,7 +53,7 @@ export default function AuftragNeu() {
     setForm((f) => ({
       ...f, [feld]: e.target.value,
       ...(feld === 'kunde_id' ? { instrument_id: '' } : {}),
-      ...(['kunde_id', 'instrument_id', 'reparaturart_id'].includes(feld) ? { ausfuehrung: '' } : {}),
+      ...(['kunde_id', 'instrument_id', 'reparaturart_id'].includes(feld) ? { ausfuehrung_id: '' } : {}),
     }))
   }
 
@@ -64,7 +66,7 @@ export default function AuftragNeu() {
         kunde_id: form.kunde_id,
         instrument_id: form.instrument_id,
         reparaturart_id: form.reparaturart_id,
-        ausfuehrung: mehrereAusfuehrungen ? form.ausfuehrung || null : null,
+        ausfuehrung_id: mehrereAusfuehrungen ? form.ausfuehrung_id || null : null,
         zugewiesener_mitarbeiter_id: form.zugewiesener_mitarbeiter_id || null,
         prioritaet: form.prioritaet,
         komplexitaet: form.komplexitaet ? Number(form.komplexitaet) : null,
@@ -110,20 +112,19 @@ export default function AuftragNeu() {
           {mehrereAusfuehrungen && (
             <label className="feld">
               <span>Ausführung</span>
-              <select value={form.ausfuehrung} onChange={setze('ausfuehrung')}>
+              <select value={form.ausfuehrung_id} onChange={setze('ausfuehrung_id')}>
                 <option value="">Noch nicht festlegen</option>
-                {ausfuehrungen.filter((a) => a.ausfuehrung).map((a) => (
-                  <option key={a.ausfuehrung} value={a.ausfuehrung}>
-                    {a.ausfuehrung}{a.ist_standard ? ' (Standard)' : ''} – {zahl(a.vorgabe_stunden)} Std., {euro(a.vorgabe_kosten)}
+                {ausfuehrungen.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.bezeichnung}{a.ist_standard ? ' (Standard)' : ''}
+                    {a.vorgabe_kosten == null ? ' – wie Standard' : ` – ${zahl(a.vorgabe_stunden)} Std., ${euro(a.vorgabe_kosten)}`}
                   </option>
                 ))}
               </select>
               <small>Die Auswahl wird am Instrument gespeichert und gilt dann auch für künftige Aufträge. Ohne Auswahl bleibt die Ausführung unbekannt, es gilt der Standard.</small>
             </label>
           )}
-          {instrument?.ausfuehrung && (
-            <p className="leise">Ausführung: {instrument.ausfuehrung} (am Instrument hinterlegt)</p>
-          )}
+          {hinterlegt && <p className="leise">Ausführung: {instrument.ausfuehrung} (am Instrument hinterlegt)</p>}
           <label className="feld">
             <span>Zugewiesen an</span>
             <select value={form.zugewiesener_mitarbeiter_id} onChange={setze('zugewiesener_mitarbeiter_id')}>

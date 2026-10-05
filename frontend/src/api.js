@@ -138,7 +138,7 @@ export const api = {
   instrumentArchivieren: (id) => anfrage(`/instrumente/${id}/archivieren`, { methode: 'POST' }),
   instrumentReaktivieren: (id) => anfrage(`/instrumente/${id}/reaktivieren`, { methode: 'POST' }),
   instrumentenklassen: () => anfrage('/instrumentenklassen'),
-  // Je Instrumentenklasse die Ausführungen, die ein Instrument tragen kann (2.5): { klasseId: [Name, …] }
+  // Je Instrumentenklasse ihre aktiven Ausführungen (2.4b): { klasseId: [{ id, bezeichnung, ist_standard }, …] }
   klassenAusfuehrungen: () => anfrage('/instrumentenklassen/ausfuehrungen'),
   // Abwesenheiten (nur Werkstattleitung/Admin)
   abwesenheiten: (filter = {}) => anfrage('/abwesenheiten?' + new URLSearchParams(filter)),
@@ -163,6 +163,11 @@ export const api = {
     artAendern: (id, daten) => anfrage(`/admin/reparaturarten/${id}`, { methode: 'PATCH', daten }),
     artArchivieren: (id) => anfrage(`/admin/reparaturarten/${id}/archivieren`, { methode: 'POST' }),
     artReaktivieren: (id) => anfrage(`/admin/reparaturarten/${id}/reaktivieren`, { methode: 'POST' }),
+    ausfuehrungen: (filter = {}) => anfrage('/admin/ausfuehrungen?' + new URLSearchParams(filter)),
+    ausfuehrungAnlegen: (daten) => anfrage('/admin/ausfuehrungen', { methode: 'POST', daten }),
+    ausfuehrungAendern: (id, daten) => anfrage(`/admin/ausfuehrungen/${id}`, { methode: 'PATCH', daten }),
+    ausfuehrungArchivieren: (id) => anfrage(`/admin/ausfuehrungen/${id}/archivieren`, { methode: 'POST' }),
+    ausfuehrungReaktivieren: (id) => anfrage(`/admin/ausfuehrungen/${id}/reaktivieren`, { methode: 'POST' }),
     vorgabewerte: (filter = {}) => anfrage('/admin/vorgabewerte?' + new URLSearchParams(filter)),
     vorgabewertAnlegen: (daten) => anfrage('/admin/vorgabewerte', { methode: 'POST', daten }),
     vorgabewertAendern: (id, daten) => anfrage(`/admin/vorgabewerte/${id}`, { methode: 'PATCH', daten }),
@@ -177,7 +182,7 @@ export const api = {
     vorgabewertReaktivieren: (id) => anfrage(`/admin/vorgabewerte/${id}/reaktivieren`, { methode: 'POST' }),
   },
   reparaturarten: () => anfrage('/reparaturarten'),
-  // Wählbare Ausführungen für Reparaturart + Instrumentenklasse (2.6a); leer oder ein Eintrag = keine Auswahl nötig
+  // Ausführungen der Instrumentenklasse mit ihrem Richtpreis für die Reparaturart (2.6a); weniger als zwei = keine Auswahl nötig
   ausfuehrungen: (parameter) => anfrage('/ausfuehrungen?' + new URLSearchParams(parameter)),
   auftragsstatus: () => anfrage('/auftragsstatus'),
   mitarbeiter: () => anfrage('/mitarbeiter'),

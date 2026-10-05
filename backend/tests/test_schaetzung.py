@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Quelle
+from app.schaetzung import MINDESTANZAHL_VERGLEICHSFAELLE, Quelle, schaetze_arbeitsstunden
 from tests.beispieldaten import Werkstatt
 
 
@@ -111,57 +111,69 @@ def test_kosten_keine_daten_keine_vorgabe(db):
     assert (s.quelle, s.wert) == (Quelle.keine, None)
 
 
-# --- Ausführung des Instruments (Abschnitt 4, "Reihenfolge bei vorhandener ausführung") ---
+# --- Ausführung des Instruments (Abschnitt 4, zwei Reihenfolgen; Ausführungen je Klasse 2.4b) ---
 
 @pytest.fixture
-def ausfuehrungen(w, db):
+def a(w, db):
+    """Der Kontrabass bekommt Ausführungen: Der bisher einzige Wert (1,5 Std. / 60 €) gehört zum Standard "natur",
+    dazu "versilbert" (3 Std. / 120 €) und "lackiert" (2 Std. / 80 €)."""
     from sqlalchemy import select
     from app.models import ReparaturVorgabewert
-    # Der bisher einzige Kontrabass-Wert (1,5 Std. / 60 €) wird zur benannten Standardausführung
-    standard = db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id))
-    standard.ausfuehrung, standard.ist_standard = "natur", True
-    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
-    w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung="lackiert")
-    return w
+    natur = w.ausfuehrung("natur", standard=True)
+    db.scalar(select(ReparaturVorgabewert).where(ReparaturVorgabewert.instrumentenklasse_id == w.kontrabass.id)).ausfuehrung_id = natur.id
+    versilbert, lackiert = w.ausfuehrung("versilbert"), w.ausfuehrung("lackiert")
+    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung=versilbert)
+    w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung=lackiert)
+    return {"natur": natur, "versilbert": versilbert, "lackiert": lackiert}
 
 
-def test_durchschnitt_bleibt_je_ausfuehrung_getrennt(ausfuehrungen):
-    w = ausfuehrungen
+def test_durchschnitt_bleibt_je_ausfuehrung_getrennt(w, a):
     for _ in range(5):
-        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung="versilbert")
+        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung=a["versilbert"])
     for _ in range(4):
-        w.auftrag(minuten=(60,), kosten="40.00", ausfuehrung="lackiert")
+        w.auftrag(minuten=(60,), kosten="40.00", ausfuehrung=a["lackiert"])
 
     # versilbert: 5 eigene Fälle → eigener Durchschnitt, die lackierten zählen nicht mit
-    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.historisch, Decimal("4.00"))
-    assert (w.kosten("versilbert").quelle, w.kosten("versilbert").wert) == (Quelle.historisch, Decimal("200.00"))
+    s, k = w.stunden(a["versilbert"]), w.kosten(a["versilbert"])
+    assert (s.quelle, s.wert, k.quelle, k.wert) == (Quelle.historisch, Decimal("4.00"), Quelle.historisch, Decimal("200.00"))
     # lackiert: nur 4 eigene Fälle → Richtpreis dieser Ausführung, obwohl es in der Klasse 9 Fälle gibt
-    s, k = w.stunden("lackiert"), w.kosten("lackiert")
+    s, k = w.stunden(a["lackiert"]), w.kosten(a["lackiert"])
     assert (s.quelle, s.wert, s.anzahl_vergleichsfaelle) == (Quelle.vorgabe_instrumentenklasse, Decimal("2.00"), 4)
     assert (k.quelle, k.wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("80.00"))
-    # Ohne Ausführung gilt die allgemeine Reihenfolge: alle 9 Fälle der Klasse
+    # Unbekannte Ausführung: alle 9 Fälle der Klasse
     assert (w.stunden().quelle, w.stunden().anzahl_vergleichsfaelle) == (Quelle.historisch, 9)
+    # Bewusst eingetragener Standard ist etwas anderes als unbekannt: keine eigene Historie → sein Richtpreis
+    assert (w.stunden(a["natur"]).quelle, w.stunden(a["natur"]).wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("1.50"))
 
 
-def test_reihenfolge_mit_ausfuehrung_ohne_historie(db):
-    w = Werkstatt(db)
-    w.vorgabe(stunden="0.50", kosten="20.00")
-    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
-    w.vorgabe(w.kontrabass, stunden="1.50", kosten="60.00", ausfuehrung="lackiert", ist_standard=True)
-    w.vorgabe(w.kontrabass, stunden="2.00", kosten="70.00", ausfuehrung="vergoldet")
-    # Kein eigener Wert für "versilbert" → Standard der Kombination, nicht irgendeine andere Ausführung
-    assert (w.stunden("versilbert").quelle, w.stunden("versilbert").wert) == (Quelle.vorgabe_instrumentenklasse, Decimal("1.50"))
-    assert w.stunden().wert == Decimal("1.50") and w.kosten().wert == Decimal("60.00")     # unbekannt: Standard
-    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
-    assert w.stunden("versilbert").wert == Decimal("3.00") and w.kosten("versilbert").wert == Decimal("120.00")
-    assert w.stunden("lackiert").wert == Decimal("1.50")                                   # bewusst der Standard
+def test_reihenfolge_der_vorgabewerte(w, a, db):
+    vergoldet = w.ausfuehrung("vergoldet")                                  # Ausführung ohne eigenen Richtpreis
+    assert w.stunden(vergoldet).wert == Decimal("1.50")                     # → Richtpreis des Standards
+    assert w.stunden().wert == Decimal("1.50") and w.kosten().wert == Decimal("60.00")   # unbekannt → Standard
+    assert w.stunden(a["versilbert"]).wert == Decimal("3.00") and w.kosten(a["versilbert"]).wert == Decimal("120.00")
+    # Klasse ohne Ausführungen: ihr einziger Wert bzw. der allgemeine
+    assert schaetze_arbeitsstunden(db, w.violine.id, w.saitenwechsel.id).quelle == Quelle.vorgabe_allgemein
+    w.vorgabe(w.violine, stunden="0.75", kosten="30.00")
+    assert schaetze_arbeitsstunden(db, w.violine.id, w.saitenwechsel.id).wert == Decimal("0.75")
+    # Die Ausführung einer anderen Klasse spielt für die Violine keine Rolle
+    assert schaetze_arbeitsstunden(db, w.violine.id, w.saitenwechsel.id, a["versilbert"].id).wert == Decimal("0.75")
 
 
-def test_altdaten_ohne_standard_fallen_auf_den_allgemeinen_wert(db):
-    """Mehrere benannte Ausführungen ohne Kennzeichen: nichts wird geraten."""
-    w = Werkstatt(db)
-    w.vorgabe(stunden="0.50", kosten="20.00")
-    w.vorgabe(w.kontrabass, stunden="3.00", kosten="120.00", ausfuehrung="versilbert")
-    w.vorgabe(w.kontrabass, stunden="2.00", kosten="80.00", ausfuehrung="lackiert")
-    assert (w.stunden().quelle, w.stunden().wert) == (Quelle.vorgabe_allgemein, Decimal("0.50"))
-    assert w.stunden("versilbert").wert == Decimal("3.00")
+def test_archivierte_ausfuehrung_wird_ignoriert_und_gilt_als_unbekannt(w, a, db):
+    """2.4b: Ihre Richtpreise zählen nicht mehr; ein Instrument mit dieser Ausführung wird wie "unbekannt" geschätzt."""
+    from sqlalchemy import func
+    for _ in range(5):
+        w.auftrag(minuten=(240,), kosten="200.00", ausfuehrung=a["versilbert"])
+    assert w.stunden(a["versilbert"]).quelle == Quelle.historisch
+    a["versilbert"].archiviert_am = func.clock_timestamp()
+    db.flush()
+    db.expire_all()
+    # wie unbekannt: Historie der ganzen Klasse (dieselben 5 Aufträge), nicht mehr "nur versilbert"
+    assert (w.stunden(a["versilbert"]).quelle, w.stunden(a["versilbert"]).anzahl_vergleichsfaelle) == (Quelle.historisch, 5)
+    assert w.stunden(a["lackiert"]).wert == Decimal("2.00")
+    # Wird der Standard selbst archiviert, bleibt für Unbekannte nur der allgemeine Wert
+    a["natur"].archiviert_am = func.clock_timestamp()
+    db.flush()
+    db.expire_all()
+    assert w.stunden(a["lackiert"]).wert == Decimal("2.00")
+    assert w.kosten(a["natur"]).quelle == w.kosten().quelle == Quelle.historisch       # beide wie unbekannt

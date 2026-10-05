@@ -56,7 +56,7 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
     baujahr: instrument?.baujahr ?? '',
     seriennummer: instrument?.seriennummer ?? '',
     notizen: instrument?.notizen ?? '',
-    ausfuehrung: instrument?.ausfuehrung ?? '',
+    ausfuehrung_id: instrument?.ausfuehrung_id ?? '',
   })
   // Ausführungen je Klasse (2.5): Das Feld erscheint nur, wenn die gewählte Klasse welche kennt
   const [ausfuehrungenJeKlasse, setAusfuehrungenJeKlasse] = useState({})
@@ -70,14 +70,14 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
       baujahr: werte.baujahr === '' ? null : Number(werte.baujahr),
       seriennummer: leerZuNull(werte.seriennummer),
       notizen: leerZuNull(werte.notizen),
-      ausfuehrung: leerZuNull(werte.ausfuehrung),
+      ausfuehrung_id: werte.ausfuehrung_id || null,
     }
     return instrument ? api.instrumentAendern(instrument.id, daten) : api.instrumentAnlegen({ ...daten, kunde_id: kundeId })
   }, onGespeichert)
   // Andere Klasse: Die bisherige Ausführung gehört zur alten Klasse
   const setze = (feld) => (e) => {
     feldGeaendert(feld)
-    setWerte((w) => ({ ...w, [feld]: e.target.value, ...(feld === 'instrumentenklasse_id' ? { ausfuehrung: '' } : {}) }))
+    setWerte((w) => ({ ...w, [feld]: e.target.value, ...(feld === 'instrumentenklasse_id' ? { ausfuehrung_id: '' } : {}) }))
   }
 
   // Eine inzwischen archivierte Klasse des bestehenden Instruments trotzdem anzeigen
@@ -95,17 +95,17 @@ export function InstrumentFormular({ formular, kundeId, instrument = null, klass
           {klassenAuswahl.map((k) => <option key={k.id} value={k.id}>{k.bezeichnung}</option>)}
         </select>
       </Feld>
-      {(ausfuehrungen.length > 0 || werte.ausfuehrung) && (
-        <Feld label="Ausführung" fehler={felder.ausfuehrung}
+      {(ausfuehrungen.length > 0 || werte.ausfuehrung_id) && (
+        <Feld label="Ausführung" fehler={felder.ausfuehrung_id}
               hinweis="Oberfläche bzw. Ventilmechanik dieses Instruments – bestimmt Richtpreis und Richtzeit neuer Aufträge. Solange sie unbekannt ist, gilt der Standard.">
-          <select value={werte.ausfuehrung} onChange={setze('ausfuehrung')}>
+          <select value={werte.ausfuehrung_id} onChange={setze('ausfuehrung_id')}>
             <option value="">Noch nicht festlegen (unbekannt)</option>
             {ausfuehrungen.map((a) => (
-              <option key={a.ausfuehrung} value={a.ausfuehrung}>{a.ausfuehrung}{a.ist_standard ? ' (Standard)' : ''}</option>
+              <option key={a.id} value={a.id}>{a.bezeichnung}{a.ist_standard ? ' (Standard)' : ''}</option>
             ))}
-            {/* Eine hinterlegte Ausführung, die es in der Preisliste nicht mehr gibt, trotzdem anzeigen */}
-            {werte.ausfuehrung && !ausfuehrungen.some((a) => a.ausfuehrung === werte.ausfuehrung) && (
-              <option value={werte.ausfuehrung}>{werte.ausfuehrung} (nicht mehr in der Preisliste)</option>
+            {/* Eine hinterlegte, inzwischen archivierte Ausführung trotzdem anzeigen (2.4b) */}
+            {werte.ausfuehrung_id && !ausfuehrungen.some((a) => a.id === werte.ausfuehrung_id) && (
+              <option value={werte.ausfuehrung_id}>{instrument?.ausfuehrung ?? 'Ausführung'} (archiviert – es gilt der Standard)</option>
             )}
           </select>
         </Feld>

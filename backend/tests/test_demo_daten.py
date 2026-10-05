@@ -40,19 +40,20 @@ def test_anlegen_ist_wiederholbar(db):
 
 
 def test_blechblas_kunde_zum_durchklicken_der_ausfuehrung(db):
-    """DEMO-004: Trompete ohne Ausführung, Flügelhorn mit Ausführung (falls die Preisliste sie kennt), Tuba."""
+    """DEMO-004: Trompete ohne Ausführung, Flügelhorn mit Ausführung (falls die Klasse sie kennt), Tuba."""
+    from app.models import Ausfuehrung
     demo_daten.anlegen(db)
     kunde = db.scalar(select(Kunde).where(Kunde.kundennummer == "DEMO-004"))
     instrumente = {klasse: ausfuehrung for klasse, ausfuehrung in db.execute(
-        select(Instrumentenklasse.bezeichnung, Instrument.ausfuehrung)
+        select(Instrumentenklasse.bezeichnung, Ausfuehrung.bezeichnung).select_from(Instrument)
         .join(Instrumentenklasse, Instrument.instrumentenklasse_id == Instrumentenklasse.id)
+        .outerjoin(Ausfuehrung, Instrument.ausfuehrung_id == Ausfuehrung.id)
         .where(Instrument.kunde_id == kunde.id))}
     assert set(instrumente) == {"Trompete", "Flügelhorn/Kornett", "B-Tuba (4 Ventile)"}
     assert instrumente["Trompete"] is None and instrumente["B-Tuba (4 Ventile)"] is None
-    # Die Ausführung steht nur am Instrument, wenn es sie in der Preisliste der Klasse gibt
-    kornett = _id(db, Instrumentenklasse, "Flügelhorn/Kornett")
-    bekannt = _anzahl(db, ReparaturVorgabewert, ReparaturVorgabewert.instrumentenklasse_id == kornett,
-                      ReparaturVorgabewert.ausfuehrung == "Drehventile, lackiert", ReparaturVorgabewert.archiviert_am.is_(None))
+    # Die Ausführung steht nur am Instrument, wenn die Klasse sie als aktive Ausführung kennt (2.4b)
+    bekannt = _anzahl(db, Ausfuehrung, Ausfuehrung.instrumentenklasse_id == _id(db, Instrumentenklasse, "Flügelhorn/Kornett"),
+                      Ausfuehrung.bezeichnung == "Drehventile, lackiert", Ausfuehrung.archiviert_am.is_(None))
     assert instrumente["Flügelhorn/Kornett"] == ("Drehventile, lackiert" if bekannt else None)
 
     assert demo_daten.entfernen(db)

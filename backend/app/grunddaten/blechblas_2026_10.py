@@ -17,6 +17,11 @@ Standard-Kennzeichen (app/grunddaten/ausfuehrung_standard_2026_10.py).
 
 "Generalüberholung" bekommt bewusst keinen Vorgabewert (nur individuelles Angebot).
 
+ACHTUNG, historisch: Dieses Modul schreibt in die Spalte `reparatur_vorgabewert.ausfuehrung`, wie sie im
+Oktober 2026 bestand. Es wird nur noch von der Migration `blechblas_vorgabewerte` aufgerufen (beim Aufbau
+einer frischen Datenbank, bevor spätere Migrationen die Ausführung in eine eigene Tabelle überführen,
+Datenmodell 2.4b) – gegen das heutige Schema läuft es nicht mehr.
+
 Die Funktion `anlegen` ist beliebig oft aufrufbar: Sie legt nur an, was fehlt, und überschreibt
 nichts, was es schon gibt (auch nichts, was inzwischen von Hand geändert oder archiviert wurde).
 Aufgerufen wird sie von der Migration `blechblas_vorgabewerte`.

@@ -204,148 +204,86 @@ def _anlegen(client, stammdaten, **extra):
     return antwort.json()
 
 
-def _kombination(client, stammdaten):
-    liste = client.get(URL, params={"instrumentenklasse_id": str(stammdaten["klasse"])}).json()["eintraege"]
-    return [(e["ausfuehrung"], e["ist_standard"]) for e in liste]
+def _ausfuehrung(client, stammdaten, bezeichnung, **extra):
+    antwort = client.post("/admin/ausfuehrungen", json={"instrumentenklasse_id": str(stammdaten["klasse"]),
+                                                         "bezeichnung": bezeichnung, **extra})
+    assert antwort.status_code == 201, antwort.json()
+    return antwort.json()
 
 
-def test_zweite_ausfuehrung_erst_nach_benennen_des_bestehenden_werts(client, stammdaten):
-    """Entweder genau ein Wert ohne Ausführung oder mehrere benannte, davon genau einer Standard (2.6a)."""
-    klasse = {"instrumentenklasse_id": str(stammdaten["klasse"])}
+def _feld(antwort):
+    assert antwort.status_code == 422, antwort.json()
+    return antwort.json()["detail"][0]["loc"][-1]
+
+
+def test_klasse_ohne_ausfuehrungen_hat_einen_wert_je_reparaturart(client, stammdaten):
     einziger = _anlegen(client, stammdaten)
-    assert (einziger["ausfuehrung"], einziger["ist_standard"]) == (None, False)
+    assert (einziger["ausfuehrung_id"], einziger["ausfuehrung"]) == (None, None)
+    assert client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]))).status_code == 409
+    # Allgemeine Werte haben nie eine Ausführung, und fremde Ausführungen passen nicht
+    assert _feld(client.post(URL, json=neu(stammdaten, ausfuehrung_id=str(uuid.uuid4())))) == "ausfuehrung_id"
+    assert _feld(client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]),
+                                           ausfuehrung_id=str(uuid.uuid4())))) == "ausfuehrung_id"
 
-    abgelehnt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert"))
-    assert abgelehnt.status_code == 422 and abgelehnt.json()["detail"][0]["loc"][-1] == "ausfuehrung"
-    assert client.post(URL, json=neu(stammdaten, **klasse)).status_code == 409            # ohne Namen gibt es schon
 
-    # Der bestehende Wert bekommt einen Namen und wird dabei zum Standard
-    benannt = client.patch(f"{URL}/{einziger['id']}", json={"ausfuehrung": " lackiert "}).json()
-    assert (benannt["ausfuehrung"], benannt["ist_standard"]) == ("lackiert", True)
-    versilbert = _anlegen(client, stammdaten, ausfuehrung="  versilbert ", vorgabe_kosten=50)
-    assert (versilbert["ausfuehrung"], versilbert["ist_standard"]) == ("versilbert", False)
+def test_klasse_mit_ausfuehrungen_jeder_richtpreis_verweist_auf_eine(client, stammdaten, db):
+    """2.4b: Hat die Klasse Ausführungen, gehört jeder ihrer Richtpreise zu einer davon."""
+    klasse = {"instrumentenklasse_id": str(stammdaten["klasse"])}
+    bisher = _anlegen(client, stammdaten)                                   # noch ohne Ausführung
+    lackiert = _ausfuehrung(client, stammdaten, "lackiert")                 # erste Ausführung = Standard …
+    assert client.get(f"{URL}/{bisher['id']}").json()["ausfuehrung"] == "lackiert"      # … übernimmt den vorhandenen Wert
+    versilbert = _ausfuehrung(client, stammdaten, "versilbert")
 
-    # Neben benannten Ausführungen braucht jede weitere einen Namen; Doppelte werden abgelehnt
-    ohne_namen = client.post(URL, json=neu(stammdaten, **klasse))
-    assert ohne_namen.status_code == 422 and ohne_namen.json()["detail"][0]["loc"][-1] == "ausfuehrung"
-    doppelt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert"))
+    assert _feld(client.post(URL, json=neu(stammdaten, **klasse))) == "ausfuehrung_id"  # ohne Ausführung geht nicht mehr
+    wert = _anlegen(client, stammdaten, ausfuehrung_id=versilbert["id"], vorgabe_kosten=50)
+    assert (wert["ausfuehrung"], wert["ausfuehrung_ist_standard"]) == ("versilbert", False)
+    doppelt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung_id=versilbert["id"]))
     assert doppelt.status_code == 409 and "Ausführung" in doppelt.json()["detail"]
-    _anlegen(client, stammdaten, ausfuehrung="vergoldet")
-    # Den Namen wieder entfernen geht nur, solange es der einzige Wert ist
-    assert client.patch(f"{URL}/{versilbert['id']}", json={"ausfuehrung": None}).status_code == 422
 
     # Liste: Standard zuerst, dann alphabetisch; Suche findet die Ausführung
-    assert _kombination(client, stammdaten) == [("lackiert", True), ("vergoldet", False), ("versilbert", False)]
-    treffer = client.get(URL, params={"suche": "vergoldet", "instrumentenklasse_id": str(stammdaten["klasse"])}).json()
-    assert [e["ausfuehrung"] for e in treffer["eintraege"]] == ["vergoldet"]
+    liste = client.get(URL, params=klasse).json()["eintraege"]
+    assert [(e["ausfuehrung"], e["ausfuehrung_ist_standard"]) for e in liste] == [("lackiert", True), ("versilbert", False)]
+    treffer = client.get(URL, params={"suche": "versilb", **klasse}).json()["eintraege"]
+    assert [e["id"] for e in treffer] == [wert["id"]]
+
+    # Ausführung wechseln geht, entfernen nicht; auf "allgemein" nur zusammen mit dem Entfernen der Ausführung
+    vergoldet = _ausfuehrung(client, stammdaten, "vergoldet")
+    assert client.patch(f"{URL}/{wert['id']}", json={"ausfuehrung_id": vergoldet["id"]}).json()["ausfuehrung"] == "vergoldet"
+    assert _feld(client.patch(f"{URL}/{wert['id']}", json={"ausfuehrung_id": None})) == "ausfuehrung_id"
+    assert _feld(client.patch(f"{URL}/{wert['id']}", json={"instrumentenklasse_id": None})) == "ausfuehrung_id"
+    allgemein = client.patch(f"{URL}/{wert['id']}", json={"instrumentenklasse_id": None, "ausfuehrung_id": None})
+    assert allgemein.status_code == 200 and allgemein.json()["ausfuehrung"] is None
+    assert lackiert["ist_standard"] is True
 
 
-def test_erste_benannte_ausfuehrung_ist_standard_und_standard_wechseln(client, stammdaten, db):
-    lackiert = _anlegen(client, stammdaten, ausfuehrung="lackiert")
-    assert lackiert["ist_standard"] is True                                               # einzige benannte
-    versilbert = _anlegen(client, stammdaten, ausfuehrung="versilbert")
-    # Das Kennzeichen lässt sich nicht einfach entfernen – nur an eine andere Ausführung weitergeben
-    weg = client.patch(f"{URL}/{lackiert['id']}", json={"ist_standard": False})
-    assert weg.status_code == 422 and weg.json()["detail"][0]["loc"][-1] == "ist_standard"
-    assert client.patch(f"{URL}/{versilbert['id']}", json={"ist_standard": True}).json()["ist_standard"] is True
-    assert _kombination(client, stammdaten) == [("versilbert", True), ("lackiert", False)]
-    # Gleich als Standard anlegen: übernimmt das Kennzeichen
-    _anlegen(client, stammdaten, ausfuehrung="vergoldet", ist_standard=True)
-    assert _kombination(client, stammdaten) == [("vergoldet", True), ("lackiert", False), ("versilbert", False)]
-    # Preis ändern lässt den Standard unberührt
-    assert client.patch(f"{URL}/{lackiert['id']}", json={"vorgabe_kosten": 30}).json()["ist_standard"] is False
-    assert _kombination(client, stammdaten)[0] == ("vergoldet", True)
-
-
-def test_standard_archivieren_nur_als_letzter_oder_nach_wechsel(client, stammdaten):
-    lackiert = _anlegen(client, stammdaten, ausfuehrung="lackiert")
-    versilbert = _anlegen(client, stammdaten, ausfuehrung="versilbert")
-    gesperrt = client.post(f"{URL}/{lackiert['id']}/archivieren")
-    assert gesperrt.status_code == 409 and "Standard" in gesperrt.json()["detail"]
-    assert client.post(f"{URL}/{versilbert['id']}/archivieren").status_code == 200        # kein Standard: geht
-    assert client.post(f"{URL}/{lackiert['id']}/archivieren").status_code == 200          # einzige verbleibende: geht
-
-    # Reaktivieren: als einzige wieder Standard, neben einer anderen nicht
-    assert client.post(f"{URL}/{versilbert['id']}/reaktivieren").json()["ist_standard"] is True
-    assert client.post(f"{URL}/{lackiert['id']}/reaktivieren").json()["ist_standard"] is False
-    assert _kombination(client, stammdaten) == [("versilbert", True), ("lackiert", False)]
-
-
-def test_datenbank_erlaubt_nur_einen_aktiven_standard(db, stammdaten):
-    from sqlalchemy.exc import IntegrityError
-    from app.models import ReparaturVorgabewert
-    for name in ("lackiert", "versilbert"):
-        db.add(ReparaturVorgabewert(reparaturart_id=stammdaten["reparaturart"], instrumentenklasse_id=stammdaten["klasse"],
-                                    ausfuehrung=name, ist_standard=True, vorgabe_stunden=1, vorgabe_kosten=1))
-    with pytest.raises(IntegrityError, match="uq_reparatur_vorgabewert_standard"):
-        db.flush()
-    db.rollback()
-
-
-def test_ausfuehrung_nur_mit_instrumentenklasse(client, stammdaten):
-    antwort = client.post(URL, json=neu(stammdaten, ausfuehrung="versilbert"))  # allgemeiner Wert + Ausführung
-    assert antwort.status_code == 422 and antwort.json()["detail"][0]["loc"][-1] == "ausfuehrung"
-
-    v = _anlegen(client, stammdaten, ausfuehrung="   ")
-    assert v["ausfuehrung"] is None
-    geaendert = client.patch(f"{URL}/{v['id']}", json={"ausfuehrung": "lackiert"})
-    assert geaendert.status_code == 200 and geaendert.json()["ausfuehrung"] == "lackiert"
-    # Klasse entfernen, solange eine Ausführung gesetzt ist: abgelehnt
-    assert client.patch(f"{URL}/{v['id']}", json={"instrumentenklasse_id": None}).status_code == 422
-    allgemein = client.patch(f"{URL}/{v['id']}", json={"instrumentenklasse_id": None, "ausfuehrung": None})
-    assert allgemein.status_code == 200 and allgemein.json()["ist_standard"] is False     # allgemeine Werte: kein Standard
+def test_richtpreis_einer_archivierten_ausfuehrung(client, stammdaten):
+    """Bleibt sichtbar und gekennzeichnet; Preis und Notiz bleiben bearbeitbar; Reaktivieren des Werts prüft die Regeln."""
+    _ausfuehrung(client, stammdaten, "lackiert")
+    versilbert = _ausfuehrung(client, stammdaten, "versilbert")
+    wert = _anlegen(client, stammdaten, ausfuehrung_id=versilbert["id"])
+    assert client.post(f"/admin/ausfuehrungen/{versilbert['id']}/archivieren").status_code == 200
+    gelesen = client.get(f"{URL}/{wert['id']}").json()
+    assert (gelesen["ausfuehrung"], gelesen["ausfuehrung_archiviert"], gelesen["archiviert_am"]) == ("versilbert", True, None)
+    assert client.patch(f"{URL}/{wert['id']}", json={"vorgabe_kosten": 77}).json()["vorgabe_kosten"] == 77.0
+    assert _feld(client.post(URL, json=neu(stammdaten, instrumentenklasse_id=str(stammdaten["klasse"]),
+                                           ausfuehrung_id=versilbert["id"]))) == "ausfuehrung_id"
+    client.post(f"{URL}/{wert['id']}/archivieren")
+    assert client.post(f"{URL}/{wert['id']}/reaktivieren").status_code == 409          # Ausführung ist archiviert
+    client.post(f"/admin/ausfuehrungen/{versilbert['id']}/reaktivieren")
+    assert client.post(f"{URL}/{wert['id']}/reaktivieren").status_code == 200
 
 
 def test_reaktivieren_prueft_auch_die_ausfuehrung(client, stammdaten):
     klasse = {"instrumentenklasse_id": str(stammdaten["klasse"])}
-    alt = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert")).json()
+    versilbert, lackiert = _ausfuehrung(client, stammdaten, "versilbert"), _ausfuehrung(client, stammdaten, "lackiert")
+    alt = _anlegen(client, stammdaten, ausfuehrung_id=versilbert["id"])
     client.post(f"{URL}/{alt['id']}/archivieren")
-    assert client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="versilbert")).status_code == 201  # Ersatz
+    assert client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung_id=versilbert["id"])).status_code == 201  # Ersatz
     assert client.post(f"{URL}/{alt['id']}/reaktivieren").status_code == 409
     # Eine andere Ausführung stört nicht
-    andere = client.post(URL, json=neu(stammdaten, **klasse, ausfuehrung="lackiert")).json()
+    andere = _anlegen(client, stammdaten, ausfuehrung_id=lackiert["id"])
     client.post(f"{URL}/{andere['id']}/archivieren")
     assert client.post(f"{URL}/{andere['id']}/reaktivieren").status_code == 200
-
-
-def test_umbenennen_zieht_instrumente_und_andere_richtpreise_der_klasse_mit(client, stammdaten, db):
-    """Eine umbenannte Ausführung darf kein Instrument unbemerkt auf den Standard zurückfallen lassen (2.5)."""
-    from app.models import Instrument, Kunde, ReparaturVorgabewert
-    andere_art = Reparaturart(bezeichnung="TEST Stimmen", standard_komplexitaet=1)
-    andere_klasse = Instrumentenklasse(bezeichnung="TEST Violine", oberkategorie="Streichinstrument")
-    kunde = Kunde(kundennummer=f"TEST-{uuid.uuid4().hex[:8]}", name="Test Kunde")
-    db.add_all([andere_art, andere_klasse, kunde])
-    db.flush()
-    _anlegen(client, stammdaten, ausfuehrung="lackiert")
-    versilbert = _anlegen(client, stammdaten, ausfuehrung="versilbert")
-    db.add(ReparaturVorgabewert(reparaturart_id=andere_art.id, instrumentenklasse_id=stammdaten["klasse"],
-                                ausfuehrung="versilbert", ist_standard=True, vorgabe_stunden=1, vorgabe_kosten=1))
-    instrumente = {name: Instrument(kunde_id=kunde.id, instrumentenklasse_id=klasse, ausfuehrung=ausfuehrung)
-                   for name, klasse, ausfuehrung in [("betroffen", stammdaten["klasse"], "versilbert"),
-                                                     ("andere_ausfuehrung", stammdaten["klasse"], "lackiert"),
-                                                     ("unbekannt", stammdaten["klasse"], None),
-                                                     ("andere_klasse", andere_klasse.id, "versilbert")]}
-    db.add_all(instrumente.values())
-    db.flush()
-    liste = client.get(URL, params={"instrumentenklasse_id": str(stammdaten["klasse"])}).json()["eintraege"]
-    assert {e["ausfuehrung"]: e["instrumente_mit_ausfuehrung"] for e in liste
-            if e["reparaturart_id"] == str(stammdaten["reparaturart"])} == {"lackiert": 1, "versilbert": 1}
-
-    antwort = client.patch(f"{URL}/{versilbert['id']}", json={"ausfuehrung": "Silber"}).json()
-    assert (antwort["ausfuehrung"], antwort["umbenannte_instrumente"], antwort["umbenannte_richtpreise"]) == ("Silber", 1, 1)
-    assert antwort["instrumente_mit_ausfuehrung"] == 1
-    for i in instrumente.values():
-        db.refresh(i)
-    assert {n: i.ausfuehrung for n, i in instrumente.items()} == {
-        "betroffen": "Silber", "andere_ausfuehrung": "lackiert", "unbekannt": None, "andere_klasse": "versilbert"}
-    # Der Richtpreis der anderen Reparaturart derselben Klasse heißt jetzt genauso
-    assert db.scalar(select(ReparaturVorgabewert.ausfuehrung).where(
-        ReparaturVorgabewert.reparaturart_id == andere_art.id)) == "Silber"
-    log = db.scalars(select(SystemEreignisLog).where(SystemEreignisLog.betroffene_id == instrumente["betroffen"].id)).one()
-    assert (log.aktion, log.details) == ("instrument_geaendert", {
-        "alt": {"ausfuehrung": "versilbert"}, "neu": {"ausfuehrung": "Silber"}, "anlass": "ausfuehrung_umbenannt"})
-    # Nur der Preis geändert: nichts wird umbenannt
-    assert client.patch(f"{URL}/{versilbert['id']}", json={"vorgabe_kosten": 99}).json()["umbenannte_instrumente"] == 0
 
 
 # --- Liste nach 9.11 ----------------------------------------------------------------

@@ -10,7 +10,7 @@ import { AktionsButton, FokusFormular, FormularBereich, Rueckfrage } from '../..
 import { useFokusFormular } from '../../komponenten/fokusFormular.js'
 import { useHervorhebung } from '../../komponenten/hervorhebung.js'
 import { useRueckmeldung } from '../../komponenten/rueckmeldung.js'
-import { instrumenteHinweis, leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
+import { leerZuNull, useSpeichern } from '../../komponenten/speichern.js'
 import { KlasseFelder } from './Instrumentenklassen.jsx'
 import { ArtFelder } from './Reparaturarten.jsx'
 
@@ -22,7 +22,6 @@ const istZelle = (schluessel) => typeof schluessel === 'string' && schluessel.st
 
 const enthaelt = (text, suche) => text.toLowerCase().includes(suche.trim().toLowerCase())
 // Standardausführung zuerst, dann die Ausführungen alphabetisch
-const nachAusfuehrung = (a, b) => (a.ausfuehrung ?? '').localeCompare(b.ausfuehrung ?? '', 'de')
 
 // Richtzeit als Vorschlag aus Preis ÷ Stundensatz, auf 0,25 Std. gerundet (9.15)
 function zeitVorschlag(preis, stundensatz) {
@@ -45,20 +44,21 @@ function NeuFormular({ formular, titel, speichernText, Felder, startwerte, zuDat
 }
 
 let laufendeNummer = 0
-const neueZeile = (wert) => ({
+// Eine Zeile im Editor: der Wert einer Ausführung der Klasse (oder der einzige Wert, wenn sie keine hat)
+const neueZeile = (wert, ausfuehrung = null) => ({
   schluessel: wert?.id ?? `neu-${laufendeNummer += 1}`,
   id: wert?.id ?? null,
-  ausfuehrung: wert?.ausfuehrung ?? '',
-  istStandard: wert?.ist_standard ?? false,
-  instrumente: wert?.instrumente_mit_ausfuehrung ?? 0,
+  ausfuehrungId: ausfuehrung?.id ?? wert?.ausfuehrung_id ?? null,
+  ausfuehrung: ausfuehrung?.bezeichnung ?? wert?.ausfuehrung ?? null,
+  istStandard: ausfuehrung?.ist_standard ?? wert?.ausfuehrung_ist_standard ?? false,
   preis: wert ? String(wert.vorgabe_kosten) : '',
   zeit: wert ? String(wert.vorgabe_stunden) : '',
   notiz: wert?.notiz ?? '',
   vorschlag: false, // Richtzeit wurde aus dem Preis vorgeschlagen und noch nicht selbst geändert
 })
-const zeileLeer = (z) => !z.id && !z.ausfuehrung.trim() && z.preis === '' && z.zeit === '' && !z.notiz.trim()
+const zeileLeer = (z) => !z.id && z.preis === '' && z.zeit === '' && !z.notiz.trim()
 const zuDaten = (z) => ({
-  ausfuehrung: leerZuNull(z.ausfuehrung.trim()),
+  ausfuehrung_id: z.ausfuehrungId,
   vorgabe_kosten: z.preis === '' ? null : Number(z.preis),
   vorgabe_stunden: z.zeit === '' ? null : Number(z.zeit),
   notiz: leerZuNull(z.notiz),
@@ -66,20 +66,18 @@ const zuDaten = (z) => ({
 const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 // Editor einer Zelle: je Ausführung eine Zeile mit Richtpreis, Richtzeit und Notiz
-function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, onGeaendert, onFertig }) {
+function ZellenEditor({ formular, klasse, art, werte, ausfuehrungen, stundensatz, onGeaendert, onFertig }) {
   const rueckmeldung = useRueckmeldung()
-  const [zeilen, setZeilen] = useState(() => (werte.length ? [...werte].sort(nachAusfuehrung).map(neueZeile) : [neueZeile()]))
+  // Hat die Klasse Ausführungen, steht je Ausführung eine Zeile da (Standard zuerst), sonst genau eine
+  const [zeilen, setZeilen] = useState(() => (ausfuehrungen.length
+    ? ausfuehrungen.map((a) => neueZeile(werte.find((w) => w.ausfuehrung_id === a.id), a))
+    : [neueZeile(werte[0])]))
   // Stand in der Datenbank je Zeile, um nur Geändertes zu senden
   const gespeichert = useRef(Object.fromEntries(werte.map((w) => [w.id, zuDaten(neueZeile(w))])))
   const [sendet, setSendet] = useState(false)
   const [fehler, setFehler] = useState(null)
   const [zeilenfehler, setZeilenfehler] = useState({})
-  const [archivFrage, setArchivFrage] = useState(null)
   const name = `${art.bezeichnung} (${klasse?.bezeichnung ?? 'allgemein'})`
-  // Es gibt Ausführungen, aber keine Zeile für die Standardausführung (9.15)
-  const gefuellt = zeilen.filter((z) => !zeileLeer(z))
-  const ohneStandard = klasse && gefuellt.length > 1 && gefuellt.every((z) => z.id) && !gefuellt.some((z) => z.istStandard)
-
   const aendern = (schluessel, feld, wert) => {
     setZeilenfehler((f) => (f[schluessel]?.[feld] ? { ...f, [schluessel]: { ...f[schluessel], [feld]: undefined } } : f))
     setZeilen((alle) => alle.map((z) => (z.schluessel === schluessel
@@ -107,12 +105,11 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
           ? await api.admin.vorgabewertAendern(z.id, daten)
           : await api.admin.vorgabewertAnlegen({ ...daten, reparaturart_id: art.id, instrumentenklasse_id: klasse?.id ?? null })
         gespeichert.current[antwort.id] = daten
-        stand.push({ ...z, id: antwort.id, vorschlag: false })
+        stand.push({ ...z, id: antwort.id, schluessel: z.schluessel, vorschlag: false })
         geaendert = true
       } catch (err) {
         // "gibt es bereits" gehört an die Ausführung, alles ohne Feldbezug unter die Zeile
-        neueFehler[z.schluessel] = err.status === 409 ? { ausfuehrung: err.message }
-          : Object.keys(err.felder ?? {}).length ? err.felder : { allgemein: err.message }
+        neueFehler[z.schluessel] = Object.keys(err.felder ?? {}).length ? err.felder : { allgemein: err.message }
         stand.push(z)
       }
     }
@@ -122,17 +119,14 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
       onFertig()
       return
     }
-    setZeilen(stand.length ? stand : [neueZeile()])
+    setZeilen(zeilen.map((z) => stand.find((s) => s.schluessel === z.schluessel) ?? z))
     setZeilenfehler(neueFehler)
     setFehler('Bitte die markierten Felder prüfen')
     setSendet(false)
   }
 
-  async function archivieren(z, bestaetigt = false) {
+  async function archivieren(z) {
     setFehler(null)
-    setArchivFrage(null)
-    // Vor dem Archivieren zeigen, wie viele Instrumente die Ausführung verwenden (2.5)
-    if (!bestaetigt && z.instrumente > 0) { setArchivFrage(z.schluessel); return }
     try {
       await api.admin.vorgabewertArchivieren(z.id)
     } catch (err) {
@@ -141,29 +135,20 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
     }
     rueckmeldung(`Richtpreis ${name}${z.ausfuehrung ? `, ${z.ausfuehrung}` : ''} archiviert – in der Listenansicht reaktivierbar`)
     onGeaendert()
-    const rest = zeilen.filter((x) => x.schluessel !== z.schluessel)
-    if (rest.some((x) => !zeileLeer(x))) setZeilen(rest)
+    delete gespeichert.current[z.id]
+    const rest = zeilen.map((x) => (x.schluessel === z.schluessel ? { ...x, id: null, preis: '', zeit: '', notiz: '' } : x))
+    if (rest.some((x) => x.id)) setZeilen(rest)
     else onFertig()
   }
-
-  const entfernen = (z) => setZeilen((alle) => {
-    const rest = alle.filter((x) => x.schluessel !== z.schluessel)
-    return rest.length ? rest : [neueZeile()]
-  })
 
   return (
     <FokusFormular formular={formular} titel={`${art.bezeichnung} – ${klasse?.bezeichnung ?? 'alle Instrumentenklassen (allgemein)'}`}
                    onSpeichern={speichern} sendet={sendet} fehler={fehler}
-                   zusatz={klasse && (
-                     <button type="button" className="btn btn--sekundaer"
-                             onClick={() => { formular.markiereGeaendert(); setZeilen((alle) => [...alle, neueZeile()]) }}>
-                       Ausführung hinzufügen
-                     </button>
-                   )}>
+                   >
       <table className="preisliste__zeilen">
         <thead>
           <tr>
-            {klasse && <th>Ausführung</th>}
+            {ausfuehrungen.length > 0 && <th>Ausführung</th>}
             <th>Richtpreis in Euro</th>
             <th>Richtzeit in Stunden</th>
             <th>Notiz</th>
@@ -182,9 +167,12 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
             return (
               <Fragment key={z.schluessel}>
                 <tr>
-                  {klasse && feld('ausfuehrung',
-                    <input aria-label="Ausführung" value={z.ausfuehrung} maxLength={100} autoComplete="off"
-                           placeholder="Standard" onChange={(e) => aendern(z.schluessel, 'ausfuehrung', e.target.value)} />)}
+                  {ausfuehrungen.length > 0 && (
+                    <td className={f.ausfuehrung_id ? 'feld--fehler' : undefined}>
+                      {z.ausfuehrung}{z.istStandard && <span className="marke marke--aktuell">Standard</span>}
+                      {f.ausfuehrung_id && <small className="feld__fehler">{f.ausfuehrung_id}</small>}
+                    </td>
+                  )}
                   {feld('vorgabe_kosten',
                     <input aria-label="Richtpreis in Euro" type="number" min="0" step="0.01" value={z.preis}
                            onChange={(e) => aendern(z.schluessel, 'preis', e.target.value)}
@@ -197,39 +185,19 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
                     <input aria-label="Notiz" value={z.notiz} autoComplete="off"
                            onChange={(e) => aendern(z.schluessel, 'notiz', e.target.value)} />)}
                   <td className="zeilenaktionen">
-                    {z.id
-                      ? <button type="button" className="btn btn--klein btn--gefahr" onClick={() => archivieren(z)}>Archivieren</button>
-                      : zeilen.length > 1 && <button type="button" className="btn btn--klein btn--sekundaer" onClick={() => entfernen(z)}>Entfernen</button>}
+                    {z.id && <button type="button" className="btn btn--klein btn--gefahr" onClick={() => archivieren(z)}>Archivieren</button>}
                   </td>
                 </tr>
                 {f.allgemein && <tr><td colSpan={5} className="meldung--fehler">{f.allgemein}</td></tr>}
-                {archivFrage === z.schluessel && (
-                  <tr>
-                    <td colSpan={5}>
-                      <div className="rueckfrage" role="alert">
-                        <p>{instrumenteHinweis(z.instrumente)}</p>
-                        <button type="button" className="btn btn--gefahr btn--klein" onClick={() => archivieren(z, true)}>Trotzdem archivieren</button>
-                        <button type="button" className="btn btn--sekundaer btn--klein" onClick={() => setArchivFrage(null)}>Abbrechen</button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
               </Fragment>
             )
           })}
         </tbody>
       </table>
-      {ohneStandard && (
-        <p className="meldung preisliste__ohne-standard">
-          Kein Standardwert hinterlegt: Für Instrumente ohne Ausführung {allgemein
-            ? `gilt der allgemeine Wert (${euro(allgemein.vorgabe_kosten)}, ${stunden(allgemein.vorgabe_stunden)}).`
-            : 'gibt es keinen Richtpreis, auch keinen allgemeinen.'}
-        </p>
-      )}
       <p className="leise klein">
-        {klasse
-          ? 'Ausführung leer = Standardausführung. Weitere Zeilen nur für Varianten desselben Instruments (Oberfläche, Ventilmechanik).'
-          : 'Der allgemeine Wert gilt für alle Instrumentenklassen ohne eigenen Wert.'}
+        {!klasse ? 'Der allgemeine Wert gilt für alle Instrumentenklassen ohne eigenen Wert.'
+          : ausfuehrungen.length ? 'Eine Ausführung ohne eigenen Wert übernimmt den des Standards. Leere Zeilen werden nicht gespeichert.'
+          : 'Diese Instrumentenklasse hat keine Ausführungen, also einen Wert je Reparaturart.'}
         {' '}Lässt du die Richtzeit leer, wird sie aus Preis ÷ Stundensatz vorgeschlagen.
       </p>
     </FokusFormular>
@@ -237,7 +205,7 @@ function ZellenEditor({ formular, klasse, art, werte, allgemein, stundensatz, on
 }
 
 // Der Standard einer Zelle: bei mehreren Ausführungen die gekennzeichnete, sonst der einzige Wert (2.6a)
-const standardVon = (werte) => werte.find((w) => w.ist_standard) ?? werte.find((w) => w.ausfuehrung === null)
+const standardVon = (werte) => werte.find((w) => w.ausfuehrung_ist_standard) ?? werte.find((w) => w.ausfuehrung_id === null)
 
 // Inhalt einer Zelle: Richtpreis, darunter klein die Richtzeit; bei mehreren Ausführungen ein Zusatz
 function Zellinhalt({ werte, allgemein }) {
@@ -293,10 +261,13 @@ export default function Preisliste() {
     alleEintraege(api.admin.arten),
     alleEintraege(api.admin.vorgabewerte),
     api.admin.einstellungen(),
+    api.klassenAusfuehrungen(),
   ])
-    .then(([klassen, arten, werte, einstellungen]) => {
+    .then(([klassen, arten, alleWerte, einstellungen, ausfuehrungen]) => {
+      // Werte archivierter Ausführungen ignoriert die Schätzung – in der Matrix erscheinen sie nicht (2.4b)
+      const werte = alleWerte.filter((w) => !w.ausfuehrung_archiviert)
       const satz = Number(einstellungen.find((e) => e.schluessel === 'stundensatz')?.wert)
-      setDaten({ klassen, arten, werte, stundensatz: satz > 0 ? satz : null })
+      setDaten({ klassen, arten, werte, ausfuehrungen, stundensatz: satz > 0 ? satz : null })
     })
     .catch((e) => setFehler(e.message)), [])
   useEffect(() => { laden() }, [laden])
@@ -372,7 +343,7 @@ export default function Preisliste() {
                 {formular.rueckfrageOffen && <Rueckfrage formular={formular} />}
                 <ZellenEditor key={formular.offen} formular={formular} klasse={klasse} art={offeneArt}
                               werte={jeZelle.get(formular.offen) ?? []}
-                              allgemein={klasse ? jeZelle.get(zellSchluessel(ALLGEMEIN, offeneArt.id))?.[0] : null} stundensatz={daten.stundensatz}
+                              ausfuehrungen={klasse ? daten.ausfuehrungen[klasse.id] ?? [] : []} stundensatz={daten.stundensatz}
                               onGeaendert={laden}
                               onFertig={() => { const s = formular.offen; formular.gespeichert(); hervorheben(s) }} />
               </div>

@@ -35,6 +35,7 @@ from app.models import (
     Auftrag,
     Auftragsstatus,
     AuftragStatusverlauf,
+    Ausfuehrung,
     Instrument,
     Instrumentenklasse,
     Kunde,
@@ -46,7 +47,7 @@ from app.models import (
     Unterbrechung,
 )
 from app.schaetzung import (
-    MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, ausfuehrungen, schaetze_arbeitsstunden, schaetze_kosten,
+    MINDESTANZAHL_VERGLEICHSFAELLE, Schaetzung, bekannte_ausfuehrung, schaetze_arbeitsstunden, schaetze_kosten,
 )
 from app.terminschaetzung import termin_neu_berechnen, termin_uebernehmen
 from app.schemas import (
@@ -315,20 +316,25 @@ def auftrag_anlegen(
 
     # Stufe-1-Schätzung (Datenmodell 4 / 4.1)
     # Die Ausführung ist eine Eigenschaft des Instruments (2.5): Ist sie dort hinterlegt, gilt sie ohne Nachfrage.
-    # Sonst darf einmalig eine gewählt werden – sie muss es als aktiven Vorgabewert für genau diese
-    # Kombination geben (2.6a) und wird am Instrument gespeichert.
-    if instrument.ausfuehrung is not None:
-        if daten.ausfuehrung is not None and daten.ausfuehrung != instrument.ausfuehrung:
-            raise feldfehler(ausfuehrung=f"Am Instrument ist bereits die Ausführung „{instrument.ausfuehrung}“ hinterlegt")
-    elif daten.ausfuehrung is not None:
-        if daten.ausfuehrung not in {a.ausfuehrung for a in ausfuehrungen(db, reparaturart.id, instrument.instrumentenklasse_id)}:
-            raise feldfehler(ausfuehrung="Diese Ausführung gibt es für die gewählte Reparaturart und das Instrument nicht")
-        instrument.ausfuehrung = daten.ausfuehrung
+    # Sonst darf einmalig eine aktive Ausführung seiner Klasse gewählt werden – sie wird am Instrument gespeichert.
+    # Eine archivierte Ausführung am Instrument gilt als unbekannt (2.4b) – dann darf neu gewählt werden.
+    bisher = bekannte_ausfuehrung(db, instrument.ausfuehrung_id)
+    if bisher is not None:
+        if daten.ausfuehrung_id not in (None, bisher):
+            raise feldfehler(ausfuehrung_id=f"Am Instrument ist bereits die Ausführung „{db.get(Ausfuehrung, bisher).bezeichnung}“ hinterlegt")
+    elif daten.ausfuehrung_id is not None:
+        gewaehlt = db.get(Ausfuehrung, daten.ausfuehrung_id)
+        if gewaehlt is None or gewaehlt.instrumentenklasse_id != instrument.instrumentenklasse_id or gewaehlt.archiviert_am is not None:
+            raise feldfehler(ausfuehrung_id="Diese Ausführung gibt es für die Instrumentenklasse des Instruments nicht")
         protokollieren(db, mitarbeiter_id, "instrument_geaendert", "instrument", instrument.id,
-                       {"alt": {"ausfuehrung": None}, "neu": {"ausfuehrung": daten.ausfuehrung}, "anlass": "auftrag_angelegt"})
-    ausfuehrung = instrument.ausfuehrung
-    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung)
-    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung)
+                       {"alt": {"ausfuehrung_id": str(instrument.ausfuehrung_id) if instrument.ausfuehrung_id else None},
+                        "neu": {"ausfuehrung_id": str(gewaehlt.id), "ausfuehrung": gewaehlt.bezeichnung},
+                        "anlass": "auftrag_angelegt"})
+        instrument.ausfuehrung_id = gewaehlt.id
+    ausfuehrung_id = bekannte_ausfuehrung(db, instrument.ausfuehrung_id)
+    ausfuehrung = db.get(Ausfuehrung, ausfuehrung_id) if ausfuehrung_id else None
+    stunden = schaetze_arbeitsstunden(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung_id)
+    kosten = schaetze_kosten(db, instrument.instrumentenklasse_id, reparaturart.id, ausfuehrung_id)
 
     auftrag = Auftrag(
         auftragsnummer=_neue_auftragsnummer(db),
@@ -363,7 +369,9 @@ def auftrag_anlegen(
         geschaetztes_datum=termin.datum,
         eingabefaktoren={
             "anlass": "auftrag_angelegt",
-            "ausfuehrung": ausfuehrung,  # Ausführung des Instruments; None = unbekannt/Standard
+            # Ausführung des Instruments zum Zeitpunkt der Schätzung; None = unbekannt (es galt der Standard)
+            "ausfuehrung": ausfuehrung.bezeichnung if ausfuehrung else None,
+            "ausfuehrung_id": str(ausfuehrung_id) if ausfuehrung_id else None,
             "instrumentenklasse_id": str(instrument.instrumentenklasse_id),
             "reparaturart_id": str(reparaturart.id),
             "komplexitaet": auftrag.komplexitaet,

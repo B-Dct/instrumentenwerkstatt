@@ -8,6 +8,10 @@ unterscheiden.
 Die Funktion `anwenden` ist beliebig oft aufrufbar: Ein zweiter Lauf ändert nichts mehr. Sie rät nie –
 Kombinationen mit mehreren Ausführungen ohne erkennbaren Standard werden nur gemeldet.
 Aufgerufen wird sie von der Migration `vorgabewert_ist_standard`.
+
+ACHTUNG, historisch: arbeitet auf den Spalten `ausfuehrung` und `ist_standard` am Richtpreis, die es seit
+der Migration `ausfuehrung_als_liste` nicht mehr gibt (Datenmodell 2.4b). Wird nur noch beim Aufbau einer
+frischen Datenbank in der Migrationskette verwendet.
 """
 
 from sqlalchemy import Connection, text
